@@ -1,7 +1,3 @@
-# Internship : Open data quality assessment (OpenStreetMap and Overture Map)
-
-### Useful command
-
 pip install gdal
 pip install overturemaps
 pip install duckdb
