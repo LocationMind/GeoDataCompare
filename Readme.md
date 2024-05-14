@@ -27,3 +27,8 @@ C:\OSGeo4W64\share\proj
 This is not useful if you have already install postgresal and postgis I think
 
 From : https://gisforthought.com/setting-up-your-gdal-and-ogr-environmental-variables/
+
+### Log / Notes / Thoughts
+
+The insertion of overturemap data using duckdb is quite long : more than an hour for the buildings, and almost 3 hours for the roads!
+
