@@ -48,7 +48,7 @@ end = time.time()
 
 print(f"Index : {end - start} seconds")
 
-rel = duckdb.sql("SELECT * FROM overturemap.public.connector;")
+rel = duckdb.sql("SELECT count(*) FROM overturemap.public.connector;")
 rel.show()
 
 end = time.time()

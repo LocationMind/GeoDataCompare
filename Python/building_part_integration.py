@@ -4,7 +4,7 @@ import time
 
 start = time.time()
 # Read data
-path_data = os.path.join("..", "Data", "OvertureMap_Japan", "building", "*.parquet")
+path_data = os.path.join("..", "Data", "OvertureMap_Japan", "building_part", "*.parquet")
 
 # Create and load the spatial extension
 duckdb.install_extension("spatial")
@@ -26,19 +26,19 @@ rel = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_data}';")
 rel.show()
 
 # Drop table
-duckdb.execute("DROP TABLE IF EXISTS overturemap.public.building CASCADE;")
+duckdb.execute("DROP TABLE IF EXISTS overturemap.public.building_part CASCADE;")
 
-# Create the building table
-duckdb.execute(f"""CREATE TABLE overturemap.public.building AS (SELECT
+# Create the building_part table
+duckdb.execute(f"""CREATE TABLE overturemap.public.building_part AS (SELECT
                id,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
                version,
                update_time,
                JSON(sources) AS sources,
                names.primary AS primary_name,
-               class,
                level,
-               height
+               height,
+               building_id
                FROM '{path_data}');
                """)
 
@@ -46,13 +46,13 @@ end = time.time()
 
 print(f"Table creation : {end - start} seconds")
 
-duckdb.execute("CREATE INDEX building_id_idx ON overturemap.public.building (id);")
+duckdb.execute("CREATE INDEX building_part_id_idx ON overturemap.public.building_part (id);")
 
 end = time.time()
 
 print(f"Index : {end - start} seconds")
 
-rel = duckdb.sql("SELECT count(*) FROM overturemap.public.building;")
+rel = duckdb.sql("SELECT count(*) FROM overturemap.public.building_part;")
 rel.show()
 
 end = time.time()
@@ -60,12 +60,12 @@ end = time.time()
 print(f"Select : {end - start} seconds")
 
 # Add a geometry column and change the WKT geom to a geometry
-duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building ADD COLUMN geom geometry;')")
-duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building ADD COLUMN theme character varying;')")
-duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building ADD COLUMN type character varying;')")
+duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building_part ADD COLUMN geom geometry;')")
+duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building_part ADD COLUMN theme character varying;')")
+duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS public.building_part ADD COLUMN type character varying;')")
 
-duckdb.execute("""CALL postgres_execute('overturemap', 'UPDATE public.building 
-               SET geom = public.ST_GeomFromText(geom_wkt, 4326), theme = ''buildings'', type = ''building'';')""")
+duckdb.execute("""CALL postgres_execute('overturemap', 'UPDATE public.building_part 
+               SET geom = public.ST_GeomFromText(geom_wkt, 4326), theme = ''buildings'', type = ''building_part'';')""")
 
 end = time.time()
 
