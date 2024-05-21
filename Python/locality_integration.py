@@ -133,18 +133,11 @@ duckdb.execute("CALL postgres_execute('overturemap', 'ALTER TABLE IF EXISTS publ
 
 duckdb.execute("CALL postgres_execute('overturemap', 'UPDATE public.locality SET geom = public.ST_GeomFromText(geom_wkt, 4326);')")
 
-""" TODO : 
-- Rethink the road and building model, as it may not be useful to add the theme and type in the data model (it is kind of in the name of the table already).
-- Create SQL function to extract information within the data, such as :
-    - primary_name in names
-    - surface in road
-    - width in road
-    - lanes in road
-    - restriction in road
-- download data for connector, road and building part using overturemaps tool and the bbox of japan : 122.7141754,20.2145811,154.205541,45.7112046
-- do the same for the administrtive boundaries, by keeping only important information for country only (admin_level = 1), like iso code and primary name.
-- 
-"""
+
+# Create a geom index
+duckdb.execute("""CALL postgres_execute('overturemap', 'CREATE INDEX locality_geom_idx
+               ON public.locality
+               USING GIST (geom);')""")
 
 end = time.time()
 

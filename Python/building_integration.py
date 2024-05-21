@@ -71,18 +71,10 @@ end = time.time()
 
 print(f"Alter + Update : {end - start} seconds")
 
-""" TODO : 
-- Rethink the road and building model, as it may not be useful to add the theme and type in the data model (it is kind of in the name of the table already).
-- Create SQL function to extract information within the data, such as :
-    - primary_name in names
-    - surface in road
-    - width in road
-    - lanes in road
-    - restriction in road
-- download data for connector, road and building part using overturemaps tool and the bbox of japan : 122.7141754,20.2145811,154.205541,45.7112046
-- do the same for the administrtive boundaries, by keeping only important information for country only (admin_level = 1), like iso code and primary name.
-"""
-
+# Create a geom index
+duckdb.execute("""CALL postgres_execute('overturemap', 'CREATE INDEX building_geom_idx
+               ON public.building
+               USING GIST (geom);')""")
 end = time.time()
 
 print(f"Update took {end - start} seconds")
