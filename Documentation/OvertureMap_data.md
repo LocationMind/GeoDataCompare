@@ -456,15 +456,19 @@ We could think that an easier way for recreating the road segment would be to ju
 The next pictures illustrate this :
 
 **Initial road**
+
 ![text](Images/initial_road.png)
 
 **Initial connectors**
+
 ![text](Images/initial_connector.png)
 
 **Results with `ST_MakeLine`**
+
 ![text](Images/false_result.png)
 
 **Results with the code provided before**
+
 ![text](Images/good_result.png)
 
 
