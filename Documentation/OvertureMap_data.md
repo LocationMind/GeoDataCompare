@@ -2,15 +2,24 @@
 
 - [OvertureMap Data integration - PgRouting test](#overturemap-data-integration---pgrouting-test)
 - [Data integration](#data-integration)
-  - [Downloading data](#downloading-data)
-    - [OvertureMap Python tool](#overturemap-python-tool)
-  - [Inserting data in the database](#inserting-data-in-the-database)
-    - [Used dependencies](#used-dependencies)
-    - [Python scripts using DuckDB](#python-scripts-using-duckdb)
-    - [SQL Dumps](#sql-dumps)
+	- [Downloading data](#downloading-data)
+		- [OvertureMap Python tool](#overturemap-python-tool)
+	- [Inserting data in the database](#inserting-data-in-the-database)
+		- [Used dependencies](#used-dependencies)
+		- [Python scripts using DuckDB](#python-scripts-using-duckdb)
+		- [SQL Dumps](#sql-dumps)
 - [PgRouting test](#pgrouting-test)
-  - [Notes](#notes)
-  - [Table creation](#table-creation)
+	- [Notes](#notes)
+	- [Tables creation](#tables-creation)
+		- [bounding\_box table (not mandatory)](#bounding_box-table-not-mandatory)
+		- [Extract data from the desired bbox](#extract-data-from-the-desired-bbox)
+		- [roads\_connectors table](#roads_connectors-table)
+		- [connectors\_road\_count table](#connectors_road_count-table)
+		- [edge table](#edge-table)
+		- [Join tables](#join-tables)
+		- [edge\_with\_cost view](#edge_with_cost-view)
+		- [vertice table](#vertice-table)
+		- [Djikstra algorithm test](#djikstra-algorithm-test)
 
 
 All the steps explained here have only been tested using Windows 11.
@@ -114,19 +123,12 @@ It is shorter for the connector (1 or 2 hours), and not long at all for the loca
 
 ### SQL Dumps
 
-If you do not want to do the whole process by yourself, you can si;ply restore the dump of the database.
-The pg_dump version used was *pg_dump (PostgreSQL) 16.2*.
-You can find the database dump [here](../Data/overturemap.sql).
-
-The database contains the table created before and some others that will be explained later (used for the PgRouting process).
-It also contains view used for pg_routing.
-
 If you only want to test the algorithm and see what OvertureMap data looks like, you can simply download and restore extract of the database for the center of Tokyo :
 
-- Table `building_tokyo` : [building_tokyo.sql](../Data/building_tokyo.sql)
-- Table `road_tokyo` : [road_tokyo.sql](../Data/road_tokyo.sql)
-- Table `connector_tokyo` : [connector_tokyo.sql](../Data/connector_tokyo.sql)
-- Table `bounding_box` : [bounding_box.sql](../Data/bounding_box.sql)
+- Table `building_tokyo` : [building_tokyo.sql](../Data/SQL_Dump/building_tokyo.sql)
+- Table `road_tokyo` : [road_tokyo.sql](../Data/SQL_Dump/road_tokyo.sql)
+- Table `connector_tokyo` : [connector_tokyo.sql](../Data/SQL_Dump/connector_tokyo.sql)
+- Table `bounding_box` : [bounding_box.sql](../Data/SQL_Dump/bounding_box.sql)
 
 # PgRouting test
 
@@ -140,7 +142,7 @@ For faster results and to prevent PgRouting from crashing, the test have been ma
 
 ![Bbox representation on a map](./Images/bbox_center_tokyo.png)
 
-All the SQL scripts are also available in the *SQL_Scripts/OvertureMap_PgRouting* folder [here](../SQL_Scripts/OvertureMap_PgRouting). The codes are inspired from a review written by Mathieu MARGOLLE about Openstreetmap_h3 tool. The document is available [here](./Openstreetmap_h3%20Test%20Review.docx).
+All the SQL scripts are also available in the *SQL_Scripts/OvertureMap_PgRouting* folder [here](../SQL_Scripts/OvertureMap_PgRouting). The codes are inspired from a review written by Mathieu MARGOLLE about Openstreetmap_h3 tool. The document is available [here](./Openstreetmap_h3_Test_Review.docx).
 
 In this section, "road" and "connector" are used respectively to mentionned the original data of the segment and connector tables, whereas "edge" and "vertice" respectively correspond to final edges and vertices of the graph (with their own id, cost and reverse_cost for the edges etc.).
 The two tables `road_tokyo` and `connector_tokyo` are used in the next sections.
@@ -456,15 +458,19 @@ We could think that an easier way for recreating the road segment would be to ju
 The next pictures illustrate this :
 
 **Initial road**
+
 ![text](Images/initial_road.png)
 
 **Initial connectors**
+
 ![text](Images/initial_connector.png)
 
 **Results with `ST_MakeLine`**
+
 ![text](Images/false_result.png)
 
 **Results with the code provided before**
+
 ![text](Images/good_result.png)
 
 
