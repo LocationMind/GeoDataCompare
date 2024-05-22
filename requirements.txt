@@ -4,31 +4,85 @@
 #
 #    pip-compile requirements.in
 #
+attrs==23.2.0
+    # via fiona
+certifi==2024.2.2
+    # via
+    #   fiona
+    #   pyproj
+    #   requests
+charset-normalizer==3.3.2
+    # via requests
 click==8.1.7
-    # via overturemaps
+    # via
+    #   click-plugins
+    #   cligj
+    #   fiona
+    #   overturemaps
+click-plugins==1.1.1
+    # via fiona
+cligj==0.7.2
+    # via fiona
 colorama==0.4.6
     # via
     #   click
     #   pytest
 duckdb==0.10.2
     # via -r requirements.in
+fiona==1.9.6
+    # via geopandas
+geopandas==0.14.4
+    # via osmnx
+idna==3.7
+    # via requests
 iniconfig==2.0.0
     # via pytest
+networkx==3.3
+    # via osmnx
 numpy==1.26.4
     # via
+    #   geopandas
+    #   osmnx
+    #   pandas
     #   pyarrow
     #   shapely
+osmnx==1.9.3
+    # via -r requirements.in
 overturemaps==0.5.0
     # via -r requirements.in
 packaging==24.0
-    # via pytest
+    # via
+    #   geopandas
+    #   pytest
+pandas==2.2.2
+    # via
+    #   geopandas
+    #   osmnx
 pluggy==1.5.0
     # via pytest
 pyarrow==15.0.2
     # via overturemaps
+pyproj==3.6.1
+    # via geopandas
 pytest==8.2.1
     # via -r requirements.in
+python-dateutil==2.9.0.post0
+    # via pandas
+pytz==2024.1
+    # via pandas
+requests==2.32.2
+    # via osmnx
 shapely==2.0.4
     # via
     #   -r requirements.in
+    #   geopandas
+    #   osmnx
     #   overturemaps
+six==1.16.0
+    # via
+    #   fiona
+    #   python-dateutil
+tzdata==2024.1
+    # via pandas
+urllib3==2.2.1
+    # via requests

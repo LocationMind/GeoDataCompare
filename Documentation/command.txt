@@ -23,3 +23,12 @@ C:\OSGeo4W64\share\proj
 This is not useful if you have already install postgresal and postgis I think
 
 From : https://gisforthought.com/setting-up-your-gdal-and-ogr-environmental-variables/
+
+Create environnment:
+
+rmdir /S /Q .venv (or delete it manually)
+python -m venv .venv
+.venv\Scripts\activate
+pip install pip-tools
+pip-compile requirements.in
+pip install -r requirements.txt
