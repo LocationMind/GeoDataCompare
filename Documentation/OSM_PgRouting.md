@@ -1,5 +1,15 @@
 # Using PgRouting with OSM data integrated with OSMnx
 
+- [Using PgRouting with OSM data integrated with OSMnx](#using-pgrouting-with-osm-data-integrated-with-osmnx)
+- [Import data into the database](#import-data-into-the-database)
+  - [Download OSMnx](#download-osmnx)
+  - [Import data with OSMnx](#import-data-with-osmnx)
+- [Data modification for PgRouting](#data-modification-for-pgrouting)
+  - [Initial data model](#initial-data-model)
+  - [Data needed for pgr\_djikstra algorithm](#data-needed-for-pgr_djikstra-algorithm)
+  - [pgr\_djikstra with initial graph provided by OSMnx](#pgr_djikstra-with-initial-graph-provided-by-osmnx)
+
+
 # Import data into the database
 
 ## Download OSMnx
@@ -68,14 +78,14 @@ Most of the time, one has the reverse attribute as `False` and the other has it 
 The geometry are also similar, but not exactly the same (so it is not possible to join two entitys by their geometry just by doing `e1.geometry=e2.geometry` for instance).
 Here is an example of two roads in reversed direction.
 
-![2 similar roads on a map](image.png)
+![2 similar roads on a map](./Images/similar-road-OSM-data.png)
 
 If you check their attributes, they share the same osmid (meaning that the same road in OSM have been used to create these roads), but they have reversed u and v values.
 Also, the "reversed" attribute is False for one and True for the other.
 The "id" attribute was created in PostgreSQL as an easy way to identify a road.
 Initial primary key on the edge table is the tuple (u, v , key).
 
-![Attributes of these 2 roads](image-1.png)
+![Attributes of these 2 roads](./Images/attributes-similar-road-OSM-data.png)
 
 ## Data needed for pgr_djikstra algorithm
 
@@ -94,3 +104,42 @@ I think that we should probably first create the table(empty) and insert data ac
 3. For other roads that do not verify the two conditions above, we insert a row in the table with `length(geometry)` as the `cost` (or `reverse_cost`, depending on the value of `reversed`).
 
 This is in theory, in practice I haven't succeed yet to do so.
+
+## pgr_djikstra with initial graph provided by OSMnx
+
+It is possible to keep the initial graphed (Multi directed graph) provided by OSMnx for pgr_djikstra algorithm, by setting the cost value to the length of the road and setting -1 to each segment.
+Indeed, two geometry for one road is not a problem because when it happensm the source and target are reversed, and by putting a cost of -1 to the reverse cost, we ensure that the graph is well constructed.
+
+To launch the `pgr_djikstra` algorithm with OSM data, run the following SQL requets to add `cost` and `reverse_cost` column to the edge table :
+
+```SQL
+ALTER TABLE edge_tokyo
+	ADD COLUMN cost double precision;
+
+ALTER TABLE edge_tokyo
+	ADD COLUMN reverse_cost double precision DEFAULT(-1);
+
+UPDATE edge_tokyo
+	SET cost = length; -- length is an attribute already calculated by OSMnx
+    -- We could also do SET cost = ST_Length(ST_Tranform(geometry, 6691))
+```
+
+Then, by choosing two nodes in the graph, you can run the following SQL request :
+
+```SQL
+SELECT seq, edge, dij."cost", geometry
+FROM pgr_dijkstra(
+    'SELECT id, u AS source, v AS target, cost, reverse_cost
+FROM edge_tokyo'::text,
+    256677064,
+	254360859,
+	directed := false) dij
+JOIN edge_tokyo AS e ON edge = e.id
+ORDER BY seq
+```
+
+Be sure to write `u AS source` and `v AS target` otherwise the algorithm will not work.
+
+The result is : 
+
+![Result for pg_routing test with OSM data](./Images/result_OSM_pgrouting_test.png)
