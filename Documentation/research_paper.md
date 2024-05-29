@@ -26,3 +26,18 @@ OSM Notes provides a good analysis but may not be enough to assess data qulity a
 This is particularly true for our case : we are trying to find quality criterias for both OSM and OvertureMap data, so using OSM notes is not sufficient for out study (we cannot use it for OvertureMap data).
 
 These research could be probably continued now as more and more AI tools could be used to analyse the content of the text.
+
+## 2. *OpenStreetMap history for intrinsic quality assessment: Is OSM up-to-date?*
+
+By **Marco Minghini1** and **Francesco Frassinelli**
+
+### Goal
+
+Explain how the *Is OSM up-to-date* tool works. This open source tool provides access to "OSM intrinsic quality based on the object history for any specific region".
+
+### Work done
+
+The tool provides acess to a OSM intrinsic qulity based on OSM history. It is possible to visualise in an area when was the first and last update of a node, how many revisions did a node have and if a node is updated frequently.
+When the woom is low, the nodes are clusterised and it is possible to visualise the color of the node depending on a criteria.
+It is possible to download this data (this way we have the node id and the statistics of each node), so we could map it with OSM data to add this value to the database we would use.
+It seems possible to use this tool directly in the terminal command, with these kind of command : `curl "https://is-osm-uptodate.frafra.eu/api/getData?minx=139.23941040039062&miny=36.5748405456543&maxx=139.23944091796875&maxy=36.57484436035156" -o japan.geojson` even though this command does not work (probably because the area is too large).
