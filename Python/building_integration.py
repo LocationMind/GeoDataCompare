@@ -21,27 +21,27 @@ user = 'postgres'
 password = 'postgres'
 duckdb.execute(f"ATTACH 'dbname={dbname} host={host} user={user} password={password}' AS overturemap (TYPE POSTGRES);")
 
-# # Show data description
-# rel = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_data}';")
-# rel.show()
+# Show data description
+rel = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_data}';")
+rel.show()
 
-# # Drop table
-# duckdb.execute("DROP TABLE IF EXISTS overturemap.public.building CASCADE;")
+# Drop table
+duckdb.execute("DROP TABLE IF EXISTS overturemap.public.building CASCADE;")
 
-# # Create the building table
-# duckdb.execute(f"""CREATE TABLE overturemap.public.building AS (SELECT
-#                id,
-#                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
-#                version,
-#                update_time,
-#                JSON(sources) AS sources,
-#                names.primary AS primary_name,
-#                class,
-#                level,
-#                height,
-#                has_parts,
-#                FROM '{path_data}');
-#                """)
+# Create the building table
+duckdb.execute(f"""CREATE TABLE overturemap.public.building AS (SELECT
+               id,
+               ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
+               version,
+               update_time,
+               JSON(sources) AS sources,
+               names.primary AS primary_name,
+               class,
+               level,
+               height,
+               has_parts,
+               FROM '{path_data}');
+               """)
 
 end = time.time()
 
