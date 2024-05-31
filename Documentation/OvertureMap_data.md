@@ -188,12 +188,10 @@ Then, run this SQL code by replacing `wkt_geom` by your real WKT bbox and `Area 
 
 ```sql
 INSERT INTO public.bounding_box(
-	geom, name)
-	VALUES (ST_GeomFromText('wkt_geom'),
+	geom, wkt_geom, name)
+	VALUES (ST_GeomFromText('wkt_geom', 4326),
+	'wkt_geom',
     'Area name');
-
-UPDATE public.bounding_box
-	SET wkt_geom = ST_AsText(geom);
 ```
 
 ### Extract data from the desired bbox
@@ -529,7 +527,7 @@ ALTER TABLE IF EXISTS public.join_connector_str_to_int
     OWNER to postgres;
 
 -- Index creation
-CREATE INDEX join_id_idx
+CREATE INDEX join_id_idx_connector_table
     ON public.join_connector_str_to_int USING btree
     (id ASC NULLS LAST);
 
@@ -664,7 +662,7 @@ FROM pgr_dijkstra(
     FROM edge_with_cost'::text,
     8024959,
 	8024811,
-	directed := false) dij
+	directed := true) dij
 JOIN edge_with_cost AS e ON edge = e.id;
 ```
 

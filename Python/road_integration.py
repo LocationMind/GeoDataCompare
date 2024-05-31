@@ -54,27 +54,27 @@ user = 'postgres'
 password = 'postgres'
 duckdb.execute(f"ATTACH 'dbname={dbname} host={host} user={user} password={password}' AS overturemap (TYPE POSTGRES);")
 
-# # Show data description
-# rel = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_data}';")
-# rel.show()
+# Show data description
+rel = duckdb.sql(f"DESCRIBE SELECT * FROM '{path_data}';")
+rel.show()
 
-# # Drop table
-# duckdb.execute("DROP TABLE IF EXISTS overturemap.public.road CASCADE;")
+# Drop table
+duckdb.execute("DROP TABLE IF EXISTS overturemap.public.road CASCADE;")
 
-# duckdb.execute(f"""CREATE TABLE overturemap.public.road AS (SELECT
-#                id,
-#                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
-#                version,
-#                update_time,
-#                JSON(sources) AS sources,
-#                names.primary AS primary_name,
-#                class,
-#                JSON(connector_ids) AS connector_ids,
-#                JSON(extract_info(road, 'surface')) AS surface,
-#                JSON(extract_info(road, 'width')) AS width,
-#                JSON(extract_info(road, 'lanes')) AS lanes,
-#                JSON(extract_info(road, 'restrictions')) AS restrictions,
-#                FROM '{path_data}');""")
+duckdb.execute(f"""CREATE TABLE overturemap.public.road AS (SELECT
+               id,
+               ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
+               version,
+               update_time,
+               JSON(sources) AS sources,
+               names.primary AS primary_name,
+               class,
+               JSON(connector_ids) AS connector_ids,
+               JSON(extract_info(road, 'surface')) AS surface,
+               JSON(extract_info(road, 'width')) AS width,
+               JSON(extract_info(road, 'lanes')) AS lanes,
+               JSON(extract_info(road, 'restrictions')) AS restrictions,
+               FROM '{path_data}');""")
 
 end = time.time()
 
