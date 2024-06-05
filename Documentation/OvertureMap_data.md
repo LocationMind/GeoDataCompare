@@ -268,7 +268,7 @@ If you decide to give them another name, please change it everywhere.
 
 ### roads_connectors table
 
-The `roads_connectors` table is created to have, a link between a road and the connectors that are connected to it.
+The `roads_connectors` table is created to have a link between a road and the connectors that are connected to it.
 These connectors are stored in the `connector_ids` column initially.
 Using `json_array_elements_text`, we can have a row per connector stored in connector_ids.
 The SQL code is given here, and includes the index creations too :

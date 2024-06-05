@@ -79,4 +79,4 @@ Each part can then be split into tasks and subtasks :
 
     4. The visualisation system should be able to compare original data and assessed data. If possible, the system should implement a choice for which criteria it should display.
 
-Most of the code will be produced using Python, as it is a powerfull language to process geographical data.
+Most of the code will be produced using Python, as it is a powerful language to process geographical data.

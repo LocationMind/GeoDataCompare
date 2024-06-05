@@ -687,7 +687,7 @@ def djikstra(startLat:float,
         f"""
         SELECT * FROM postgres_query(
             'dbpostgresql',
-            'SELECT seq, edge, dij."cost", geom
+            'SELECT seq, edge, dij."cost", ST_AsGeoJSON(geom) as geojson
             FROM pgr_dijkstra(
                 ''SELECT id, source, target, cost, reverse_cost
                 FROM public.{edgeWithCostView}''::text,
@@ -699,9 +699,21 @@ def djikstra(startLat:float,
     rel.show()
     
     rel.to_table("djikstra")
+    
+    # Add a geometry column to djikstra table
+    duckdb.execute("ALTER TABLE djikstra ADD COLUMN geometry GEOMETRY;")
+    
+    # Change geometry so it can be read by DuckDB
+    duckdb.execute("UPDATE djikstra SET geometry = ST_GeomFromGeoJSON(geojson);")
+    
+    # Remove geojson column
+    duckdb.execute("ALTER TABLE djikstra DROP geojson;")
+    
+    rel = duckdb.sql("SELECT * FROM djikstra;")
+    rel.show()
 
     duckdb.execute(f"""COPY djikstra TO '{saveGeoJSONPath}'
-                   WITH (FORMAT GDAL, DRIVER 'GeoJSON', LAYER_CREATION_OPTIONS 'WRITE_BBOX=YES');""")
+                   WITH (FORMAT GDAL, DRIVER 'GeoJSON');""")
     
     print(f"File has been saved to {saveGeoJSONPath}")
 
@@ -778,6 +790,9 @@ def createPgRoutingTables(bboxCSV:str,
 
 
 if __name__ == "__main__":
+    import time
+    start = time.time()
+    
     bbox = '139.6968505495,35.6993555056,139.701360952,35.701704437'
     area = "Test area"
     extractRoad = "road_test_area"
@@ -792,3 +807,6 @@ if __name__ == "__main__":
 
     savePath = os.path.join(".", "Data", "Test", "result.geojson")
     djikstra(35.699579, 139.696734, 35.701291, 139.700234, savePath)
+    
+    end = time.time()
+    print(f"Djikstra : {end - start} seconds")
