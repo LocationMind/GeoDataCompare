@@ -1,14 +1,13 @@
 import osmnx as ox
 from osmnx import convert as con
-from sqlalchemy import create_engine
+import sqlalchemy
 import geopandas as gpd
 import pandas as pd
-from sqlalchemy import create_engine
 import psycopg2
 
 log = print
 
-def bboxCsvToTuple(bbox):
+def bboxCsvToTuple(bbox:str) -> tuple[float, float, float, float]:
     """Tranform a bbox in a CSV format to a tuple.
     The bbox is in format west, south, east, north
     The tuple will be as (north, south, east, west)
@@ -22,42 +21,57 @@ def bboxCsvToTuple(bbox):
     (west, south, east, north) = bbox.split(',')
     return (float(north), float(south), float(east), float(west))
 
-def getConnection(host,
-                  user="postgres",
-                  password="postgres",
-                  port="5432",
-                  database="osm-pgrouting"):
+def getConnection(database:str,
+                  host:str="127.0.0.1",
+                  user:str="postgres",
+                  password:str="postgres",
+                  port:str="5432") -> psycopg2.extensions.connection:
     """
     Get connection token to the database.
     Only the host is required, other parameters can be ommited.
 
     Parameters
     ----------
-    host : str
-       Ip address for the database connection.
-    user : str, optional
-        Username for the database connection. The default is "postgres".
-    password : str, optional
-        Password for the database connection. The default is "postgres".
-    port : str, optional
-        Port for the connection. The default is "5432".
-    database : str, optional
-        Database to connect to. The default is "panoramax".
+    database (str): Database to connect to.
+    host (str, optional): Ip address for the database connection. The default is "127.0.0.1"
+    user (str, optional): Username for the database connection. The default is "postgres".
+    password (str, optional): Password for the database connection. The default is "postgres".
+    port (str, optional): Port for the connection. The default is "5432".
 
     Returns
     -------
-    connection : psycopg2.extensions.connection
-        Database connection token.
+        psycopg2.extensions.connection: Database connection token.
 
     """
-    connection = psycopg2.connect(host=host,
+    connection = psycopg2.connect(database=database,
+                                  host=host,
                                   user=user,
                                   password=password,
-                                  port=port,
-                                  database=database)
+                                  port=port)
     return connection
 
-def executeQueryWithTransaction(connection, query):
+def getEngine(database:str,
+              host:str="127.0.0.1",
+              user:str="postgres",
+              password:str="postgres",
+              port:str="5432") -> sqlalchemy.engine.base.Engine:
+    """Get sqlalchemy engine to connect to the database.
+    
+    Args:
+        database (str): Database to connect to.
+        host (str, optional): Ip address for the database connection. The default is "127.0.0.1"
+        user (str, optional): Username for the database connection. The default is "postgres".
+        password (str, optional): Password for the database connection. The default is "postgres".
+        port (str, optional): Port for the connection. The default is "5432".
+
+    Returns:
+        sqlalchemy.engine.base.Engine: Engine with the database connection.
+    """
+    engine = sqlalchemy.create_engine(f"postgresql://{user}:{password}@{host}:{port}/{database}")
+    return engine
+
+def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
+                                query:str):
     """Execute a query safely by using a SQL transaction.
     It does not return anything, so this function should not be used for SELECT queries for instance.
 
@@ -70,7 +84,6 @@ def executeQueryWithTransaction(connection, query):
         # Execute and commit the query
         cursor.execute(query)
         connection.commit()
-        linesNumber = cursor.rowcount
     except Exception as e:
         # If there is an error, the transaction is canceled
         connection.rollback()
@@ -79,279 +92,299 @@ def executeQueryWithTransaction(connection, query):
         # The transaction is closed anyway
         cursor.close()
 
+# def loadDatatoPostgisFromBbox()
+
 if __name__ == "__main__":
+    import json
+    import os
     import time
     start = time.time()
     
-    ## Download data with OSMnx
-    # Get network data for a specific bbox
-    bbox = bboxCsvToTuple("139.74609375, 35.67514743608467, 139.833984375, 35.7465122599185")
+    # Create connections to the database
+    database = "osm-pgrouting"
     
-    graph = ox.graph_from_bbox(bbox=bbox, retain_all=True)
-
-    end = time.time()
-    print(f"Create graph : {end - start} seconds")
-
-    # Transform the graph to geodataframe for the edges and nodes
-    node = con.graph_to_gdfs(graph, nodes=True, edges=False, node_geometry=True)
-    edge = con.graph_to_gdfs(graph, nodes=False, edges=True, fill_edge_geometry=True)
-
-    end = time.time()
-    print(f"Load graph : {end - start} seconds")
-
-    # Create an engine to save into postgresql
-    engine = create_engine("postgresql://postgres:postgres@127.0.0.1:5432/osm-pgrouting") 
-
-    # Save nodes to postgresql
-    node.to_postgis("node_bbox", engine, if_exists="replace", index=True)
-
-    end = time.time()
-    print(f"Save node to postgis : {end - start} seconds")
-
-    # Save edges to postgresql
-    edge.to_postgis("edge_bbox", engine, if_exists="replace", index=True)
-
-    end = time.time()
-    print(f"Save edge to postgis : {end - start} seconds")
+    engine = getEngine(database)
+    connection = getConnection(database)
     
-    # Create a table to join parallel edges using psycopg2
+    # Load the 3 bbox that we will use from the json file
+    path_json = os.path.join(".", "Data", "bboxs.json")
+    with open(path_json, "r") as f:
+        bboxJson = json.load(f)
     
-    connection = getConnection("127.0.0.1")
+    # Create tables for each bbox
+    for elem in bboxJson["bboxs"]:
+        # Get the element we need from the json
+        bbox = elem["bbox"]
+        edge_table = elem["edge_table"]
+        node_table = elem["node_table"]
+        final_table = elem["final_table"]
+        
+        end = time.time()
+        print(f"Start download {final_table} :  {end - start} seconds")
     
-    table_name = "edge_bbox_test"
-    
-    # SQL query to create the table with everything needed
-    sql = f"""
-    -- Drop table if exists
-    DROP TABLE IF EXISTS {table_name} CASCADE;
+        ## 1st step : Download data with OSMnx
+        
+        # Get network data for a specific bbox
+        bboxTuple = bboxCsvToTuple(bbox)
+        
+        graph = ox.graph_from_bbox(bbox=bboxTuple, retain_all=True)
 
-    -- Create table with a self join
-    CREATE TABLE IF NOT EXISTS {table_name} AS
-    SELECT
-        e1.id AS id1,
-        e1.u AS u1,
-        e1.v AS v1,
-        e1.key AS key1,
-        e2.id AS id2,
-        e2.u AS u2,
-        e2.v AS v2,
-        e2.key AS key2,
-        e1.osmid AS osmid1,
-        e1.oneway AS oneway1,
-        e1.ref AS ref1,
-        e1.name AS name1,
-        e1.highway AS highway1,
-        e1.reversed AS reversed1,
-        e1.length AS length1,
-        e1.lanes AS lanes1,
-        e1.maxspeed AS maxspeed1,
-        e1.geometry AS geom1,
-        e1.access AS access1,
-        e1.bridge AS bridge1,
-        e1.tunnel AS tunnel1,
-        e1.service AS service1,
-        e1.width AS width1,
-        e1.junction AS junction1,
-        e2.osmid AS osmid2,
-        e2.oneway AS oneway2,
-        e2.ref AS ref2,
-        e2.name AS name2,
-        e2.highway AS highway2,
-        e2.reversed AS reversed2,
-        e2.length AS length2,
-        e2.lanes AS lanes2,
-        e2.maxspeed AS maxspeed2,
-        e2.geometry AS geom2,
-        e2.access AS access2,
-        e2.bridge AS bridge2,
-        e2.tunnel AS tunnel2,
-        e2.service AS service2,
-        e2.width AS width2,
-        e2.junction AS junction2
-    FROM edge_bbox AS e1
-    LEFT JOIN edge_bbox AS e2 ON e1.u = e2.v AND e1.v = e2.u
-    WHERE e1.id != e2.id AND ST_Contains(ST_Buffer(ST_Transform(e1.geometry, 6691), 0.5), ST_Transform(e2.geometry, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(e2.geometry, 6691), 0.5), ST_Transform(e1.geometry, 6691))
-    ORDER BY e1.id;
+        end = time.time()
+        print(f"Create graph : {end - start} seconds")
 
-    -- Add cost and reverse cost columns
-    ALTER TABLE {table_name} DROP COLUMN IF EXISTS cost;
-    ALTER TABLE {table_name} DROP COLUMN IF EXISTS reverse_cost;
+        # Transform the graph to geodataframe for the edges and nodes
+        node = con.graph_to_gdfs(graph, nodes=True, edges=False, node_geometry=True)
+        edge = con.graph_to_gdfs(graph, nodes=False, edges=True, fill_edge_geometry=True)
 
-    ALTER TABLE {table_name} ADD COLUMN cost double precision;
-    ALTER TABLE {table_name} ADD COLUMN reverse_cost double precision;
+        end = time.time()
+        print(f"Load graph : {end - start} seconds")
 
-    -- Set cost to length of the road
-    UPDATE {table_name}
-    SET cost = ST_Length(geom1);
+        # Save nodes to postgresql
+        node.to_postgis(node_table, engine, if_exists="replace", index=True)
 
-    -- Set reverse cost for parallel roads 
-    UPDATE {table_name}
-    SET reverse_cost = ST_Length(geom1)
-    WHERE u1 = v2 AND v1 = u2
-    AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
-    
-    CREATE INDEX {table_name}_geom1_idx
-    ON public.{table_name} USING gist (geom1);
-    
-    CREATE INDEX {table_name}_geom2_idx
-    ON public.{table_name} USING gist (geom2);
-    
-    CREATE INDEX {table_name}_id1_idx
-    ON public.{table_name} USING btree (id1)"""
-    
-    # Execute the query
-    executeQueryWithTransaction(connection, sql)
-    
-    end = time.time()
-    print(f"Execute query took {end - start} seconds")
+        end = time.time()
+        print(f"Save node to postgis : {end - start} seconds")
 
-    # Select bidirectional roads
-    sql_bi_roads = f"""
-    SELECT * FROM {table_name}
-    WHERE u1 = v2 AND v1 = u2
-    AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));"""
+        # Save edges to postgresql
+        edge.to_postgis(edge_table, engine, if_exists="replace", index=True)
 
-    bi = gpd.read_postgis(sql_bi_roads, engine, geom_col="geom1" )
+        end = time.time()
+        print(f"Save edge to postgis : {end - start} seconds")
+        
+        # Create a table to join parallel edges using psycopg2
 
-    print(bi)
+        
+        # SQL query to create the table with everything needed
+        sql = f"""
+        -- Add id column to edge table
+        ALTER TABLE {edge_table} ADD COLUMN id serial;
+        
+        -- Drop table if exists
+        DROP TABLE IF EXISTS {final_table} CASCADE;
 
-    print(bi.shape)
+        -- Create table with a self join
+        CREATE TABLE IF NOT EXISTS {final_table} AS
+        SELECT
+            e1.id AS id1,
+            e1.u AS u1,
+            e1.v AS v1,
+            e1.key AS key1,
+            e2.id AS id2,
+            e2.u AS u2,
+            e2.v AS v2,
+            e2.key AS key2,
+            e1.osmid AS osmid1,
+            e1.oneway AS oneway1,
+            e1.ref AS ref1,
+            e1.name AS name1,
+            e1.highway AS highway1,
+            e1.reversed AS reversed1,
+            e1.length AS length1,
+            e1.lanes AS lanes1,
+            e1.maxspeed AS maxspeed1,
+            e1.geometry AS geom1,
+            e1.access AS access1,
+            e1.bridge AS bridge1,
+            e1.tunnel AS tunnel1,
+            e1.service AS service1,
+            e1.width AS width1,
+            e1.junction AS junction1,
+            e2.osmid AS osmid2,
+            e2.oneway AS oneway2,
+            e2.ref AS ref2,
+            e2.name AS name2,
+            e2.highway AS highway2,
+            e2.reversed AS reversed2,
+            e2.length AS length2,
+            e2.lanes AS lanes2,
+            e2.maxspeed AS maxspeed2,
+            e2.geometry AS geom2,
+            e2.access AS access2,
+            e2.bridge AS bridge2,
+            e2.tunnel AS tunnel2,
+            e2.service AS service2,
+            e2.width AS width2,
+            e2.junction AS junction2
+        FROM {edge_table} AS e1
+        LEFT JOIN {edge_table} AS e2 ON e1.u = e2.v AND e1.v = e2.u
+        AND e1.id != e2.id AND ST_Contains(ST_Buffer(ST_Transform(e1.geometry, 6691), 0.5), ST_Transform(e2.geometry, 6691))
+        AND ST_Contains(ST_Buffer(ST_Transform(e2.geometry, 6691), 0.5), ST_Transform(e1.geometry, 6691))
+        ORDER BY e1.id;
 
-    end = time.time()
-    print(f"Bidirectional roads took {end - start} seconds")
+        -- Add cost and reverse cost columns
+        ALTER TABLE {final_table} DROP COLUMN IF EXISTS cost;
+        ALTER TABLE {final_table} DROP COLUMN IF EXISTS reverse_cost;
 
-    # Select all the other roads
-    sql_uni_road = f"""
-    SELECT * FROM {table_name}
-    WHERE id1 not in (
-        SELECT id1 FROM {table_name}
+        ALTER TABLE {final_table} ADD COLUMN cost double precision DEFAULT -1;
+        ALTER TABLE {final_table} ADD COLUMN reverse_cost double precision DEFAULT -1;
+
+        -- Set cost to length of the road
+        UPDATE {final_table} 
+        SET cost = ST_Length(geom1);
+
+        -- Set reverse cost for parallel roads 
+        UPDATE {final_table}
+        SET reverse_cost = ST_Length(geom1)
         WHERE u1 = v2 AND v1 = u2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-        AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691)));"""
-    
-    uni = gpd.read_postgis(sql_uni_road, engine, geom_col="geom1" )
+        AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
+        
+        CREATE INDEX {final_table}_geom1_idx
+        ON public.{final_table} USING gist (geom1);
+        
+        CREATE INDEX {final_table}_geom2_idx
+        ON public.{final_table} USING gist (geom2);
+        
+        CREATE INDEX {final_table}_id1_idx
+        ON public.{final_table} USING btree (id1)"""
+        
+        # Execute the query
+        executeQueryWithTransaction(connection, sql)
+        
+        end = time.time()
+        print(f"Execute query took {end - start} seconds")
 
-    print(uni)
+        # Select bidirectional roads
+        sql_bi_roads = f"""
+        SELECT * FROM {final_table}
+        WHERE u1 = v2 AND v1 = u2
+        AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
+        AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));"""
 
-    print(uni.shape)
+        bi = gpd.read_postgis(sql_bi_roads, engine, geom_col="geom1" )
+        
+        end = time.time()
+        print(f"Bidirectional roads took {end - start} seconds")
 
-    end = time.time()
-    print(f"Unidirectional roads took {end - start} seconds")
-    
-    ## For bidirectionnal roads, agregate them into one.
-    # Dictionnary for mapping id1 and id2
-    dict = {}
+        # Select all the other roads
+        sql_uni_road = f"""
+        SELECT * FROM {final_table}
+        WHERE id1 not in (
+            SELECT id1 FROM {final_table}
+            WHERE u1 = v2 AND v1 = u2
+            AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
+            AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691)));"""
+        
+        uni = gpd.read_postgis(sql_uni_road, engine, geom_col="geom1" )
 
-    # To do so, we first have to parse each row and check what are the rows corresponding to each couple (id1, id2)
-    for index, row in bi.iterrows():
-        id1, id2 = row["id1"], row["id2"]
-        # If this couple is not inside the dictionnary, we add it with a count of one
-        if (id1, id2) not in dict:
-            # Check if (id2, id1) is in it
-            if (id2, id1) not in dict:
-                dict[(id1, id2)] = [index]
-            # Else, we add one to this tuple
+        end = time.time()
+        print(f"Unidirectional roads took {end - start} seconds")
+        
+        ## For bidirectionnal roads, agregate them into one.
+        # Dictionnary for mapping id1 and id2
+        dict = {}
+
+        # To do so, we first have to parse each row and check what are the rows corresponding to each couple (id1, id2)
+        for index, row in bi.iterrows():
+            id1, id2 = row["id1"], row["id2"]
+            # If this couple is not inside the dictionnary, we add it with a count of one
+            if (id1, id2) not in dict:
+                # Check if (id2, id1) is in it
+                if (id2, id1) not in dict:
+                    dict[(id1, id2)] = [index]
+                # Else, we add one to this tuple
+                else:
+                    dict[(id2, id1)].append(index)
             else:
-                dict[(id2, id1)].append(index)
-        else:
-            dict[(id1, id2)].append(index)
+                dict[(id1, id2)].append(index)
 
-    end = time.time()
-    print(f"Dictionnary creation took {end - start} seconds")
+        end = time.time()
+        print(f"Dictionnary creation took {end - start} seconds")
 
-    # When we have all the pair in the dictionnary, we verify that we only have two value per key
-    listNot2Count = []
-    for key in dict:
-        if len(dict[key]) != 2:
-            # If there are not exactly two occurences of the pair, we remove it but keep a track of it
-            listNot2Count.append(dict.pop(key))
+        # When we have all the pair in the dictionnary, we verify that we only have two value per key
+        listNot2Count = []
+        for key in dict:
+            if len(dict[key]) != 2:
+                # If there are not exactly two occurences of the pair, we remove it but keep a track of it
+                listNot2Count.append(dict.pop(key))
+        
+        end = time.time()
+        print(f"Remove not exactly 2 occurences took {end - start} seconds")
 
-    print(listNot2Count)
-    
-    end = time.time()
-    print(f"Remove not exactly 2 occurences took {end - start} seconds")
+        # Create an empty geodataframe with the same columns than the existing
+        bi_without_parallel = gpd.GeoDataFrame().reindex_like(bi)
 
-    # Create an empty geodataframe with the same columns than the existing
-    bi_without_parallel = gpd.GeoDataFrame().reindex_like(bi)
+        listIndex = []
+        # Then, for each pair, we remove the second occurence to keep only one road per key
+        for key in dict:
+            index = dict[key][1]
+            listIndex.append(index)
 
-    listIndex = []
-    # Then, for each pair, we remove the second occurence to keep only one road per key
-    for key in dict:
-        index = dict[key][1]
-        listIndex.append(index)
+        # Take only the row with the index on the list
+        bi_without_parallel = bi.loc[listIndex]
 
-    # Take only the row with the index on the list
-    bi_without_parallel = bi.loc[listIndex]
+        end = time.time()
+        print(f"Removing parallel edges took {end - start} seconds")
 
-    print(bi_without_parallel)
+        # We concatenate the two dataframes to recreate the whole road network
+        edge_with_cost = pd.concat([bi_without_parallel, uni])
 
-    end = time.time()
-    print(f"Removing parallel edges took {end - start} seconds")
+        end = time.time()
+        print(f"Concat dataframes took {end - start} seconds")
 
-    # We concatenate the two dataframes to recreate the whole road network
-    edge_with_cost = pd.concat([bi_without_parallel, uni])
+        # Rename useful columns
+        edge_with_cost = edge_with_cost.rename(
+            columns= {"id1":"id",
+                    "u1":"source",
+                    "v1":"target",
+                    "geom1":"geom",
+                    "osmid1":"osmid",
+                    "oneway1":"oneway",
+                    "ref1":"ref",
+                    "name1":"name",
+                    "highway1":"class",
+                    "lanes1":"lanes",
+                    "maxspeed1":"maxspeed",
+                    "access1":"access",
+                    "bridge1":"bridge",
+                    "tunnel1":"tunnel",
+                    "service1":"service",
+                    "width1":"width",
+                    "junction1":"junction"})
+        
+        # Keep only these columns
+        edge_with_cost = edge_with_cost[[
+            "id",
+            "source",
+            "target",
+            "cost",
+            "reverse_cost",
+            "geom",
+            "osmid",
+            "oneway",
+            "ref",
+            "name",
+            "class",
+            "lanes",
+            "maxspeed",
+            "access",
+            "bridge",
+            "tunnel",
+            "service",
+            "width",
+            "junction"]]
 
-    print(edge_with_cost)
+        # Set the geometry to the geom column
+        edge_with_cost = edge_with_cost.set_geometry("geom")
+        
+        # Load dataframe into postgis table
+        edge_with_cost.to_postgis(f"{final_table}_with_cost", engine, if_exists="replace", index=True)
+        
+        end = time.time()
+        print(f"Edge with cost to postgis took {end - start} seconds")
+        
+        # Create a geon index on the table
+        sql_create_index = f"""
+        CREATE INDEX {final_table}_with_cost_geom_idx
+        ON public.{final_table}_with_cost USING gist (geom);
+        """
+        
+        executeQueryWithTransaction(connection, sql_create_index)
+        
+        end = time.time()
+        print(f"Geom index with cost to postgis took {end - start} seconds")
+        
+        end = time.time()
+        print(f"Download {final_table} took {end - start} seconds")
 
-    end = time.time()
-    print(f"Concat dataframes took {end - start} seconds")
-
-    # Rename useful columns
-    edge_with_cost = edge_with_cost.rename(
-        columns= {"id1":"id",
-                  "u1":"source",
-                  "v1":"target",
-                  "geom1":"geom",
-                  "osmid1":"osmid",
-                  "oneway1":"oneway",
-                  "ref1":"ref",
-                  "name1":"name",
-                  "highway1":"highway",
-                  "lanes1":"lanes",
-                  "maxspeed1":"maxspeed",
-                  "access1":"access",
-                  "bridge1":"bridge",
-                  "tunnel1":"tunnel",
-                  "service1":"service",
-                  "width1":"width",
-                  "junction1":"junction"})
-    
-    # Keep only these columns
-    edge_with_cost = edge_with_cost[[
-        "id",
-        "source",
-        "target",
-        "cost",
-        "reverse_cost",
-        "geom",
-        "osmid",
-        "oneway",
-        "ref",
-        "name",
-        "highway",
-        "lanes",
-        "maxspeed",
-        "access",
-        "bridge",
-        "tunnel",
-        "service",
-        "width",
-        "junction"]]
-
-    # Set the geometry to the geom column
-    edge_with_cost = edge_with_cost.set_geometry("geom") 
-
-    edge_with_cost.to_postgis("edge_bbox_with_cost", engine, if_exists="replace", index=True)
-    
-    sql_create_index = f"""
-    CREATE INDEX {table_name}_with_cost_geom_idx
-    ON public.{table_name}_with_cost USING gist (geom);
-    """
-
-    end = time.time()
-    print(f"It took {end - start} seconds")
-
-    # exec(open('c:/Users/Mathis.Rouillard/Documents/OSM_Overture_Works/Python/OSM_to_network.py').read())
+        # exec(open('c:/Users/Mathis.Rouillard/Documents/OSM_Overture_Works/Python/OSM_to_network.py').read())

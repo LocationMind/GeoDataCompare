@@ -85,6 +85,7 @@ def insertBoundingBox(wktGeom:str, aeraName:str, tableName:str = 'bounding_box')
     
     # Get id of the inserted row
     id = rel.fetchone()[0]
+    print(id)
     return id
 
 
@@ -131,22 +132,72 @@ def extractRoads(extractedRoadTable:str,
             JOIN public.{boundingBoxTable} AS box ON ST_Intersects(r.geom, box.geom)
         WHERE box.id = {boundingBoxId};')
         """)
+    
+    # Create index if exists
+    duckdb.execute(
+        f"""
+        CALL postgres_execute(
+        'dbpostgresql',
+        'DROP INDEX IF EXISTS public.{extractedRoadTable}_geom_idx CASCADE;
+
+        CREATE INDEX IF NOT EXISTS {extractedRoadTable}_geom_idx
+        ON public.{extractedRoadTable} USING gist (geom);
+
+        DROP INDEX IF EXISTS public.{extractedRoadTable}_id_idx CASCADE;
+
+        CREATE INDEX IF NOT EXISTS {extractedRoadTable}_id_idx
+        ON public.{extractedRoadTable} USING btree
+        (id ASC NULLS LAST)
+        TABLESPACE pg_default;')""")
+
+
+# def extractConnectors(extractedConnectorTable:str,
+#                       boundingBoxId:int,
+#                       connectorTable:str = 'connector',
+#                       boundingBoxTable:str = 'bounding_box',
+#                       dropTableIfExists:bool = True):
+#     """Extract connectors from the bbox. The connector table must have been created
+#     by functions in data_integration script.
+
+#     Args:
+#         extractedConnectorTable (str): Name of the extracted connector table.
+#         boundingBoxId (int): Id of the bounding box.
+#         connetorTable (str, optional): Name of the initial connector table. Defaults to 'connector'.
+#         boundingBoxTable (str, optional): Name of the bounding box table. Defaults to 'bounding_box'.
+#         dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+#     """
+#     # Drop table if the user wants to
+#     if dropTableIfExists:
+#         duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.public.{extractedConnectorTable} CASCADE;")
+
+#     # Extract connectors from the bounding box
+#     duckdb.execute(
+#         f"""
+#         CALL postgres_execute(
+#         'dbpostgresql',
+#         'CREATE TABLE public.{extractedConnectorTable} AS
+#         SELECT
+#             c.id,
+#             c.geom,
+#             c.version,
+#             c.update_time,
+#             c.sources
+#         FROM public.{connectorTable} AS c
+#         JOIN public.{boundingBoxTable} AS box ON ST_Intersects(c.geom, box.geom)
+#         WHERE box.id = {boundingBoxId};')""")
 
 
 def extractConnectors(extractedConnectorTable:str,
-                 boundingBoxId:int,
-                 connectorTable:str = 'connector',
-                 boundingBoxTable:str = 'bounding_box',
-                 dropTableIfExists:bool = True
-                 ):
-    """Extract connectors from the bbox. The connector table must have been created
-    by functions in data_integration script.
+                      extractRoadTable:str,
+                      connectorTable:str = 'connector',
+                      dropTableIfExists:bool = True):
+    """Extract connectors that intersects the extracted roads.
+    Connectors might be outside of the bbox if extracted roads are outside the bbox too.
 
     Args:
         extractedConnectorTable (str): Name of the extracted connector table.
-        boundingBoxId (int): Id of the bounding box.
+        extractedRoadTable (str): Name of the extracted road table.
         connetorTable (str, optional): Name of the initial connector table. Defaults to 'connector'.
-        boundingBoxTable (str, optional): Name of the bounding box table. Defaults to 'bounding_box'.
         dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
     """
     # Drop table if the user wants to
@@ -166,8 +217,24 @@ def extractConnectors(extractedConnectorTable:str,
             c.update_time,
             c.sources
         FROM public.{connectorTable} AS c
-        JOIN public.{boundingBoxTable} AS box ON ST_Intersects(c.geom, box.geom)
-        WHERE box.id = {boundingBoxId};')""")
+        JOIN public.{extractRoadTable} AS r ON ST_Intersects(c.geom, r.geom);')""")
+    
+    # Create index if exists
+    duckdb.execute(
+        f"""
+        CALL postgres_execute(
+        'dbpostgresql',
+        'DROP INDEX IF EXISTS public.{extractedConnectorTable}_geom_idx CASCADE;
+
+        CREATE INDEX IF NOT EXISTS {extractedConnectorTable}_geom_idx
+        ON public.{extractedConnectorTable} USING gist (geom);
+
+        DROP INDEX IF EXISTS public.{extractedConnectorTable}_id_idx CASCADE;
+
+        CREATE INDEX IF NOT EXISTS {extractedConnectorTable}_id_idx
+        ON public.{extractedConnectorTable} USING btree
+        (id ASC NULLS LAST)
+        TABLESPACE pg_default;')""")
 
 
 def createRoadsConnectorsTable(extractedRoadTable:str,
@@ -378,7 +445,7 @@ def createEdgeTable(extractedRoadTable:str,
         'dbpostgresql',
         'ALTER TABLE public.{edgeTable} ADD CONSTRAINT {edgeTable}_pkey PRIMARY KEY (id);')""")
 
-    # CREATE INDEX IF NOT EXISTSes
+    # Create index if not exists
     duckdb.execute(
         f"""
         CALL postgres_execute(
@@ -420,28 +487,34 @@ def createJoinEdgeTable(edgeTable:str = 'edge',
         (
             id bigserial PRIMARY KEY,
             edge_id character varying NOT NULL,
-            CONSTRAINT unique_edge_id UNIQUE (edge_id)
+            CONSTRAINT {joinEdgeTable}_unique_edge_id UNIQUE (edge_id)
         );
 
         ALTER TABLE IF EXISTS public.{joinEdgeTable}
             OWNER to postgres;')""")
+    
+    print("Join edge created")
     
     # Create the indexes
     duckdb.execute(
         f"""
         CALL postgres_execute(
         'dbpostgresql',
-        'DROP INDEX IF EXISTS public.join_id_idx_edge_table CASCADE;
+        'DROP INDEX IF EXISTS public.{joinEdgeTable}_id_idx_edge_table CASCADE;
 
-        CREATE INDEX IF NOT EXISTS join_id_idx_edge_table
+        CREATE INDEX IF NOT EXISTS {joinEdgeTable}_id_idx_edge_table
             ON public.{joinEdgeTable} USING btree
             (id ASC NULLS LAST);
 
-        DROP INDEX IF EXISTS public.join_edge_id_idx CASCADE;
+        DROP INDEX IF EXISTS public.{joinEdgeTable}_edge_id_idx CASCADE;
 
-        CREATE INDEX IF NOT EXISTS join_edge_id_idx
+        CREATE INDEX IF NOT EXISTS {joinEdgeTable}_edge_id_idx
             ON public.{joinEdgeTable} USING btree
             (edge_id ASC NULLS LAST);')""")
+    
+    print("Index created")
+    
+    print("Start insert created")
     
     # Insert the values
     duckdb.execute(
@@ -449,19 +522,18 @@ def createJoinEdgeTable(edgeTable:str = 'edge',
         INSERT INTO dbpostgresql.public.{joinEdgeTable}(edge_id)
         SELECT id FROM dbpostgresql.public.{edgeTable}
         ORDER BY id ASC;""")
+    print("end insert created")
 
 
-def createJoinConnectorTable(connectorTable:str = 'connector',
+def createJoinConnectorTable(extractedConnectorTable:str,
                              joinConnectorTable:str = 'join_connector_str_to_int',
                              dropTableIfExists:bool = True):
     
     """Create a join table for connectors id (string) and integer id for pgr_djikstra algorithm.
-    It also inserts the value from the connector.
-    To avoid problems in the pgr_djikstra algorithm later, it is better to use
-    the initial connector table and not the extracted connector table.
+    It does it only for the extracted connector table.
 
     Args:
-        connectorTable (str, optional): Name of the connector table. Defaults to 'connector'.
+        extractedConnectorTable (str): Name of the extracted connector table.
         joinConnectorTable (str, optional): Name of the join connector table. Defaults to 'join_connector_str_to_int'.
         dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
     """
@@ -478,35 +550,41 @@ def createJoinConnectorTable(connectorTable:str = 'connector',
         (
             id bigserial PRIMARY KEY,
             connector_id character varying NOT NULL,
-            CONSTRAINT unique_connector_id UNIQUE (connector_id)
+            CONSTRAINT {joinConnectorTable}_unique_connector_id UNIQUE (connector_id)
         );
 
         ALTER TABLE IF EXISTS public.{joinConnectorTable}
             OWNER to postgres;')""")
+    
+    print("Join connector created")
     
     # Create the indexes
     duckdb.execute(
         f"""
         CALL postgres_execute(
         'dbpostgresql',
-        'DROP INDEX IF EXISTS public.join_id_idx_connector_table CASCADE;
+        'DROP INDEX IF EXISTS public.{joinConnectorTable}_id_idx_connector_table CASCADE;
 
-        CREATE INDEX IF NOT EXISTS join_id_idx_connector_table
+        CREATE INDEX IF NOT EXISTS {joinConnectorTable}_id_idx_connector_table
             ON public.{joinConnectorTable} USING btree
             (id ASC NULLS LAST);
         
-        DROP INDEX IF EXISTS public.join_connector_id_idx CASCADE;
+        DROP INDEX IF EXISTS public.{joinConnectorTable}_connector_id_idx CASCADE;
 
-        CREATE INDEX IF NOT EXISTS join_connector_id_idx
+        CREATE INDEX IF NOT EXISTS {joinConnectorTable}_connector_id_idx
             ON public.{joinConnectorTable} USING btree
             (connector_id ASC NULLS LAST);')""")
     
+    print("Index created")
+    
+    print("Start insert created")
     # Insert the values
     duckdb.execute(
         f"""
-        INSERT INTO dbpostgresql.public.{joinConnectorTable}(connector_id)
-        SELECT id FROM dbpostgresql.public.{connectorTable}
+        INSERT INTO dbpostgresql.public.{joinConnectorTable} (connector_id)
+        SELECT id FROM dbpostgresql.public.{extractedConnectorTable}
         ORDER BY id ASC;""")
+    print("end insert created")
 
 def createEdgeWithCostView(edgeTable:str = 'edge',
                            joinEdgeTable:str = 'join_edge_str_to_int',
@@ -757,56 +835,116 @@ def createPgRoutingTables(bboxCSV:str,
         edgeWithCostView (str, optional): Name of the edge view with cost. Defaults to 'edge_with_cost'.
         verticeTable (str, optional): Name of the vertice table. Defaults to 'vertice'.
     """
+    start = time.time()
     # Tranform bbox to OGC WKT format and create bounding box table 
     wktGeom = bboxCSVTobboxWKT(bboxCSV)
-    createBoundingboxTable(boundingBoxTable, dropTablesIfExist)
 
     # Insert bbox in it and get bbox id
     id = insertBoundingBox(wktGeom, areaNameBoundingBox, boundingBoxTable)
+    end = time.time()
+    print(f"insertBoundingBox : {end - start} seconds")
 
     # Extract roads and connectors
     extractRoads(extractedRoadTable, id, roadTable, boundingBoxTable, dropTablesIfExist)
-    extractConnectors(extractedConnectorTable, id, connectorTable, boundingBoxTable, dropTablesIfExist)
+    end = time.time()
+    print(f"extractRoads : {end - start} seconds")
+    extractConnectors(extractedConnectorTable, extractedRoadTable, connectorTable, dropTablesIfExist)
+    end = time.time()
+    print(f"extractConnectors : {end - start} seconds")
 
     # Create roads connector table
     createRoadsConnectorsTable(extractedRoadTable, connectorTable, roadsConnectorsTable, dropTablesIfExist)
+    end = time.time()
+    print(f"createRoadsConnectorsTable : {end - start} seconds")
 
     # Create connectors road count table
     createConnectorsRoadCountTable(roadsConnectorsTable, connectorsRoadCountTable, dropTablesIfExist)
+    end = time.time()
+    print(f"createConnectorsRoadCountTable : {end - start} seconds")
 
     # Add a function to postres and create edge table
     addSplitLineFromPointsFunction()
+    end = time.time()
+    print(f"addSplitLineFromPointsFunction : {end - start} seconds")
 
     createEdgeTable(extractedRoadTable, roadsConnectorsTable, connectorsRoadCountTable,edgeTable, dropTablesIfExist)
+    end = time.time()
+    print(f"createEdgeTable : {end - start} seconds")
 
     # Create join edges and join connectors tables
     createJoinEdgeTable(edgeTable, joinEdgeTable, dropTablesIfExist)
+    end = time.time()
+    print(f"createJoinEdgeTable : {end - start} seconds")
     createJoinConnectorTable(connectorTable, joinConnectorTable, dropTablesIfExist)
+    end = time.time()
+    print(f"createJoinConnectorTable : {end - start} seconds")
     
     # Finally, create edges with cost view and vertice table
     createEdgeWithCostView(edgeTable, joinEdgeTable, joinConnectorTable, edgeWithCostView, dropTablesIfExist)
+    end = time.time()
+    print(f"createEdgeWithCostView : {end - start} seconds")
     createVerticeTable(verticeTable, connectorsRoadCountTable, connectorTable, joinConnectorTable, edgeWithCostView, dropTablesIfExist)
+    end = time.time()
+    print(f"createVerticeTable : {end - start} seconds")
 
 
 
 if __name__ == "__main__":
     import time
+    import json
     start = time.time()
     
-    bbox = '139.6968505495,35.6993555056,139.701360952,35.701704437'
-    area = "Test area"
-    extractRoad = "road_test_area"
-    extractConnector = "connector_test_area"
-
+    # Initialise duckdb
     di.initDuckDb('overturemap-pgrouting')
-
-    # createPgRoutingTables(bboxCSV = bbox,
-    #                       areaNameBoundingBox = area,
-    #                       extractedRoadTable = extractRoad, 
-    #                       extractedConnectorTable = extractConnector)
-
-    savePath = os.path.join(".", "Data", "Test", "result.geojson")
-    djikstra(35.699579, 139.696734, 35.701291, 139.700234, savePath)
+    
+    # Create bbox table
+    createBoundingboxTable()
     
     end = time.time()
-    print(f"Djikstra : {end - start} seconds")
+    print(f"createBoundingboxTable : {end - start} seconds")
+    
+    # Load the 3 bbox that we will use from the json file
+    path_json = os.path.join(".", "Data", "bboxs.json")
+    with open(path_json, "r") as f:
+        bboxJson = json.load(f)
+    
+    # Create tables for each bbox
+    for elem in bboxJson["bboxs"]:
+        # Get the element we need from the json
+        bbox = elem["bbox"]
+        area = elem["final_table"]
+        extractRoad = elem["extractRoad"]
+        extractConnector = elem["extractConnector"]
+        
+        # Create names of the other tables
+        roadsConnectorsTable = f'roads_connectors_{area}'
+        connectorsRoadCountTable = f'connectors_road_count_{area}'
+        edgeTable = f'edge_{area}'
+        joinEdgeTable = f'join_edge_str_to_int_{area}'
+        joinConnectorTable = f'join_connector_str_to_int_{area}'
+        edgeWithCostView = f'edge_with_cost_{area}'
+        verticeTable = f'vertice_{area}'
+        
+        print(f"Start process {area}")
+        
+        
+        
+        # Create all tables for each
+        createPgRoutingTables(bboxCSV = bbox,
+                              areaNameBoundingBox = area,
+                              extractedRoadTable = extractRoad, 
+                              extractedConnectorTable = extractConnector,
+                              roadsConnectorsTable = roadsConnectorsTable,
+                              connectorsRoadCountTable = connectorsRoadCountTable,
+                              edgeTable = edgeTable,
+                              joinEdgeTable = joinEdgeTable,
+                              joinConnectorTable = joinConnectorTable,
+                              edgeWithCostView = edgeWithCostView,
+                              verticeTable = verticeTable)
+        
+        # Djikstra algorithm
+        # savePath = os.path.join(".", "Data", "Test", "result.geojson")
+        # djikstra(35.699579, 139.696734, 35.701291, 139.700234, savePath)
+        
+        # end = time.time()
+        # print(f"Djikstra : {end - start} seconds")

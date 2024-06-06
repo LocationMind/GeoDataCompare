@@ -4,7 +4,7 @@ import os
 import time
 import json
 
-def extract_information(data, field) -> str:
+def extract_information(data:str, field:str) -> str:
     """Extract information of the field in the data.
     Return none if no information were found.
     The data must be in a JSON format
