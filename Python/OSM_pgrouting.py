@@ -127,6 +127,8 @@ if __name__ == "__main__":
         # Get network data for a specific bbox
         bboxTuple = bboxCsvToTuple(bbox)
         
+        print(bboxTuple)
+        
         graph = ox.graph_from_bbox(bbox=bboxTuple, retain_all=True)
 
         end = time.time()
@@ -151,9 +153,47 @@ if __name__ == "__main__":
         end = time.time()
         print(f"Save edge to postgis : {end - start} seconds")
         
-        # Create a table to join parallel edges using psycopg2
+        # Add missing columns if not exists
+        sqlMissingColumns = f"""
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS osmid text;
 
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS oneway boolean;
         
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS lanes text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS highway text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS reversed text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS length double precision;
+        
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS ref text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS maxspeed text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS maxspeed text; 
+        
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS name text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS service text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS access text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS tunnel text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS bridge text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS width text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS junction text;"""
+
+        # Execute the query
+        executeQueryWithTransaction(connection, sqlMissingColumns)
+        
+        end = time.time()
+        print(f"Add missing columns took {end - start} seconds")
+        
+        # Create a table to join parallel edges using psycopg2
         # SQL query to create the table with everything needed
         sql = f"""
         -- Add id column to edge table
@@ -220,11 +260,11 @@ if __name__ == "__main__":
 
         -- Set cost to length of the road
         UPDATE {final_table} 
-        SET cost = ST_Length(geom1);
+        SET cost = ST_Length(geom1::geography);
 
         -- Set reverse cost for parallel roads 
         UPDATE {final_table}
-        SET reverse_cost = ST_Length(geom1)
+        SET reverse_cost = ST_Length(geom1::geography)
         WHERE u1 = v2 AND v1 = u2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
@@ -386,5 +426,3 @@ if __name__ == "__main__":
         
         end = time.time()
         print(f"Download {final_table} took {end - start} seconds")
-
-        # exec(open('c:/Users/Mathis.Rouillard/Documents/OSM_Overture_Works/Python/OSM_to_network.py').read())

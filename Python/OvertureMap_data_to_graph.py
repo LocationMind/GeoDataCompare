@@ -927,8 +927,6 @@ if __name__ == "__main__":
         
         print(f"Start process {area}")
         
-        
-        
         # Create all tables for each
         createPgRoutingTables(bboxCSV = bbox,
                               areaNameBoundingBox = area,
