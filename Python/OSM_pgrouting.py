@@ -92,8 +92,6 @@ def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
         # The transaction is closed anyway
         cursor.close()
 
-# def loadDatatoPostgisFromBbox()
-
 if __name__ == "__main__":
     import json
     import os
@@ -106,8 +104,18 @@ if __name__ == "__main__":
     engine = getEngine(database)
     connection = getConnection(database)
     
+    ## OSMnx settings
+    
+    # Add footway tags to ways
+    ox.settings.useful_tags_way += ["footway"]
+    
+    print(ox.settings.useful_tags_way)
+    
+    # Download data until the 8th April only, up to date data from OMF 2024-04-16-beta.0 release
+    ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-04-08T00:00:00Z"]'
+    
     # Load the 3 bbox that we will use from the json file
-    path_json = os.path.join(".", "Data", "bboxs.json")
+    path_json = os.path.join(".", "Data", "bbox_test.json")
     with open(path_json, "r") as f:
         bboxJson = json.load(f)
     
@@ -129,10 +137,17 @@ if __name__ == "__main__":
         
         print(bboxTuple)
         
-        graph = ox.graph_from_bbox(bbox=bboxTuple, retain_all=True)
+        graph = ox.graph_from_bbox(bbox=bboxTuple, simplify=False, retain_all=True)
 
         end = time.time()
         print(f"Create graph : {end - start} seconds")
+        
+        # Simplify the graph by using the simplify_graph function but without aggregating edges
+        
+        graph = ox.simplify_graph(graph, edge_attrs_differ=['osmid'])
+
+        end = time.time()
+        print(f"Simplify graph : {end - start} seconds")
 
         # Transform the graph to geodataframe for the edges and nodes
         node = con.graph_to_gdfs(graph, nodes=True, edges=False, node_geometry=True)
@@ -227,6 +242,7 @@ if __name__ == "__main__":
             e1.bridge AS bridge1,
             e1.tunnel AS tunnel1,
             e1.service AS service1,
+            e1.footway AS footway1,
             e1.width AS width1,
             e1.junction AS junction1,
             e2.osmid AS osmid2,
@@ -243,6 +259,7 @@ if __name__ == "__main__":
             e2.bridge AS bridge2,
             e2.tunnel AS tunnel2,
             e2.service AS service2,
+            e2.footway AS footway2,
             e2.width AS width2,
             e2.junction AS junction2
         FROM {edge_table} AS e1
@@ -379,6 +396,7 @@ if __name__ == "__main__":
                     "bridge1":"bridge",
                     "tunnel1":"tunnel",
                     "service1":"service",
+                    "footway1":"footway",
                     "width1":"width",
                     "junction1":"junction"})
         
@@ -401,6 +419,7 @@ if __name__ == "__main__":
             "bridge",
             "tunnel",
             "service",
+            "footway",
             "width",
             "junction"]]
 

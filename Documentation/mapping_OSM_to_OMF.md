@@ -7,12 +7,12 @@ OMF road data have 21 different classes, not always represented as a possible va
 - [Mapping OpenStreetMap (OSM) classes to OvertureMap Foundation (OMF) classes (road data)](#mapping-openstreetmap-osm-classes-to-overturemap-foundation-omf-classes-road-data)
 - [OMF Classes](#omf-classes)
   - [`motorway` class](#motorway-class)
+  - [`trunk` class](#trunk-class)
   - [`primary` class](#primary-class)
   - [`secondary` class](#secondary-class)
   - [`tertiary` class](#tertiary-class)
   - [`residential` class](#residential-class)
   - [`living_street` class](#living_street-class)
-  - [`trunk` class](#trunk-class)
   - [`unclassified` class](#unclassified-class)
   - [`parking_aisle` class](#parking_aisle-class)
   - [`driveway` class](#driveway-class)
@@ -36,6 +36,11 @@ Sometimes it will be really easy as it is directly in the highway tag, sometimes
 In OSM data, we can find the tag `highway=motorway` for the main motorway and `highway=motorway_link` for motorways links.
 These values can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
 
+## `trunk` class
+
+In OSM data, we can find the tag `highway=trunk` for the main trunk roads and `highway=trunk_link` for trunk road links.
+These values can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
+
 ## `primary` class
 
 In OSM data, we can find the tag `highway=primary` for the main primary roads and `highway=primary_link` for primary road links.
@@ -48,7 +53,7 @@ These values can also be find in OSMnx integrated data, directly in the class at
 
 ## `tertiary` class
 
-In OSM data, we can find the tag `highway=tertiary` for tertiary roads.
+In OSM data, we can find the tag `highway=tertiary` for the main tertiary roads and `highway=tertiary_link` for tertiary road links.
 This value can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
 
 ## `residential` class
@@ -62,11 +67,6 @@ It could be useful to have a look inside those results to see why this differenc
 
 In OSM data, we can find the tag `highway=living_street` for living streets.
 This value can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
-
-## `trunk` class
-
-In OSM data, we can find the tag `highway=trunk` for the main trunk roads and `highway=trunk_link` for trunk road links.
-These values can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
 
 ## `unclassified` class
 
