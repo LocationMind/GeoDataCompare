@@ -149,43 +149,7 @@ def extractRoads(extractedRoadTable:str,
         ON public.{extractedRoadTable} USING btree
         (id ASC NULLS LAST)
         TABLESPACE pg_default;')""")
-
-
-# def extractConnectors(extractedConnectorTable:str,
-#                       boundingBoxId:int,
-#                       connectorTable:str = 'connector',
-#                       boundingBoxTable:str = 'bounding_box',
-#                       dropTableIfExists:bool = True):
-#     """Extract connectors from the bbox. The connector table must have been created
-#     by functions in data_integration script.
-
-#     Args:
-#         extractedConnectorTable (str): Name of the extracted connector table.
-#         boundingBoxId (int): Id of the bounding box.
-#         connetorTable (str, optional): Name of the initial connector table. Defaults to 'connector'.
-#         boundingBoxTable (str, optional): Name of the bounding box table. Defaults to 'bounding_box'.
-#         dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
-#     """
-#     # Drop table if the user wants to
-#     if dropTableIfExists:
-#         duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.public.{extractedConnectorTable} CASCADE;")
-
-#     # Extract connectors from the bounding box
-#     duckdb.execute(
-#         f"""
-#         CALL postgres_execute(
-#         'dbpostgresql',
-#         'CREATE TABLE public.{extractedConnectorTable} AS
-#         SELECT
-#             c.id,
-#             c.geom,
-#             c.version,
-#             c.update_time,
-#             c.sources
-#         FROM public.{connectorTable} AS c
-#         JOIN public.{boundingBoxTable} AS box ON ST_Intersects(c.geom, box.geom)
-#         WHERE box.id = {boundingBoxId};')""")
-
+    
 
 def extractConnectors(extractedConnectorTable:str,
                       extractRoadTable:str,
@@ -320,13 +284,13 @@ def createConnectorsRoadCountTable(roadsConnectorsTable:str = 'roads_connectors'
         CREATE TABLE dbpostgresql.public.{connectorsRoadCountTable} AS
         SELECT connector_id, array_agg(road_id) AS roads, count(*) AS cnt
         FROM dbpostgresql.public.{roadsConnectorsTable}
-        GROUP BY connector_id
-        HAVING count(*)>1;""")
+        GROUP BY connector_id;""")
     
     # Add primary key
     duckdb.execute(f"""CALL postgres_execute(
         'dbpostgresql',
         'ALTER TABLE public.{connectorsRoadCountTable} ADD PRIMARY KEY (connector_id);')""")
+
 
 def addSplitLineFromPointsFunction():
     """Add a custom function name "ST_SplitLineFromPoints" to postgresql.
@@ -586,6 +550,7 @@ def createJoinConnectorTable(extractedConnectorTable:str,
         ORDER BY id ASC;""")
     print("end insert created")
 
+
 def createEdgeWithCostView(edgeTable:str = 'edge',
                            joinEdgeTable:str = 'join_edge_str_to_int',
                            joinConnectorTable:str = 'join_connector_str_to_int',
@@ -634,6 +599,7 @@ def createEdgeWithCostView(edgeTable:str = 'edge',
         LEFT JOIN public.{joinConnectorTable} AS s ON source=s.connector_id
         LEFT JOIN public.{joinConnectorTable} AS t ON target=t.connector_id
         LEFT JOIN public.{joinEdgeTable} AS j ON e.id=j.edge_id;')""")
+
 
 def createVerticeTable(verticeTable:str = 'vertice',
                        connectorsRoadCountTable:str = 'connectors_road_count',
@@ -691,6 +657,7 @@ def createVerticeTable(verticeTable:str = 'vertice',
         
         CREATE INDEX IF NOT EXISTS {verticeTable}_geom_idx ON public.{verticeTable} USING gist (geom);')""")
 
+
 def initialisePgRouting():
     """Initialise pg routing. If the extension already exists, it skip the query
     """
@@ -700,6 +667,7 @@ def initialisePgRouting():
         CALL postgres_execute(
             'dbpostgresql',
             'CREATE EXTENSION IF NOT EXISTS pgrouting;')""")
+
 
 def getClosestPointIntId(lat:float,
                          lon:float,
@@ -886,7 +854,6 @@ def createPgRoutingTables(bboxCSV:str,
     createVerticeTable(verticeTable, connectorsRoadCountTable, connectorTable, joinConnectorTable, edgeWithCostView, dropTablesIfExist)
     end = time.time()
     print(f"createVerticeTable : {end - start} seconds")
-
 
 
 if __name__ == "__main__":

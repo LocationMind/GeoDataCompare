@@ -92,25 +92,25 @@ The `alley` class does not exist directly in OSMnx integrated data, but by combi
 ## `pedestrian` class
 
 In OSM data, we can find the tag `highway=pedestrian` for pedestrian ways.
-The `alley` class does not exist directly in OSMnx integrated data, but by combining the value of the class and service attribute, we might be able to find it again.
+This value can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
 
 ## `footway` class
 
 In OSM data, we can find the tag `highway=footway` for footways, ie "minor pathways which are used mainly or exclusively by pedestrians" (https://wiki.openstreetmap.org/wiki/Tag:highway%3Dfootway).
-However, if the key `footway` is used, then it should not be mapped with the `footway` class, but with the class defined by the tag `footway=*`, such as sidewalk or crossings for instance.
+However, if the key `footway` is used, then it should not be mapped with the `footway` class directly, but with the class defined by the tag `footway=*` if it exists, such as sidewalk or crossings for instance.
 This value can also be find in OSMnx integrated data, directly in the class attribute, so the mapping should be easy.
 
 ## `sidewalk` class
 
 In OSM data, we can find the tag `highway=footway` or `highway=path` used with `footway=sidewalk` for sidewalks.
-However, there are no information about the `footway` value in OSMnx integrated data.
-It will be necessary to find a way to get this information again (maybe by using the OSM id of the road).
+The `sidewalk` class does not exist directly in OSMnx integrated data, but by combining the value of the class and footway attribute, we might be able to find it again.
+
 
 ## `crosswalk` class
 
 In OSM data, we can find the tag `highway=footway` or `highway=path` used with `footway=crossing` for sidewalks.
-However, there are no information about the `footway` value in OSMnx integrated data.
-It will be necessary to find a way to get this information again (maybe by using the OSM id of the road).
+The `crosswalk` class does not exist directly in OSMnx integrated data, but by combining the value of the class and footway attribute, we might be able to find it again.
+
 Another possibility could be to used nodes information, as some nodes have in their `highway` attribute a value equals to `crossing`, indicating that the node correspond to a crosswalk.
 But this information is not always indicated in the node attributes, so the OSM id might be the way to use it.
 

@@ -106,16 +106,15 @@ if __name__ == "__main__":
     
     ## OSMnx settings
     
-    # Add footway tags to ways
+    # Add footway and abutters tags to ways
     ox.settings.useful_tags_way += ["footway"]
-    
-    print(ox.settings.useful_tags_way)
+    ox.settings.useful_tags_way += ["abutters"]
     
     # Download data until the 8th April only, up to date data from OMF 2024-04-16-beta.0 release
     ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-04-08T00:00:00Z"]'
     
     # Load the 3 bbox that we will use from the json file
-    path_json = os.path.join(".", "Data", "bbox_test.json")
+    path_json = os.path.join(".", "Data", "bboxs.json")
     with open(path_json, "r") as f:
         bboxJson = json.load(f)
     
@@ -198,6 +197,10 @@ if __name__ == "__main__":
 
         ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS bridge text;
 
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS footway text;
+
+        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS abutters text;
+
         ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS width text;
 
         ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS junction text;"""
@@ -243,6 +246,7 @@ if __name__ == "__main__":
             e1.tunnel AS tunnel1,
             e1.service AS service1,
             e1.footway AS footway1,
+            e1.abutters AS abutters1,
             e1.width AS width1,
             e1.junction AS junction1,
             e2.osmid AS osmid2,
@@ -260,11 +264,13 @@ if __name__ == "__main__":
             e2.tunnel AS tunnel2,
             e2.service AS service2,
             e2.footway AS footway2,
+            e2.abutters AS abutters2,
             e2.width AS width2,
             e2.junction AS junction2
         FROM {edge_table} AS e1
         LEFT JOIN {edge_table} AS e2 ON e1.u = e2.v AND e1.v = e2.u
-        AND e1.id != e2.id AND ST_Contains(ST_Buffer(ST_Transform(e1.geometry, 6691), 0.5), ST_Transform(e2.geometry, 6691))
+        AND e1.id != e2.id AND e1.highway = e2.highway
+        AND ST_Contains(ST_Buffer(ST_Transform(e1.geometry, 6691), 0.5), ST_Transform(e2.geometry, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(e2.geometry, 6691), 0.5), ST_Transform(e1.geometry, 6691))
         ORDER BY e1.id;
 
@@ -282,7 +288,7 @@ if __name__ == "__main__":
         -- Set reverse cost for parallel roads 
         UPDATE {final_table}
         SET reverse_cost = ST_Length(geom1::geography)
-        WHERE u1 = v2 AND v1 = u2
+        WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2 AND id1 != id2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
         
@@ -396,7 +402,7 @@ if __name__ == "__main__":
                     "bridge1":"bridge",
                     "tunnel1":"tunnel",
                     "service1":"service",
-                    "footway1":"footway",
+                    "footway1":"footway", "abutters1":"abutters",
                     "width1":"width",
                     "junction1":"junction"})
         
@@ -420,6 +426,7 @@ if __name__ == "__main__":
             "tunnel",
             "service",
             "footway",
+            "abutters",
             "width",
             "junction"]]
 

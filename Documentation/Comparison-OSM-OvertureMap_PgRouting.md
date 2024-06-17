@@ -165,85 +165,93 @@ To have the result by class, we simply have to add a `GROUP BY class` clause in 
 However, because the result will not be given in one line, each request must be run separately.
 Also, it is better to use the round function to truncate the result to two decimals here as there are many classes, so by letting `CEILING`, we raise the risk of having bad values.
 
-Because sometime OSM class are in an array format, we cannot just do a `GROUP BY class`.
-Moreover, we cannot just add the total length of arrays value to each class contained in the array or the result will be false too at the end.
-
-The query is a bit complicated, but the principle is to transform the classes to a row for each class containing in the array (1 row if the class was not in an array format).
-Using this, we assigned the length of the road divided by the number of class of the road to avoid falsing the results.
-This is done in the `WITH` clause.
-In the main `SELECT` clause, we simply remove the quote from the class and we regroup them with the same request.
-It is only necessary to change the table in the `FROM` part of the `WITH` clause to adapt this code.
+It is easier to transform OSM classes into OMF classes, as these classes have been created from OSM classes.
+Also, we might want to have 21 rows in the results (ie one row per class), even though the class does not exist in the data.
+To do so, we can change slightly the query to include all results.
+For OSM data, the mapping has been done according to what is written in this document: [mapping_OSM_to_OMF](./mapping_OSM_to_OMF.md).
 
 **OSM**
 ```sql
-WITH exploded_classes AS (
-    SELECT 
-        unnest(
-            CASE 
-                WHEN class LIKE '[%' THEN regexp_split_to_array(trim(both '[]' from class), ',\s*')
-                ELSE ARRAY[class]
-            END
-        ) AS class,
-        ST_Length(geom::geography) / CASE 
-            WHEN class LIKE '[%' THEN array_length(regexp_split_to_array(trim(both '[]' from class), ',\s*'), 1)
-            ELSE 1
-        END AS length
-    FROM 
-        tokyo_with_cost
+WITH table_new_classes AS
+(
+	SELECT id,
+	geom,
+	-- New class creations
+	CASE
+		WHEN class = 'motorway' OR class = 'motorway_link' THEN 'motorway'
+		WHEN class = 'trunk' OR class = 'trunk_link' THEN 'trunk'
+		WHEN class = 'primary' OR class = 'primary_link' THEN 'primary'
+		WHEN class = 'secondary' OR class = 'secondary_link' THEN 'secondary'
+		WHEN class = 'tertiary' OR class = 'tertiary_link' THEN 'tertiary'
+		WHEN class = 'residential' OR (class = 'unclassified' AND abutters = 'residential') THEN 'residential'
+		WHEN class = 'living_street' THEN 'living_street'
+		WHEN class = 'service' AND service = 'parking_aisle' THEN 'parking_aisle'
+		WHEN class = 'service' AND service = 'driveway' THEN 'driveway'
+		WHEN class = 'service' AND service = 'alley' THEN 'alley'
+		WHEN class = 'pedestrian' THEN 'pedestrian'
+		WHEN (class = 'footway' OR class = 'path') AND footway = 'sidewalk' THEN 'sidewalk'
+		WHEN (class = 'footway' OR class = 'path') AND footway = 'crosswalk' THEN 'crosswalk'
+		WHEN class = 'footway' THEN 'footway'
+		WHEN class = 'path' THEN 'path'
+		WHEN class = 'steps' THEN 'steps'
+		WHEN class = 'track' THEN 'track'
+		WHEN class = 'cycleway' THEN 'cycleway'
+		WHEN class = 'bridleway' THEN 'bridleway'
+		WHEN class = 'unclassified' THEN 'unclassified'
+		ELSE 'unknown'
+	END AS new_class
+	FROM public.tokyo_with_cost
+),
+OMF_classes AS (
+    SELECT unnest(ARRAY[
+        'alley', 'bridleway', 'cycleway', 'driveway', 'footway', 'living_street',
+        'motorway', 'parking_aisle', 'path', 'pedestrian', 'primary', 'residential',
+        'secondary', 'sidewalk', 'steps', 'tertiary', 'trunk', 'unclassified', 'unknown',
+        'crosswalk', 'track'
+    ]) AS new_class
 )
 SELECT 
-    trim(both '''' from class) AS class,
-    round((SUM(length) / 1000)::numeric, 2) AS length_kilometer
-FROM 
-    exploded_classes
-GROUP BY 
-    trim(both '''' from class) 
-ORDER BY 
-    trim(both '''' from class)  ASC;
-
+    omf.new_class AS new_class,
+    COALESCE(join_table.length_kilometer, 0) AS length_kilometer,
+    COALESCE(join_table.nb_entity, 0) AS nb_entity
+FROM OMF_classes AS omf
+LEFT JOIN (
+	SELECT new_class,	
+	round((SUM(ST_Length(geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+	count(*) as nb_entity
+	FROM table_new_classes
+	GROUP BY new_class
+) join_table
+USING (new_class)
+ORDER BY omf.new_class ASC;
 ```
-
-To ensure that the result is good, we can simply run this request:
-
-```sql
-WITH exploded_classes AS (
-    SELECT 
-        unnest(
-            CASE 
-                WHEN class LIKE '[%' THEN regexp_split_to_array(trim(both '[]' from class), ',\s*')
-                ELSE ARRAY[class]
-            END
-        ) AS class,
-        ST_Length(geom::geography) / CASE 
-            WHEN class LIKE '[%' THEN array_length(regexp_split_to_array(trim(both '[]' from class), ',\s*'), 1)
-            ELSE 1
-        END AS length
-    FROM 
-        tokyo_with_cost
-)
-SELECT CEILING(SUM(length_kilometer)) as length_kilometer
-FROM(
-	SELECT 
-		trim(both '''' from class) AS class,
-		round((SUM(length) / 1000)::numeric, 2) AS length_kilometer
-	FROM 
-		exploded_classes
-	GROUP BY 
-		trim(both '''' from class) 
-	ORDER BY 
-		trim(both '''' from class) ASC);
-```
-
-It should give you the same result that with the first SQL request.
 
 **OMF**
 ```sql
-SELECT class, round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer
-FROM edge_with_cost_hamamatsu AS e
-JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
-WHERE b.name = 'hamamatsu'
-GROUP BY class
-ORDER BY class ASC;
+WITH OMF_classes AS (
+    SELECT unnest(ARRAY[
+        'alley', 'bridleway', 'cycleway', 'driveway', 'footway', 'living_street',
+        'motorway', 'parking_aisle', 'path', 'pedestrian', 'primary', 'residential',
+        'secondary', 'sidewalk', 'steps', 'tertiary', 'trunk', 'unclassified', 'unknown',
+        'crosswalk', 'track'
+    ]) AS new_class
+)
+SELECT 
+    omf.new_class AS new_class,
+    COALESCE(join_table.length_kilometer, 0) AS length_kilometer,
+    COALESCE(join_table.nb_entity, 0) AS nb_entity
+FROM OMF_classes AS omf
+LEFT JOIN (
+	SELECT e.class AS new_class,
+	round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+	count(e.class) AS nb_entity
+	FROM edge_with_cost_tokyo AS e
+	JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
+	WHERE b.name = 'tokyo'
+	GROUP BY class
+) join_table
+USING (new_class)
+ORDER BY omf.new_class ASC;
 ```
 
 # Results
