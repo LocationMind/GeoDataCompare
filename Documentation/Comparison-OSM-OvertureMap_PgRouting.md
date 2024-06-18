@@ -4,14 +4,15 @@
 - [Dataset creation](#dataset-creation)
 - [Comparison process](#comparison-process)
 	- [Tests zone](#tests-zone)
-	- [Create vertices / nodes table](#create-vertices--nodes-table)
 	- [Criteria for graph analysis](#criteria-for-graph-analysis)
 		- [Number of nodes](#number-of-nodes)
+		- [Number of ways](#number-of-ways)
 		- [Number of kilometer (total / by class)](#number-of-kilometer-total--by-class)
 - [Results](#results)
 	- [General results](#general-results)
 	- [Specific results](#specific-results)
-		- [Total kilometer of roads by type](#total-kilometer-of-roads-by-type)
+		- [Total kilometer of roads by type (before mapping)](#total-kilometer-of-roads-by-type-before-mapping)
+		- [Total kilometer of roads by type (after mapping)](#total-kilometer-of-roads-by-type-after-mapping)
 
 # Dataset creation
 
@@ -55,9 +56,7 @@ For **OvertureMap foundation (OMF) dataset**, the names of the edge tables are :
 - Hamamatsu : `edge_with_cost_hamamatsu`
 - Tateyama : `edge_with_cost_tateyama`
 
-
-
-## Create vertices / nodes table
+<!-- ## Create vertices / nodes table
 
 To have vertices that are well associated to the graph, we can use the `pgr_createVerticesTable` function of PgRouting.
 To do so, just run the following SQL query in PostgreSQL, by replacing `edge` and `geom` respectively by the name of your edge table and the name of the geometry column:
@@ -67,7 +66,7 @@ SELECT pgr_createVerticesTable('edge', 'geom');
 ```
 
 The vertices table will have the name of the edge table with `_vertices_pgr` at the end.
-It is better to let the name like this, as some PgRouting function works with this vertices table without possibility to change the name of it in the function.
+It is better to let the name like this, as some PgRouting function works with this vertices table without possibility to change the name of it in the function. -->
 
 ## Criteria for graph analysis
 
@@ -85,42 +84,79 @@ Here is a list of criteria that we used:
 
 To calculate those criteria, we can use PgRouting functions, writing SQL request or using python and geopandas / networkx packages.
 
+For OMF data, we need to keep only ways and nodes inside the bounding box (it is not necessary to do it with OSM data as it was constructed such as no vertices or edges are outside the bounding box).
+Please be sure to have only one bounding box with the name that you will use, otherwise use the id of the bounding box it will be easier.
+
 ### Number of nodes
 
 Without needing PgRouting functions, we can easily find the number of nodes in each dataset.
-The SQL query is the following:
+The SQL queries are the following:
 
+**OSM**
 ```sql
 SELECT
-	(SELECT count(*) FROM tokyo_with_cost_vertices_pgr) as vertice_number_tokyo,
-	(SELECT count(*) FROM hamamatsu_with_cost_vertices_pgr) as vertice_number_hamamatsu,
-	(SELECT count(*) FROM tateyama_with_cost_vertices_pgr) as vertice_number_tateyama;
+	(SELECT count(*) FROM node_tokyo) as vertice_number_tokyo,
+	(SELECT count(*) FROM node_hamamatsu) as vertice_number_hamamatsu,
+	(SELECT count(*) FROM node_tateyama) as vertice_number_tateyama;
 ```
 
-For OMF data, we need to keep only thos inside the bounding box (it is not necessary to do it with OSM data as it was constructed such as no vertices or edges are outside the bounding box).
-Please be sure to have only one bounding box with the name that you will use, otherwise use the id of the bounding box it will be easier.
-Here is the SQL query:
-
+**OMF**
 ```sql
 SELECT
 	(
 		SELECT count(*)
-		FROM edge_with_cost_tokyo_vertices_pgr AS e
-		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		FROM vertice_tokyo AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'tokyo'
 	) as vertice_number_tokyo,
 	(
 		SELECT count(*)
-		FROM edge_with_cost_hamamatsu_vertices_pgr AS e
-		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		FROM vertice_hamamatsu AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'hamamatsu'
 	) as vertice_number_hamamatsu,
 	(
 		SELECT count(*)
-		FROM edge_with_cost_tateyama_vertices_pgr AS e
-		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		FROM vertice_tateyama AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'tateyama'
 	) as vertice_number_tateyama;
+```
+
+### Number of ways
+
+Without needing PgRouting functions, we can easily find the number of ways in each dataset.
+The SQL queries are the following:
+
+**OSM**
+```sql
+SELECT
+	(SELECT count(*) FROM tokyo_with_cost) as ways_number_tokyo,
+	(SELECT count(*) FROM hamamatsu_with_cost) as ways_number_hamamatsu,
+	(SELECT count(*) FROM tateyama_with_cost) as ways_number_tateyama;
+```
+
+**OMF**
+```sql
+SELECT
+	(
+		SELECT count(*)
+		FROM edge_with_cost_tokyo AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		WHERE b.name = 'tokyo'
+	) as ways_number_tokyo,
+	(
+		SELECT count(*)
+		FROM edge_with_cost_hamamatsu AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		WHERE b.name = 'hamamatsu'
+	) as ways_number_hamamatsu,
+	(
+		SELECT count(*)
+		FROM edge_with_cost_tateyama AS e
+		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
+		WHERE b.name = 'tateyama'
+	) as ways_number_tateyama;
 ```
 
 ### Number of kilometer (total / by class)
@@ -163,7 +199,32 @@ SELECT
 
 To have the result by class, we simply have to add a `GROUP BY class` clause in the request.
 However, because the result will not be given in one line, each request must be run separately.
-Also, it is better to use the round function to truncate the result to two decimals here as there are many classes, so by letting `CEILING`, we raise the risk of having bad values.
+Also, it is better to use the round function to truncate the result to two decimals here as there are many classes, so by letting `CEILING`, we lower down the result uncertainty.
+
+The query to do so before mapping OSM classes to OMF classes are these one:
+
+**OSM**
+```sql
+SELECT class,
+round((SUM(ST_Length(geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+count(*) as nb_entity
+FROM tokyo_with_cost
+GROUP by class
+ORDER by class ASC;
+```
+
+**OMF**
+```sql
+SELECT e.class,
+round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+count(e.class) AS nb_entity
+FROM edge_with_cost_tokyo AS e
+JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
+WHERE b.name = 'tokyo'
+GROUP BY class
+ORDER by class ASC;
+```
+
 
 It is easier to transform OSM classes into OMF classes, as these classes have been created from OSM classes.
 Also, we might want to have 21 rows in the results (ie one row per class), even though the class does not exist in the data.
@@ -264,9 +325,13 @@ ORDER BY omf.new_class ASC;
 | **Number of nodes** | *Hamamatsu* | 26409 | 27858 |
 | **Number of nodes** | *Tateyama* | 5962 | 6143 |
 |  |  |  |  |
-| **Total Kilometer** | *Tokyo* | 3176 | 3153 | 
-| **Total Kilometer** | *Hamamatsu* | 1756 | 1755 |
-| **Total Kilometer** | *Tateyama* | 604 | 604 |
+| **Number of edges** | *Tokyo* | 109922 | 101206 | 
+| **Number of edges** | *Hamamatsu* | 44444 | 39579 |
+| **Number of edges** | *Tateyama* | 8419 | 7821 |
+|  |  |  |  |
+| **Total Kilometer** | *Tokyo* | 3197 | 3153 | 
+| **Total Kilometer** | *Hamamatsu* | 1770 | 1755 |
+| **Total Kilometer** | *Tateyama* | 626 | 604 |
 |  |  |  |  |
 | **Criterion** | *Tokyo* | xxx | yyy | 
 | **Criterion** | *Hamamatsu* | xxx | xxx |
@@ -287,94 +352,176 @@ ORDER BY omf.new_class ASC;
 
 ## Specific results
 
-### Total kilometer of roads by type
+### Total kilometer of roads by type (before mapping)
+
+Missing values correspond to no value in the dataset.
+
+**For Tokyo**:
+
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | | | 143.63 | 3976 |
+| bridleway | 0.02 | 1 | 0.02 | 1 |
+| busway | 0.17 | 10 | | |
+| corridor | 0.13 | 15 | | |
+| crosswalk | | | 43.17 | 5968 |
+| cycleway | 11.23 | 191 | 10.55 | 181 |
+| driveway | | | 12.77 | 461 |
+| elevator | 0.05 | 8 | | |
+| footway | 1097.29 | 47834 | 686.37 | 25806 |
+| living_street | 0.16 | 7 | 0.16 | 7 |
+| motorway | 63.21 | 176 | 72.26 | 195 |
+| motorway_link | 23.98 | 207 | | |
+| parking_aisle | | | 15.17 | 566 |
+| path | 34.48 | 1047 | 34.26 | 1026 |
+| pedestrian | 27.75 | 799 | 27.64 | 762 |
+| primary | 103.18 | 2647 | 104.20 | 2544 |
+| primary_link | 2.56 | 62 | | |
+| residential | 690.78 | 20806 | 689.98 | 20722 |
+| road | 0.13 | 3 | | |
+| secondary | 130.65 | 3521 | 131.70 | 3405 |
+| secondary_link | 2.00 | 61 | | |
+| service | 300.32 | 8778 | | |
+| sidewalk | | | 348.45 | 8817 |
+| steps | 20.17 | 2033 | 18.89 | 1833 |
+| tertiary | 232.71 | 7553 | 233.89 | 7463 |
+| tertiary_link | 2.29 | 74 | | |
+| trunk | 57.57 | 1460 | 58.90 | 1439 |
+| trunk_link | 1.89 | 50 | | |
+| unclassified | 393.81 | 12579 | 392.86 | 12468 |
+| unknown | | | 127.86 | 3566 |
+
+**For Hamamatsu**:
+
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | | | 13.92 | 320 |
+| crosswalk | | | 8.41 | 1254 |
+| driveway | | | 19.34 | 578 |
+| footway | 282.98 | 10348 | 236.26 | 5337 |
+| motorway | 6.64 | 23 | 7.61 | 18 |
+| motorway_link | 2.17 | 16 | | |
+| parking_aisle | | | 107.45 | 4761 |
+| path | 36.88 | 988 | 35.98 | 835 |
+| pedestrian | 2.43 | 41 | 2.42 | 36 |
+| primary | 39.00 | 874 | 38.71 | 840 |
+| primary_link | 0.02 | 2 | | |
+| residential | 586.21 | 12868 | 584.44 | 12630 |
+| secondary | 23.59 | 661 | 23.55 | 640 |
+| service | 202.42 | 7887 | | |
+| sidewalk | | | 36.22 | 743 |
+| steps | 4.19 | 396 | 4.21 | 390 |
+| tertiary | 179.85 | 4207 | 178.60 | 4048 |
+| tertiary_link | 0.02 | 4 | | |
+| track | 66.54 | 735 | 65.91 | 660 |
+| trunk | 24.47 | 507 | 26.32 | 522 |
+| trunk_link | 2.10 | 23 | | |
+| unclassified | 310.03 | 4864 | 308.61 | 4531 |
+| unknown | | | 56.85 | 1436 |
+
+
+**For Tateyama**: 
+
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | | | 33.34 | 501 |
+| crosswalk | | | 2.66 | 528 |
+| driveway | | | 3.59 | 70 |
+| footway | 13.84 | 802 | 8.38 | 158 |
+| parking_aisle | | | 6.11 | 132 |
+| path | 62.75 | 291 | 51.71 | 235 |
+| pedestrian | 0.84 | 6 | 0.84 | 6 |
+| primary | 6.09 | 67 | 5.95 | 57 |
+| residential | 264.28 | 3875 | 261.55 | 3664 |
+| secondary | 24.72 | 473 | 24.59 | 441 |
+| service | 58.89 | 1034 | | |
+| sidewalk | | | 2.57 | 41 |
+| steps | 0.30 | 13 | 0.30 | 13 |
+| tertiary | 36.49 | 500 | 34.86 | 481 |
+| track | 105.01 | 776 | 102.56 | 681 |
+| trunk | 23.30 | 288 | 22.82 | 259 |
+| unclassified | 28.56 | 294 | 25.98 | 273 |
+| unknown | | | 15.55 | 281 |
+
+### Total kilometer of roads by type (after mapping)
 
 Missing values correspond to no value in the dataset.
 
 **For Tokyo**: 
 
-| class          | OSM   | OMF   |
-|----------------|-------|-------|
-| alley          |       | 143.63|
-| bridleway      |       | 0.02  |
-| busway         | 0.17  |       |
-| corridor       | 0.11  |       |
-| crosswalk      |       | 43.17 |
-| cycleway       | 10.22 | 10.55 |
-| driveway       |       | 12.77 |
-| elevator       | 0.05  |       |
-| footway        | 1090.40| 686.37|
-| living_street  | 0.14  | 0.16  |
-| motorway       | 48.79 | 72.26 |
-| motorway_link  | 24.36 |       |
-| parking_aisle  |       | 15.17 |
-| path           | 34.43 | 34.26 |
-| pedestrian     | 27.20 | 27.64 |
-| primary        | 101.69| 104.20|
-| primary_link   | 2.56  |       |
-| residential    | 691.48| 689.98|
-| road           | 0.13  |       |
-| secondary      | 129.83| 131.70|
-| secondary_link | 1.93  |       |
-| service        | 298.75|       |
-| sidewalk       |       | 348.45|
-| steps          | 28.30 | 18.89 |
-| tertiary       | 231.61| 233.89|
-| tertiary_link  | 2.14  |       |
-| trunk          | 57.02 | 58.90 |
-| trunk_link     | 1.89  |       |
-| unclassified   | 392.26| 392.86|
-| unknown        |       | 127.86|
-
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | 145.24 | 4030 | 143.63 | 3976 |
+| bridleway | 0.02 | 1 | 0.02 | 1 |
+| crosswalk | 0 | 0 | 43.17 | 5968 |
+| cycleway | 11.23 | 191 | 10.55 | 181 |
+| driveway | 13.19 | 480 | 12.77 | 461 |
+| footway | 413.18 | 26980 | 686.37 | 25806 |
+| living_street | 0.16 | 7 | 0.16 | 7 |
+| motorway | 87.19 | 383 | 72.26 | 195 |
+| parking_aisle | 16.49 | 621 | 15.17 | 566 |
+| path | 34.09 | 1038 | 34.26 | 1026 |
+| pedestrian | 27.75 | 799 | 27.64 | 762 |
+| primary | 105.74 | 2709 | 104.20 | 2544 |
+| residential | 690.78 | 20806 | 689.98 | 20722 |
+| secondary | 132.66 | 3582 | 131.70 | 3405 |
+| sidewalk | 684.50 | 20863 | 348.45 | 8817 |
+| steps | 20.17 | 2033 | 18.89 | 1833 |
+| tertiary | 235.00 | 7627 | 233.89 | 7463 |
+| track | 0 | 0 | 0 | 0 |
+| trunk | 59.45 | 1510 | 58.90 | 1439 |
+| unclassified | 393.81 | 12579 | 392.86 | 12468 |
+| unknown | 125.88 | 3683 | 127.86 | 3566 |
 
 **For Hamamatsu**:
 
-| class          | OSM    | OMF    |
-|----------------|--------|--------|
-| alley          |        | 13.92  |
-| crosswalk      |        | 8.41   |
-| driveway       |        | 19.34  |
-| footway        | 280.68 | 236.26 |
-| motorway       | 5.44   | 7.61   |
-| motorway_link  | 2.17   |        |
-| parking_aisle  |        | 107.45 |
-| path           | 35.02  | 35.98  |
-| pedestrian     | 2.45   | 2.42   |
-| primary        | 38.69  | 38.71  |
-| primary_link   | 0.02   |        |
-| residential    | 583.74 | 584.44 |
-| secondary      | 23.55  | 23.55  |
-| service        | 197.71 |        |
-| sidewalk       |        | 36.22  |
-| steps          | 7.70   | 4.21   |
-| tertiary       | 178.51 | 178.60 |
-| tertiary_link  | 0.02   |        |
-| track          | 62.82  | 65.91  |
-| trunk          | 24.22  | 26.32  |
-| trunk_link     | 2.10   |        |
-| unclassified   | 310.43 | 308.61 |
-| unknown        |        | 56.85  |
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | 14.44 | 340 | 13.92 | 320 |
+| bridleway | 0 | 0 | 0 | 0 |
+| crosswalk | 0 | 0 | 8.41 | 1254 |
+| cycleway | 0 | 0 | 0 | 0 |
+| driveway | 19.46 | 604 | 19.34 | 578 |
+| footway | 74.44 | 5735 | 236.26 | 5337 |
+| living_street | 0 | 0 | 0 | 0 |
+| motorway | 8.81 | 39 | 7.61 | 18 |
+| parking_aisle | 108.87 | 5461 | 107.45 | 4761 |
+| path | 36.88 | 988 | 35.98 | 835 |
+| pedestrian | 2.43 | 41 | 2.42 | 36 |
+| primary | 39.02 | 876 | 38.71 | 840 |
+| residential | 586.21 | 12868 | 584.44 | 12630 |
+| secondary | 23.59 | 661 | 23.55 | 640 |
+| sidewalk | 208.54 | 4613 | 36.22 | 743 |
+| steps | 4.19 | 396 | 4.21 | 390 |
+| tertiary | 179.86 | 4211 | 178.60 | 4048 |
+| track | 66.54 | 735 | 65.91 | 660 |
+| trunk | 26.57 | 530 | 26.32 | 522 |
+| unclassified | 310.03 | 4864 | 308.61 | 4531 |
+| unknown | 59.65 | 1482 | 56.85 | 1436 |
 
 
 **For Tateyama**: 
 
-| class          | OSM    | OMF    |
-|----------------|--------|--------|
-| alley          |        | 33.34  |
-| crosswalk      |        | 2.66   |
-| driveway       |        | 3.59   |
-| footway        | 12.78  | 8.38   |
-| parking_aisle  |        | 6.11   |
-| path           | 53.26  | 51.71  |
-| pedestrian     | 0.05   | 0.84   |
-| primary        | 5.95   | 5.95   |
-| residential    | 261.91 | 261.55 |
-| secondary      | 24.59  | 24.59  |
-| service        | 59.48  |        |
-| sidewalk       |        | 2.57   |
-| steps          | 0.50   | 0.30   |
-| tertiary       | 35.12  | 34.86  |
-| track          | 102.00 | 102.56 |
-| trunk          | 22.82  | 22.82  |
-| unclassified   | 25.43  | 25.98  |
-| unknown        |        | 15.55  |
+| class | OSM - Total length (km) | OSM - Number of entities | OMF - Total length (km) | OMF - Number of entities |
+|---|---|---|---|---|
+| alley | 33.64 | 527 | 33.34 | 501 |
+| bridleway | 0 | 0 | 0 | 0 |
+| crosswalk | 0 | 0 | 2.66 | 528 |
+| cycleway | 0 | 0 | 0 | 0 |
+| driveway | 3.70 | 75 | 3.59 | 70 |
+| footway | 6.79 | 680 | 8.38 | 158 |
+| living_street | 0 | 0 | 0 | 0 |
+| motorway | 0 | 0 | 0 | 0 |
+| parking_aisle | 6.79 | 141 | 6.11 | 132 |
+| path | 62.75 | 291 | 51.71 | 235 |
+| pedestrian | 0.84 | 6 | 0.84 | 6 |
+| primary | 6.09 | 67 | 5.95 | 57 |
+| residential | 264.28 | 3875 | 261.55 | 3664 |
+| secondary | 24.72 | 473 | 24.59 | 441 |
+| sidewalk | 7.05 | 122 | 2.57 | 41 |
+| steps | 0.30 | 13 | 0.30 | 13 |
+| tertiary | 36.49 | 500 | 34.86 | 481 |
+| track | 105.01 | 776 | 102.56 | 681 |
+| trunk | 23.30 | 288 | 22.82 | 259 |
+| unclassified | 28.56 | 294 | 25.98 | 273 |
+| unknown | 14.76 | 291 | 15.55 | 281 |

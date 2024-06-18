@@ -60,7 +60,7 @@ This value can also be find in OSMnx integrated data, directly in the class attr
 
 In OSM data, we can find the tag `highway=residential` for residential roads.
 Also, the tag `abutters=residential` can also be used combined with other value of `highway`, such as `highway=unclassified` and `abutters=residential`.
-The residential class can be find in OSMnx integrated data, but the first graph analysis made on the total length kilometer by classes shows that there is a little difference between the OSM and OMF data (see [these results](./Comparison-OSM-OvertureMap_PgRouting.md#total-kilometer-of-roads-by-type)).
+The residential class can be find in OSMnx integrated data, but the first graph analysis made on the total length kilometer by classes shows that there is a little difference between the OSM and OMF data (see [these results](./Comparison-OSM-OvertureMap_PgRouting.md#total-kilometer-of-roads-by-type-before-mapping)).
 It could be useful to have a look inside those results to see why this difference exists, and if it could have an impact on the mapping or if it is just 
 
 ## `living_street` class
