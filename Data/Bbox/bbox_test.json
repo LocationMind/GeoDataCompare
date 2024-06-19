@@ -1,0 +1,13 @@
+{
+    "bboxs" : 
+    [
+        {
+            "bbox" : "139.74609375, 35.67514743608467, 139.833984375, 35.7465122599185",
+            "edge_table" : "edge_tokyo_bis",
+            "node_table" : "node_tokyo_bis",
+            "final_table" : "tokyo_bis",
+            "extractRoad" : "road_tokyo_bis",
+            "extractConnector" : "connector_tokyo_bis"
+        }
+    ]
+}

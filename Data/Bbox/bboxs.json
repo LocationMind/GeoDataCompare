@@ -1,0 +1,30 @@
+{
+    "bboxs" : [
+        {
+            "bbox" : "139.74609375, 35.67514743608467, 139.833984375, 35.7465122599185",
+            "edge_table" : "edge_tokyo",
+            "node_table" : "node_tokyo",
+            "area" : "tokyo",
+            "extractRoad" : "road_tokyo",
+            "extractConnector" : "connector_tokyo"
+        },
+        
+        {
+            "bbox" : "137.63671875, 34.66935854524544, 137.724609375, 34.74161249883172",
+            "edge_table" : "edge_hamamatsu",
+            "node_table" : "node_hamamatsu",
+            "area" : "hamamatsu",
+            "extractRoad" : "road_hamamatsu",
+            "extractConnector" : "connector_hamamatsu"
+        },
+        
+        {
+            "bbox" : "139.833984375, 34.95799531086791, 139.921875, 35.02999636902566",
+            "edge_table" : "edge_tateyama",
+            "node_table" : "node_tateyama",
+            "area" : "tateyama",
+            "extractRoad" : "road_tateyama",
+            "extractConnector" : "connector_tateyama"
+        }
+    ]
+}

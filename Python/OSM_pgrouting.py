@@ -114,7 +114,7 @@ if __name__ == "__main__":
     ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-04-08T00:00:00Z"]'
     
     # Load the 3 bbox that we will use from the json file
-    path_json = os.path.join(".", "Data", "bboxs.json")
+    path_json = os.path.join(".", "Data", "Bbox", "bboxs.json")
     with open(path_json, "r") as f:
         bboxJson = json.load(f)
     
@@ -124,7 +124,7 @@ if __name__ == "__main__":
         bbox = elem["bbox"]
         edge_table = elem["edge_table"]
         node_table = elem["node_table"]
-        final_table = elem["final_table"]
+        final_table = elem["area"]
         
         end = time.time()
         print(f"Start download {final_table} :  {end - start} seconds")
@@ -387,7 +387,7 @@ if __name__ == "__main__":
 
         # Rename useful columns
         edge_with_cost = edge_with_cost.rename(
-            columns= {"id1":"id",
+            columns= {"id1":"original_id",
                     "u1":"source",
                     "v1":"target",
                     "geom1":"geom",
@@ -408,7 +408,7 @@ if __name__ == "__main__":
         
         # Keep only these columns
         edge_with_cost = edge_with_cost[[
-            "id",
+            "original_id",
             "source",
             "target",
             "cost",
@@ -434,7 +434,7 @@ if __name__ == "__main__":
         edge_with_cost = edge_with_cost.set_geometry("geom")
         
         # Load dataframe into postgis table
-        edge_with_cost.to_postgis(f"{final_table}_with_cost", engine, if_exists="replace", index=True)
+        edge_with_cost.to_postgis(f"{final_table}_with_cost", engine, if_exists="replace", index=True, index_label = 'id')
         
         end = time.time()
         print(f"Edge with cost to postgis took {end - start} seconds")

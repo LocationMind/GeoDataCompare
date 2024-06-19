@@ -8,6 +8,11 @@
 		- [Number of nodes](#number-of-nodes)
 		- [Number of ways](#number-of-ways)
 		- [Number of kilometer (total / by class)](#number-of-kilometer-total--by-class)
+		- [Connected components](#connected-components)
+		- [Strong connected component](#strong-connected-component)
+		- [Isolated nodes](#isolated-nodes)
+		- [Overlap indicator](#overlap-indicator)
+		- [Corresponding nodes](#corresponding-nodes)
 - [Results](#results)
 	- [General results](#general-results)
 	- [Specific results](#specific-results)
@@ -79,7 +84,7 @@ Here is a list of criteria that we used:
 - Number of connected components;
 - Number of isolated nodes;
 - Sort nodes by number of roads getting in / out of it.
-- Spatial extent of one dataset comparing to the another for ways (i.e. pourcentage of dataset A overlaping dataset B and vice versa);
+- Spatial extent of one dataset comparing to the another for ways (i.e. percentage of dataset A overlaping dataset B and vice versa);
 - Number of associated nodes in both dataset.
 
 To calculate those criteria, we can use PgRouting functions, writing SQL request or using python and geopandas / networkx packages.
@@ -95,28 +100,28 @@ The SQL queries are the following:
 **OSM**
 ```sql
 SELECT
-	(SELECT count(*) FROM node_tokyo) as vertice_number_tokyo,
-	(SELECT count(*) FROM node_hamamatsu) as vertice_number_hamamatsu,
-	(SELECT count(*) FROM node_tateyama) as vertice_number_tateyama;
+	(SELECT COUNT(*) FROM node_tokyo) as vertice_number_tokyo,
+	(SELECT COUNT(*) FROM node_hamamatsu) as vertice_number_hamamatsu,
+	(SELECT COUNT(*) FROM node_tateyama) as vertice_number_tateyama;
 ```
 
 **OMF**
 ```sql
 SELECT
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM vertice_tokyo AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'tokyo'
 	) as vertice_number_tokyo,
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM vertice_hamamatsu AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'hamamatsu'
 	) as vertice_number_hamamatsu,
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM vertice_tateyama AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 		WHERE b.name = 'tateyama'
@@ -131,28 +136,28 @@ The SQL queries are the following:
 **OSM**
 ```sql
 SELECT
-	(SELECT count(*) FROM tokyo_with_cost) as ways_number_tokyo,
-	(SELECT count(*) FROM hamamatsu_with_cost) as ways_number_hamamatsu,
-	(SELECT count(*) FROM tateyama_with_cost) as ways_number_tateyama;
+	(SELECT COUNT(*) FROM tokyo_with_cost) as ways_number_tokyo,
+	(SELECT COUNT(*) FROM hamamatsu_with_cost) as ways_number_hamamatsu,
+	(SELECT COUNT(*) FROM tateyama_with_cost) as ways_number_tateyama;
 ```
 
 **OMF**
 ```sql
 SELECT
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM edge_with_cost_tokyo AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
 		WHERE b.name = 'tokyo'
 	) as ways_number_tokyo,
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM edge_with_cost_hamamatsu AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
 		WHERE b.name = 'hamamatsu'
 	) as ways_number_hamamatsu,
 	(
-		SELECT count(*)
+		SELECT COUNT(*)
 		FROM edge_with_cost_tateyama AS e
 		JOIN bounding_box AS b ON ST_Contains(b.geom, e.the_geom)
 		WHERE b.name = 'tateyama'
@@ -207,7 +212,7 @@ The query to do so before mapping OSM classes to OMF classes are these one:
 ```sql
 SELECT class,
 round((SUM(ST_Length(geom::geography)) / 1000)::numeric, 2) as length_kilometer,
-count(*) as nb_entity
+COUNT(*) as nb_entity
 FROM tokyo_with_cost
 GROUP by class
 ORDER by class ASC;
@@ -217,7 +222,7 @@ ORDER by class ASC;
 ```sql
 SELECT e.class,
 round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
-count(e.class) AS nb_entity
+COUNT(e.class) AS nb_entity
 FROM edge_with_cost_tokyo AS e
 JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 WHERE b.name = 'tokyo'
@@ -279,7 +284,7 @@ FROM OMF_classes AS omf
 LEFT JOIN (
 	SELECT new_class,	
 	round((SUM(ST_Length(geom::geography)) / 1000)::numeric, 2) as length_kilometer,
-	count(*) as nb_entity
+	COUNT(*) as nb_entity
 	FROM table_new_classes
 	GROUP BY new_class
 ) join_table
@@ -305,7 +310,7 @@ FROM OMF_classes AS omf
 LEFT JOIN (
 	SELECT e.class AS new_class,
 	round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
-	count(e.class) AS nb_entity
+	COUNT(e.class) AS nb_entity
 	FROM edge_with_cost_tokyo AS e
 	JOIN bounding_box AS b ON ST_Contains(b.geom, e.geom)
 	WHERE b.name = 'tokyo'
@@ -314,6 +319,208 @@ LEFT JOIN (
 USING (new_class)
 ORDER BY omf.new_class ASC;
 ```
+
+### Connected components
+
+In an undirected graph, a connected component is a partition of the graph where all vertices are reachable from one another.
+Even though we are working with directed graph, it can be useful to have the number of connected components and the number of strong connected components, as the first one give information about the completeness of the graph and the second one focuses on the direction of each edges.
+PgRouting algorithm can be used for this algorithm.
+For connected components, the function used is [`pgr_connectedComponents`](https://docs.pgrouting.org/3.6/en/pgr_connectedComponents.html).
+
+To have the number of connected components in each graph:
+
+**OSM**
+```sql
+SELECT
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tokyo,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM hamamatsu_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_hamamatsu,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tateyama_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tateyama;
+```
+
+For OMF data, we do not keep only the road inside the bbox as the data have not been prepared for this.
+
+**OMF**
+```sql
+SELECT
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tokyo,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_hamamatsu')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_hamamatsu,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tateyama')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tateyama;
+```
+
+To be able to see the results on QGIS for example, it is necessary to join the result with the node / vertices table.
+The query is the same for OSM and OMF data, so only one example will be given here.
+We add the `COUNT(*) OVER (PARTITION BY component) AS cardinality` to be able then to query the layer without having to recalculate the number of nodes in each component.
+This is useful to see how many components have few nodes (less than 10 nodes for example).
+
+```sql
+SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo') pgr
+		JOIN vertice_tokyo AS v ON pgr.node = v.id
+		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+```
+
+Using this query directly in the database manager of QGIS, you can then check where are the different connected components and how many nodes are in the connected component.
+To help you display that, you can use this QML file for connected components and strong connected components layers : [connected_components.qml](../Data/QGIS/Styles/connected_components.qml).
+
+### Strong connected component
+
+A strong connected component in a graph corresponds to a partition of the graph where all the vertices are reachable from one another.
+It is not similar to the connected components, as the direction is used in this case, and two distinct strong connected components can actually be one connected component of the graph.
+Strong connected components give useful information about the validity of the direction of the graph, as usually no nodes should only have out edges or in edges for instance.
+
+Queries are really similar for the strong connected components, though the function used here is [`pgr_strongComponents`](https://docs.pgrouting.org/3.6/en/pgr_strongComponents.html).
+
+**OSM**
+```sql
+SELECT
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tokyo,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM hamamatsu_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_hamamatsu,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tateyama_with_cost')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tateyama;
+```
+
+For OMF data, we do not keep only the road inside the bbox as the data have not been prepared for this.
+
+**OMF**
+```sql
+SELECT
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tokyo,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_hamamatsu')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_hamamatsu,
+(
+	SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tateyama')
+		GROUP BY DISTINCT component
+	)
+) as number_connected_components_tateyama;
+```
+
+Just as the connected components, you can use a query to see each strong connected components of the graph with this query:
+
+```sql
+SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo') pgr
+		JOIN vertice_tokyo AS v ON pgr.node = v.id
+		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+```
+
+### Isolated nodes
+
+One way to find isolated nodes is to use the [`pgr_connectedComponents`](https://docs.pgrouting.org/3.6/en/pgr_connectedComponents.html) function and filter only those with one node.
+The [`pgr_strongComponents`](https://docs.pgrouting.org/3.6/en/pgr_strongComponents.html) should not be used for this, as a strong component might have a cardinality of 1 without being isolated (for instance, underground parking exits).
+
+For this criterion, one query must be run per area.
+
+**OSM**
+```sql
+SELECT component, count(component) as nb, ARRAY_AGG(node) as nodes
+	FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost') pgr
+	JOIN node_tokyo AS v ON pgr.node = v.osmid
+	GROUP BY component
+	HAVING count(*) = 1
+```
+
+For OMF data, we do not keep only the road inside the bbox as the data have not been prepared for this.
+
+**OMF**
+```sql
+SELECT component, count(component) as nb, ARRAY_AGG(node) as nodes
+	FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo') pgr
+	JOIN node_tokyo AS v ON pgr.node = v.osmid
+	GROUP BY component
+	HAVING count(*) = 1
+```
+
+### Overlap indicator
+
+This indicator come from an analyse made by the heidelberg Institute for Geoinformation Technology in November 2023 where they compared Microsoft ML roads and OSM Data : [*Exploring the Value of Microsoft ML Roads for OSM Data Quality Analysis*](https://giscienceblog.uni-heidelberg.de/2023/11/09/exploring-the-value-of-microsoft-ml-roads-for-osm-data-quality-analysis/).
+In this article, they have created an Overlap Indicator for both dataset that correspond to the proportion length of roads in dataset A that overlap a buffer of roads from Dataset B over the total length of road from dataset A.
+A result close to 1 means that almost all the roads from Dataset A are also in Dataset B.
+Conversely, a result close to 0 means that almost no roads from Dataset A can be found in Dataset B.
+Depending on which dataset is used as a reference, the results are not the same, neither are their interpretation.
+For our case, the two datasets are OSM and OMF, and the results are given in the [General results section](#general-results).
+The value in the OSM column correspond to this indicator with OMF dataset as a reference, so the buffer will be made from the OMF dataset and the value correspond to the percentage of OSM roads that can ve find in OMF dataset.
+It is of course the same logical for the value in OMF column.
+
+Because OSM and OMF are not stored in the same database, we would have to run cross-database query with PostgreSQL in order to calculate the Overlap Indicator.
+Cross-database query are not really implemented in PostgreSQL (at least I did not succeed), but we can work with layers coming directly from PostGIS table in QGIS.
+For that reason, I have made two python script to calculate this indicator : one is a processing script that you have to add in the processing toolbox - [overlap_indicator.py](../Python/overlap_indicator.py) - and the other one is the "main" script that calculate the indicator for the different dataset - [overlap_indicator_calculation.py](../Python/overlap_indicator_calculation.py).
+The idea is to work with projected layer to have significant results, and to check the quantity of one dataset roads in the other one, by checking which roads are within a 1 meter buffer in the reference dataset.
+It also creates a layer with a boolean attribute `overlap`, that stores whether the road is in the other dataset or not.
+This way, it is possible to visualise where are the missing roads in each dataset.
+To do so, you can load the layer with the QGIS style file for the overlap results : [overlap-results.qml](../Data/QGIS/Styles/overlap-results.qml).
+The red roads corresponds to missing roads and are higlighted with this symbology.
+
+
+### Corresponding nodes
+
+Another criterion that is possible to calculate is the number / percentage of corresponding nodes in each dataset.
+To do so, we can easily 
 
 # Results
 
@@ -329,26 +536,41 @@ ORDER BY omf.new_class ASC;
 | **Number of edges** | *Hamamatsu* | 44444 | 39579 |
 | **Number of edges** | *Tateyama* | 8419 | 7821 |
 |  |  |  |  |
-| **Total Kilometer** | *Tokyo* | 3197 | 3153 | 
-| **Total Kilometer** | *Hamamatsu* | 1770 | 1755 |
-| **Total Kilometer** | *Tateyama* | 626 | 604 |
+| **Total length (km)** | *Tokyo* | 3197 | 3153 | 
+| **Total length (km)** | *Hamamatsu* | 1770 | 1755 |
+| **Total length (km)** | *Tateyama* | 626 | 604 |
+|  |  |  |  |
+| **Number of connected components** | *Tokyo* | 254 | 260 | 
+| **Number of connected components** | *Hamamatsu* | 53 | 52 |
+| **Number of connected components** | *Tateyama* | 17 | 10 |
+|  |  |  |  |
+| **Number of strong connected components** | *Tokyo* | 597 | 598 | 
+| **Number of strong connected components** | *Hamamatsu* | 101 | 105 |
+| **Number of strong connected components** | *Tateyama* | 24 | 12 |
+|  |  |  |  |
+| **Isolated nodes** | *Tokyo* | 0 | 0 | 
+| **Isolated nodes** | *Hamamatsu* | 0 | 0 |
+| **Isolated nodes** | *Tateyama* | 0 | 0 |
+|  |  |  |  |
+| **Overlap Indicator** | *Tokyo* | 99.52 % | 94.98 % | 
+| **Overlap Indicator** | *Hamamatsu* | 99.99 % | 95.89 % |
+| **Overlap Indicator** | *Tateyama* | 100 % | 91.57 % |
+|  |  |  |  |
+| **percentage of corresponding nodes** | *Tokyo* | xxx | yyy | 
+| **percentage of corresponding nodes** | *Hamamatsu* | xxx | yyy |
+| **percentage of corresponding nodes** | *Tateyama* | xxx | yyy |
+|  |  |  |  |
+| **Criterion** | *Tokyo* | xxx | yyy | 
+| **Criterion** | *Hamamatsu* | xxx | yyy |
+| **Criterion** | *Tateyama* | xxx | yyy |
+|  |  |  |  |
+| **Criterion** | *Tokyo* | xxx | yyy | 
+| **Criterion** | *Hamamatsu* | xxx | yyy |
+| **Criterion** | *Tateyama* | xxx | yyy |
 |  |  |  |  |
 | **Criterion** | *Tokyo* | xxx | yyy | 
 | **Criterion** | *Hamamatsu* | xxx | xxx |
 | **Criterion** | *Tateyama* | xxx | xxx |
-|  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | xxx |
-| **Criterion** | *Tateyama* | xxx | xxx |
-|  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | xxx |
-| **Criterion** | *Tateyama* | xxx | xxx |
-|  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | xxx |
-| **Criterion** | *Tateyama* | xxx | xxx |
-|  |  |  |  |
 
 ## Specific results
 

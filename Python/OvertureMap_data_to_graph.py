@@ -871,7 +871,7 @@ if __name__ == "__main__":
     print(f"createBoundingboxTable : {end - start} seconds")
     
     # Load the 3 bbox that we will use from the json file
-    path_json = os.path.join(".", "Data", "bboxs.json")
+    path_json = os.path.join(".", "Data", "Bbox", "bboxs.json")
     with open(path_json, "r") as f:
         bboxJson = json.load(f)
     
@@ -879,7 +879,7 @@ if __name__ == "__main__":
     for elem in bboxJson["bboxs"]:
         # Get the element we need from the json
         bbox = elem["bbox"]
-        area = elem["final_table"]
+        area = elem["area"]
         extractRoad = elem["extractRoad"]
         extractConnector = elem["extractConnector"]
         
