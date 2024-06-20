@@ -520,7 +520,10 @@ The red roads corresponds to missing roads and are higlighted with this symbolog
 ### Corresponding nodes
 
 Another criterion that is possible to calculate is the number / percentage of corresponding nodes in each dataset.
-To do so, we can easily 
+We can easily do so using QGIS with a select by location (once again using PostgreSQL means running cross-database query)
+To ease the process, it is possible to use the [corresponding_nodes.py](../Python/corresponding_nodes.py), that calculate the number and proportion of corresponding nodes for each dataset.
+For OMF data though, we only keep the nodes inside the bounding box.
+It is not necessary to select only the right bounding box as long as areas are not too close to each other.
 
 # Results
 
@@ -548,29 +551,21 @@ To do so, we can easily
 | **Number of strong connected components** | *Hamamatsu* | 101 | 105 |
 | **Number of strong connected components** | *Tateyama* | 24 | 12 |
 |  |  |  |  |
-| **Isolated nodes** | *Tokyo* | 0 | 0 | 
-| **Isolated nodes** | *Hamamatsu* | 0 | 0 |
-| **Isolated nodes** | *Tateyama* | 0 | 0 |
+| **Number of isolated nodes** | *Tokyo* | 0 | 0 | 
+| **Number of isolated nodes** | *Hamamatsu* | 0 | 0 |
+| **Number of isolated nodes** | *Tateyama* | 0 | 0 |
 |  |  |  |  |
 | **Overlap Indicator** | *Tokyo* | 99.52 % | 94.98 % | 
 | **Overlap Indicator** | *Hamamatsu* | 99.99 % | 95.89 % |
 | **Overlap Indicator** | *Tateyama* | 100 % | 91.57 % |
 |  |  |  |  |
-| **percentage of corresponding nodes** | *Tokyo* | xxx | yyy | 
-| **percentage of corresponding nodes** | *Hamamatsu* | xxx | yyy |
-| **percentage of corresponding nodes** | *Tateyama* | xxx | yyy |
+| **Number of corresponding nodes** | *Tokyo* | 65490 | 65489 | 
+| **Number of corresponding nodes** | *Hamamatsu* | 27654 | 27654 |
+| **Number of corresponding nodes** | *Tateyama* | 6093 | 6093 |
 |  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | yyy |
-| **Criterion** | *Tateyama* | xxx | yyy |
-|  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | yyy |
-| **Criterion** | *Tateyama* | xxx | yyy |
-|  |  |  |  |
-| **Criterion** | *Tokyo* | xxx | yyy | 
-| **Criterion** | *Hamamatsu* | xxx | xxx |
-| **Criterion** | *Tateyama* | xxx | xxx |
+| **Percentage of corresponding nodes** | *Tokyo* | 87.66 % | 98.88 % | 
+| **Percentage of corresponding nodes** | *Hamamatsu* | 84.49 % | 99.26 % |
+| **Percentage of corresponding nodes** | *Tateyama* | 90.37 % | 99.18 % |
 
 ## Specific results
 

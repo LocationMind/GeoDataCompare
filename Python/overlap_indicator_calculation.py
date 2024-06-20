@@ -1,8 +1,7 @@
 import json
 import os
 import time
-# processing.run("script:overlapindicator", {'INPUT':'postgres://dbname=\'osm-pgrouting\' host=127.0.0.1 port=5432 key=\'tid\' srid=4326 type=LineString checkPrimaryKeyUnicity=\'0\' table="public"."tateyama_with_cost" (geom)','INTERSECT':'postgres://dbname=\'overturemap-pgrouting\' host=127.0.0.1 port=5432 key=\'id\' srid=4326 type=LineString checkPrimaryKeyUnicity=\'1\' table="public"."edge_with_cost_tateyama" (geom)','BUFFERDIST':1,'TARGETEPSG':QgsCoordinateReferenceSystem('EPSG:6691'),'OUTPUT':'ogr:dbname=\'C:/Users/Mathis.Rouillard/Documents/OSM_Overture_Works/Data/Result/QGIS/Overlap_results.gpkg\' table="test_tateyama" (geom)'})
-# ogr:dbname='C:/Users/Mathis.Rouillard/Documents/OSM_Overture_Works/Data/Result/QGIS/Overlap_results.gpkg' table="test_tateyama" (geom)
+
 start = time.time()
 
 # Path of the github project, where we can find the bbox file

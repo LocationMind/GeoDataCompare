@@ -1,0 +1,18 @@
+tokyo - OSM Total nodes : 74701
+tokyo - OSM Corresponding nodes : 65490
+tokyo - OSM Proportion : 0.8766950910965048 (87.66950910965048 %)
+tokyo - OMF Total nodes : 66230
+tokyo - OMF Corresponding nodes : 65489
+tokyo - OMF Proportion : 0.9888117167446776 (98.88117167446777 %)
+hamamatsu - OSM Total nodes : 32729
+hamamatsu - OSM Corresponding nodes : 27654
+hamamatsu - OSM Proportion : 0.8449387393443124 (84.49387393443124 %)
+hamamatsu - OMF Total nodes : 27858
+hamamatsu - OMF Corresponding nodes : 27654
+hamamatsu - OMF Proportion : 0.992677148395434 (99.2677148395434 %)
+tateyama - OSM Total nodes : 6742
+tateyama - OSM Corresponding nodes : 6093
+tateyama - OSM Proportion : 0.9037377632749926 (90.37377632749926 %)
+tateyama - OMF Total nodes : 6143
+tateyama - OMF Corresponding nodes : 6093
+tateyama - OMF Proportion : 0.991860654403386 (99.1860654403386 %)

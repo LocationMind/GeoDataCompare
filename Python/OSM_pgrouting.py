@@ -151,7 +151,14 @@ if __name__ == "__main__":
         # Transform the graph to geodataframe for the edges and nodes
         node = con.graph_to_gdfs(graph, nodes=True, edges=False, node_geometry=True)
         edge = con.graph_to_gdfs(graph, nodes=False, edges=True, fill_edge_geometry=True)
-
+        
+        # Rename geometry column to geom
+        node = node.rename(columns={'geometry':'geom'})
+        node = node.set_geometry("geom")
+        
+        edge = edge.rename(columns={'geometry':'geom'})
+        edge = edge.set_geometry("geom")
+        
         end = time.time()
         print(f"Load graph : {end - start} seconds")
 
@@ -240,7 +247,7 @@ if __name__ == "__main__":
             e1.length AS length1,
             e1.lanes AS lanes1,
             e1.maxspeed AS maxspeed1,
-            e1.geometry AS geom1,
+            e1.geom AS geom1,
             e1.access AS access1,
             e1.bridge AS bridge1,
             e1.tunnel AS tunnel1,
@@ -258,7 +265,7 @@ if __name__ == "__main__":
             e2.length AS length2,
             e2.lanes AS lanes2,
             e2.maxspeed AS maxspeed2,
-            e2.geometry AS geom2,
+            e2.geom AS geom2,
             e2.access AS access2,
             e2.bridge AS bridge2,
             e2.tunnel AS tunnel2,
@@ -270,8 +277,8 @@ if __name__ == "__main__":
         FROM {edge_table} AS e1
         LEFT JOIN {edge_table} AS e2 ON e1.u = e2.v AND e1.v = e2.u
         AND e1.id != e2.id AND e1.highway = e2.highway
-        AND ST_Contains(ST_Buffer(ST_Transform(e1.geometry, 6691), 0.5), ST_Transform(e2.geometry, 6691))
-        AND ST_Contains(ST_Buffer(ST_Transform(e2.geometry, 6691), 0.5), ST_Transform(e1.geometry, 6691))
+        AND ST_Contains(ST_Buffer(ST_Transform(e1.geom, 6691), 0.5), ST_Transform(e2.geom, 6691))
+        AND ST_Contains(ST_Buffer(ST_Transform(e2.geom, 6691), 0.5), ST_Transform(e1.geom, 6691))
         ORDER BY e1.id;
 
         -- Add cost and reverse cost columns
