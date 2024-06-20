@@ -99,19 +99,19 @@ if __name__ == "__main__":
     start = time.time()
     
     # Create connections to the database
-    database = "osm-pgrouting"
+    database = "pgrouting"
+    schema = 'osm'
     
     engine = getEngine(database)
     connection = getConnection(database)
     
     ## OSMnx settings
-    
     # Add footway and abutters tags to ways
     ox.settings.useful_tags_way += ["footway"]
     ox.settings.useful_tags_way += ["abutters"]
     
-    # Download data until the 8th April only, up to date data from OMF 2024-04-16-beta.0 release
-    ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-04-08T00:00:00Z"]'
+    # Download data until the 8th April only, up to date data from OMF 2024-06-13-beta.0 release
+    ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-06-07T00:00:00Z"]'
     
     # Load the 3 bbox that we will use from the json file
     path_json = os.path.join(".", "Data", "Bbox", "bboxs.json")
@@ -120,14 +120,15 @@ if __name__ == "__main__":
     
     # Create tables for each bbox
     for elem in bboxJson["bboxs"]:
-        # Get the element we need from the json
+        # Get and create the element we need from the json
         bbox = elem["bbox"]
-        edge_table = elem["edge_table"]
-        node_table = elem["node_table"]
-        final_table = elem["area"]
+        area = elem["area"].lower()
+        
+        edge_table = f"edge_{area}"
+        node_table = f"node_{area}"
         
         end = time.time()
-        print(f"Start download {final_table} :  {end - start} seconds")
+        print(f"Start download {area} :  {end - start} seconds")
     
         ## 1st step : Download data with OSMnx
         
@@ -163,54 +164,54 @@ if __name__ == "__main__":
         print(f"Load graph : {end - start} seconds")
 
         # Save nodes to postgresql
-        node.to_postgis(node_table, engine, if_exists="replace", index=True)
+        node.to_postgis(node_table, engine, if_exists="replace", schema=schema, index=True)
 
         end = time.time()
         print(f"Save node to postgis : {end - start} seconds")
 
         # Save edges to postgresql
-        edge.to_postgis(edge_table, engine, if_exists="replace", index=True)
+        edge.to_postgis(edge_table, engine, if_exists="replace", schema=schema, index=True)
 
         end = time.time()
         print(f"Save edge to postgis : {end - start} seconds")
         
         # Add missing columns if not exists
         sqlMissingColumns = f"""
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS osmid text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS osmid text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS oneway boolean;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS oneway boolean;
         
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS lanes text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS lanes text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS highway text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS highway text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS reversed text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS reversed text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS length double precision;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS length double precision;
         
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS ref text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS ref text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS maxspeed text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS maxspeed text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS maxspeed text; 
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS maxspeed text; 
         
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS name text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS name text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS service text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS service text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS access text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS access text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS tunnel text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS tunnel text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS bridge text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS bridge text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS footway text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS footway text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS abutters text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS abutters text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS width text;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS width text;
 
-        ALTER TABLE {edge_table} ADD COLUMN IF NOT EXISTS junction text;"""
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN IF NOT EXISTS junction text;"""
 
         # Execute the query
         executeQueryWithTransaction(connection, sqlMissingColumns)
@@ -222,13 +223,13 @@ if __name__ == "__main__":
         # SQL query to create the table with everything needed
         sql = f"""
         -- Add id column to edge table
-        ALTER TABLE {edge_table} ADD COLUMN id serial;
+        ALTER TABLE {schema}.{edge_table} ADD COLUMN id serial;
         
         -- Drop table if exists
-        DROP TABLE IF EXISTS {final_table} CASCADE;
+        DROP TABLE IF EXISTS {schema}.{area} CASCADE;
 
         -- Create table with a self join
-        CREATE TABLE IF NOT EXISTS {final_table} AS
+        CREATE TABLE IF NOT EXISTS {schema}.{area} AS
         SELECT
             e1.id AS id1,
             e1.u AS u1,
@@ -274,39 +275,39 @@ if __name__ == "__main__":
             e2.abutters AS abutters2,
             e2.width AS width2,
             e2.junction AS junction2
-        FROM {edge_table} AS e1
-        LEFT JOIN {edge_table} AS e2 ON e1.u = e2.v AND e1.v = e2.u
+        FROM {schema}.{edge_table} AS e1
+        LEFT JOIN {schema}.{edge_table} AS e2 ON e1.u = e2.v AND e1.v = e2.u
         AND e1.id != e2.id AND e1.highway = e2.highway
         AND ST_Contains(ST_Buffer(ST_Transform(e1.geom, 6691), 0.5), ST_Transform(e2.geom, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(e2.geom, 6691), 0.5), ST_Transform(e1.geom, 6691))
         ORDER BY e1.id;
 
         -- Add cost and reverse cost columns
-        ALTER TABLE {final_table} DROP COLUMN IF EXISTS cost;
-        ALTER TABLE {final_table} DROP COLUMN IF EXISTS reverse_cost;
+        ALTER TABLE {schema}.{area} DROP COLUMN IF EXISTS cost;
+        ALTER TABLE {schema}.{area} DROP COLUMN IF EXISTS reverse_cost;
 
-        ALTER TABLE {final_table} ADD COLUMN cost double precision DEFAULT -1;
-        ALTER TABLE {final_table} ADD COLUMN reverse_cost double precision DEFAULT -1;
+        ALTER TABLE {schema}.{area} ADD COLUMN cost double precision DEFAULT -1;
+        ALTER TABLE {schema}.{area} ADD COLUMN reverse_cost double precision DEFAULT -1;
 
         -- Set cost to length of the road
-        UPDATE {final_table} 
+        UPDATE {schema}.{area} 
         SET cost = ST_Length(geom1::geography);
 
         -- Set reverse cost for parallel roads 
-        UPDATE {final_table}
+        UPDATE {schema}.{area}
         SET reverse_cost = ST_Length(geom1::geography)
         WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2 AND id1 != id2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
         
-        CREATE INDEX {final_table}_geom1_idx
-        ON public.{final_table} USING gist (geom1);
+        CREATE INDEX {area}_geom1_idx
+        ON {schema}.{area} USING gist (geom1);
         
-        CREATE INDEX {final_table}_geom2_idx
-        ON public.{final_table} USING gist (geom2);
+        CREATE INDEX {area}_geom2_idx
+        ON {schema}.{area} USING gist (geom2);
         
-        CREATE INDEX {final_table}_id1_idx
-        ON public.{final_table} USING btree (id1)"""
+        CREATE INDEX {area}_id1_idx
+        ON {schema}.{area} USING btree (id1)"""
         
         # Execute the query
         executeQueryWithTransaction(connection, sql)
@@ -316,7 +317,7 @@ if __name__ == "__main__":
 
         # Select bidirectional roads
         sql_bi_roads = f"""
-        SELECT * FROM {final_table}
+        SELECT * FROM {schema}.{area}
         WHERE u1 = v2 AND v1 = u2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
         AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));"""
@@ -328,9 +329,9 @@ if __name__ == "__main__":
 
         # Select all the other roads
         sql_uni_road = f"""
-        SELECT * FROM {final_table}
+        SELECT * FROM {schema}.{area}
         WHERE id1 not in (
-            SELECT id1 FROM {final_table}
+            SELECT id1 FROM {schema}.{area}
             WHERE u1 = v2 AND v1 = u2
             AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
             AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691)));"""
@@ -441,15 +442,15 @@ if __name__ == "__main__":
         edge_with_cost = edge_with_cost.set_geometry("geom")
         
         # Load dataframe into postgis table
-        edge_with_cost.to_postgis(f"{final_table}_with_cost", engine, if_exists="replace", index=True, index_label = 'id')
+        edge_with_cost.to_postgis(f"edge_with_cost_{area}", engine, if_exists="replace", index=True, index_label = 'id', schema = schema)
         
         end = time.time()
         print(f"Edge with cost to postgis took {end - start} seconds")
         
         # Create a geon index on the table
         sql_create_index = f"""
-        CREATE INDEX {final_table}_with_cost_geom_idx
-        ON public.{final_table}_with_cost USING gist (geom);
+        CREATE INDEX edge_with_cost_{area}_geom_idx
+        ON {schema}.edge_with_cost_{area} USING gist (geom);
         """
         
         executeQueryWithTransaction(connection, sql_create_index)
@@ -458,4 +459,4 @@ if __name__ == "__main__":
         print(f"Geom index with cost to postgis took {end - start} seconds")
         
         end = time.time()
-        print(f"Download {final_table} took {end - start} seconds")
+        print(f"Download {area} took {end - start} seconds")
