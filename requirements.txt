@@ -64,7 +64,7 @@ numpy==1.26.4
     #   shapely
 osmnx==1.9.3
     # via -r requirements.in
-overturemaps==0.6.0
+overturemaps==0.7.0
     # via -r requirements.in
 packaging==24.0
     # via

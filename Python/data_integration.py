@@ -133,8 +133,8 @@ def createRoadTable(pathSegmentData: str,
                 JSON(extract_info(road, 'width')) AS width,
                 JSON(extract_info(road, 'lanes')) AS lanes,
                 JSON(extract_info(road, 'restrictions')) AS restrictions,
-                'transportation' AS theme,
-                'road' AS type,
+                -- 'transportation' AS theme,
+                -- 'road' AS type,
                 ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                 FROM '{pathSegmentData}'
                 WHERE subtype = 'road');""")
@@ -161,7 +161,7 @@ def createRoadTableV2(pathSegmentData: str,
         duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.{schema}.{tableName} CASCADE;")
 
     # Create the road table with all the good attributes
-    duckdb.execute(f"""CREATE TABLE overturemap.{schema}.road AS (SELECT
+    duckdb.execute(f"""CREATE TABLE dbpostgresql.{schema}.{tableName} AS (SELECT
                id,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
                version,
@@ -177,6 +177,8 @@ def createRoadTableV2(pathSegmentData: str,
                JSON(road_flags) AS road_flags,
                JSON(speed_limits) AS speed_limits,
                JSON(width_rules) AS width_rules
+                -- 'transportation' AS theme,
+                -- 'road' AS type,
                FROM '{pathSegmentData}'
                WHERE subtype = 'road');""")
     
@@ -206,8 +208,8 @@ def createConnectorTable(pathConnectorData: str,
                version,
                update_time,
                JSON(sources) AS sources,
-               'transportation' AS theme,
-               'connector' AS type,
+               -- 'transportation' AS theme,
+               -- 'connector' AS type,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                FROM '{pathConnectorData}');
                """)
@@ -244,8 +246,8 @@ def createBuildingTable(pathBuildingData: str,
                level,
                height,
                has_parts,
-               'buildings' AS theme,
-               'building' AS type,
+               -- 'buildings' AS theme,
+               -- 'building' AS type,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                FROM '{pathBuildingData}');
                """)
@@ -282,8 +284,8 @@ def createBuildingPartTable(pathBuildingPartData: str,
                level,
                height,
                building_id,
-               'buildings' AS theme,
-               'building_part' AS type,
+               -- 'buildings' AS theme,
+               -- 'building_part' AS type,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                FROM '{pathBuildingPartData}');
                """)
@@ -450,6 +452,8 @@ def createGeometry(tableName: str,
 
 
 if __name__ == "__main__":
+    import time
+    start = time.time()
     # Path to data
     pathConnector = os.path.join("..", "Data", "OvertureMap_Japan", "connector", "japan_connector_2024_06_13.parquet")
     pathSegment = os.path.join("..", "Data", "OvertureMap_Japan", "segment", "japan_segment_2024_06_13.parquet")
@@ -459,8 +463,14 @@ if __name__ == "__main__":
 
     # Create connector table (June release)
     describeData(pathConnector)
-    createConnectorTable(pathConnector, schema = 'omf')
+    createConnectorTable(pathConnector, schema = 'omf', dropTableIfExists=True)
+    
+    end = time.time()
+    print(f"Connector table created in {end - start} seconds")
     
     # Create road table (June release)
     describeData(pathSegment)
-    createRoadTableV2(pathSegment, schema = 'omf')
+    createRoadTableV2(pathSegment, schema = 'omf', dropTableIfExists=True)
+    
+    end = time.time()
+    print(f"Road table created in {end - start} seconds")
