@@ -9,22 +9,31 @@ def getNumberElements(connection:psycopg2.extensions.connection,
                       joinTable:str = 'bounding_box',
                       areaName:str = "") -> int:
     """Get the number of elements for the designed table (ways or nodes).
-    If filter is true, then the elements will be joined with the given join table using
-    the ST_Contains method (usually with a bounding box).
+    If filter is true, then only entity contains in the join table will be used.
+    The ST_Contains method will be used for this.
     If so, the area name is necessary and an exception will be raised if not given.
     
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
+        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+
+    Raises:
+        ValueError: If areaName is None or an empty string but the filter is on.
+        An area name must be given.
+        ValueError: If joinTable is None or an empty string but the filter is on.
+        A join table must be given.
     
     Returns:
         int: Number of elements in the table.
     """
+    # General query
     query = f"""SELECT COUNT(*) as cnt FROM {schema}.{tableName} AS e """
+    
+    # Join query if needed
     joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
     
     if filter:
@@ -54,45 +63,294 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
                             joinTable:str = 'bounding_box',
                             areaName:str = None) -> float:
     """Return the total length in kilometer of the table.
-    The function used is `CEILING(SUM(ST_Length(geom::geography)) / 1000`
+    If filter is true, then only entity contains in the join table will be used.
+    The ST_Contains method will be used for this.
+    The function used to calculate length is :
+    `CEILING(SUM(ST_Length(geom::geography)) / 1000`.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
+        tableName (str): Name of the table to calculate the total length kilometer.
+        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+
+    Raises:
+        ValueError: If areaName is None or an empty string but the filter is on.
+        An area name must be given.
+        ValueError: If joinTable is None or an empty string but the filter is on.
+        A join table must be given.
 
     Returns:
-        float: Total length in kilometer of the table
+        float: Total length in kilometer of the table.
     """
-    # TODO: Write the function
+    # General query
+    query = f"""SELECT CEILING(SUM(public.ST_Length(e.geom::geography)) / 1000) as cnt FROM {schema}.{tableName} AS e """
     
+    # Join query if needed
+    joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
     
-def getLengthKilometerByClass(connection:psycopg2.extensions.connection,
-                              schema:str,
-                              tableName:str,
-                              filter:bool = False,
-                              joinTable:str = 'bounding_box',
-                              areaName:str = None) -> dict[str, float]:
+    if filter:
+        # Check for parameter exception
+        if areaName == "" or areaName is None:
+            raise ValueError("If filter is true, an area name must be given")
+        if joinTable == "" or joinTable is None:
+            raise ValueError("If filter is true, a join table must be given")
+        query += joinQuery
+    else:
+        query += ";"
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    # Get result
+    row = cursor.fetchone()
+    count = row[0]
+    
+    # close cursor
+    cursor.close()
+    
+    return count
+
+
+def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
+                               schema:str,
+                               tableName:str,
+                               filter:bool = False,
+                               joinTable:str = 'bounding_box',
+                               areaName:str = None) -> list[tuple[str, float, int]]:
     """Return the length in kilometer of the table per class, in a dict format.
-    The function used is `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`
+    No mapping is made for each dataset.
+    If filter is true, then only entity contains in the join table will be used.
+    The ST_Contains method will be used for this.
+    The function used to calculate length is :
+    `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
+        tableName (str): Name of the table to calculate the length kilometer per class.
+        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+
+    Raises:
+        ValueError: If areaName is None or an empty string but the filter is on.
+        An area name must be given.
+        ValueError: If joinTable is None or an empty string but the filter is on.
+        A join table must be given.
 
     Returns:
-        dict[str, float]: Dictionnary representing the total length per classes
+        list[tuple[str, float, int]]: List representing the total length per classes.
     """
-    # TODO: Write the function
+    # General query
+    query = f"""
+    SELECT class,
+    round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+    COUNT(*) as nb_entity
+    FROM {schema}.{tableName} AS e """
     
+    # Join query if needed
+    joinQuery = f"""
+    JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom)
+    WHERE b.name = '{areaName}' """
     
+    if filter:
+        # Check for parameter exception
+        if areaName == "" or areaName is None:
+            raise ValueError("If filter is true, an area name must be given")
+        if joinTable == "" or joinTable is None:
+            raise ValueError("If filter is true, a join table must be given")
+        query += joinQuery
+    
+    query += """
+    GROUP by class
+    ORDER by class ASC;"""
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    listClasses = []
+    # Get result
+    for (newClass, length, number) in cursor:
+        listClasses.append((newClass, float(length), number))
+    
+    listClasses.sort(key= lambda a: a[0].lower())
+    
+    # close cursor
+    cursor.close()
+    
+    return listClasses
+
+
+def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
+                                      schema:str,
+                                      tableName:str) -> list[tuple[str, float, int]]:
+    """Return the length in kilometer of the table per class, in a dict format for OSM data.
+    Because it is only for OSM data, no filter is needed.
+    The mapping is made from OSM Data to OMF classes.
+    The function used to calculate length is :
+    `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`
+
+    Args:
+        connection (psycopg2.extensions.connection): Connection token for the database
+        schema (str): Name of the schema.
+        tableName (str): Name of the table to calculate the length kilometer per class.
+
+    Returns:
+        list[tuple[str, float, int]]: List representing the total length per classes.
+    """
+    # General query
+    query = f"""
+    WITH table_new_classes AS
+    (
+        SELECT id,
+        geom,
+        -- New class creations
+        CASE
+            WHEN class = 'motorway' OR class = 'motorway_link' THEN 'motorway'
+            WHEN class = 'trunk' OR class = 'trunk_link' THEN 'trunk'
+            WHEN class = 'primary' OR class = 'primary_link' THEN 'primary'
+            WHEN class = 'secondary' OR class = 'secondary_link' THEN 'secondary'
+            WHEN class = 'tertiary' OR class = 'tertiary_link' THEN 'tertiary'
+            WHEN class = 'residential' OR (class = 'unclassified' AND abutters = 'residential') THEN 'residential'
+            WHEN class = 'living_street' THEN 'living_street'
+            WHEN class = 'service' AND service = 'parking_aisle' THEN 'parking_aisle'
+            WHEN class = 'service' AND service = 'driveway' THEN 'driveway'
+            WHEN class = 'service' AND service = 'alley' THEN 'alley'
+            WHEN class = 'pedestrian' THEN 'pedestrian'
+            WHEN (class = 'footway' OR class = 'path') AND footway = 'sidewalk' THEN 'sidewalk'
+            WHEN (class = 'footway' OR class = 'path') AND footway = 'crosswalk' THEN 'crosswalk'
+            WHEN class = 'footway' THEN 'footway'
+            WHEN class = 'path' THEN 'path'
+            WHEN class = 'steps' THEN 'steps'
+            WHEN class = 'track' THEN 'track'
+            WHEN class = 'cycleway' THEN 'cycleway'
+            WHEN class = 'bridleway' THEN 'bridleway'
+            WHEN class = 'unclassified' THEN 'unclassified'
+            ELSE 'unknown'
+        END AS new_class
+        FROM {schema}.{tableName}
+    ),
+    final_classes AS (
+        SELECT unnest(ARRAY[
+            'alley', 'bridleway', 'cycleway', 'driveway', 'footway', 'living_street',
+            'motorway', 'parking_aisle', 'path', 'pedestrian', 'primary', 'residential',
+            'secondary', 'sidewalk', 'steps', 'tertiary', 'trunk', 'unclassified', 'unknown',
+            'crosswalk', 'track'
+        ]) AS new_class
+    )
+    SELECT 
+        fin.new_class AS new_class,
+        COALESCE(join_table.length_kilometer, 0) AS length_kilometer,
+        COALESCE(join_table.nb_entity, 0) AS nb_entity
+    FROM final_classes AS fin
+    LEFT JOIN (
+        SELECT new_class,	
+        round((SUM(ST_Length(geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+        COUNT(*) as nb_entity
+        FROM table_new_classes
+        GROUP BY new_class
+    ) join_table
+    USING (new_class)
+    ORDER BY fin.new_class ASC;
+    """
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    listClasses = []
+    # Get result
+    for (newClass, length, number) in cursor:
+        listClasses.append((newClass, float(length), number))
+    
+    # Sort the list by alphabetic order
+    listClasses.sort(key= lambda a: a[0].lower())
+    
+    # close cursor
+    cursor.close()
+    
+    return listClasses
+
+
+def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
+                                      schema:str,
+                                      tableName:str,
+                                      joinTable:str = 'bounding_box',
+                                      areaName:str = None) -> dict[str, float]:
+    """Return the length in kilometer of the table per class, in a dict format.
+    This works only for OMF dataset, therefore a filter is used.
+    Only entity contains in the join table will be used, and the ST_Contains method
+    will be used for this.
+    The function used to calculate length is :
+    `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`
+
+    Args:
+        connection (psycopg2.extensions.connection): Connection token for the database
+        schema (str): Name of the schema.
+        tableName (str): Name of the table to calculate the length kilometer per class.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+
+    Raises:
+        ValueError: If areaName is None or an empty string. An area name must be given.
+        ValueError: If joinTable is None or an empty string. A join table must be given.
+
+    Returns:
+        dict[str, float]: Dictionnary representing the total length per final classes.
+    """
+    # General query
+    query = f"""
+    WITH final_classes AS (
+        SELECT unnest(ARRAY[
+            'alley', 'bridleway', 'cycleway', 'driveway', 'footway', 'living_street',
+            'motorway', 'parking_aisle', 'path', 'pedestrian', 'primary', 'residential',
+            'secondary', 'sidewalk', 'steps', 'tertiary', 'trunk', 'unclassified', 'unknown',
+            'crosswalk', 'track'
+        ]) AS new_class
+    )
+    SELECT 
+        fin.new_class AS new_class,
+        COALESCE(join_table.length_kilometer, 0) AS length_kilometer,
+        COALESCE(join_table.nb_entity, 0) AS nb_entity
+    FROM final_classes AS fin
+    LEFT JOIN (
+        SELECT e.class AS new_class,
+        round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
+        COUNT(e.class) AS nb_entity
+        FROM {schema}.{tableName} AS e
+        JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom)
+        WHERE b.name = '{areaName}'
+        GROUP BY class
+    ) join_table
+    USING (new_class)
+    ORDER BY fin.new_class ASC;
+    """
+    
+    # Check for execption
+    if areaName == "" or areaName is None:
+        raise ValueError("If filter is true, an area name must be given")
+    if joinTable == "" or joinTable is None:
+        raise ValueError("If filter is true, a join table must be given")
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    listClasses = []
+    # Get result
+    for (newClass, length, number) in cursor:
+        listClasses.append((newClass, float(length), number))
+    
+    # Sort the list by alphabetic order
+    listClasses.sort(key= lambda a: a[0].lower())
+    
+    # close cursor
+    cursor.close()
+    
+    return listClasses
+
+
 def getConnectedComponents(connection:psycopg2.extensions.connection,
                            schema:str,
                            tableName:str,
@@ -105,10 +363,14 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
+        tableName (str): Name of the table to count the connected components.
+        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+
+    Raises:
+        ValueError: If areaName is None or an empty string. An area name must be given.
+        ValueError: If joinTable is None or an empty string. A join table must be given.
 
     Returns:
         int: Number of connected components for the graph.
@@ -118,21 +380,16 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     
 def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
                                  schema:str,
-                                 tableName:str,
-                                 filter:bool = False,
-                                 joinTable:str = 'bounding_box',
-                                 areaName:str = None) -> int:
+                                 tableName:str) -> int:
     """Return the number of strong connected components
     of the graph using PgRouting algorithms.
+    No filter is necessary as it would only 
     PgRouting must be installed otherwise it will not work.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
+        tableName (str): Name of the table to count the strong connected components.
     
     Returns:
         int: Number of strong connected components for the graph.
@@ -157,7 +414,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Returns:
@@ -184,7 +441,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Returns:
@@ -209,7 +466,7 @@ if __name__ == "__main__":
     omfEdgeTableTemplate = "edge_with_cost_{}"
     omfNodeTableTemplate = "node_{}"
     
-    listArea = ['tateyama']
+    listArea = ['tokyo']
     
     for area in listArea:
         osmEdgeTable = osmEdgeTableTemplate.format(area)
@@ -218,6 +475,7 @@ if __name__ == "__main__":
         omfEdgeTable = omfEdgeTableTemplate.format(area)
         omfNodeTable = omfNodeTableTemplate.format(area)
         
+        # Number of edges / nodes
         count = getNumberElements(connection, osmSchema, osmEdgeTable)
         print(f"Number of edges in OSM for {area} is : {count}")
         
@@ -229,6 +487,30 @@ if __name__ == "__main__":
         
         count = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area.capitalize())
         print(f"Number of nodes in OMF for {area} is : {count}")
+        
+        
+        # Total length kilometer
+        count = getTotalLengthKilometer(connection, osmSchema, osmEdgeTable)
+        print(f"Total length in km in OSM for {area} is : {count}")
+        
+        count = getTotalLengthKilometer(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
+        print(f"Total length in km in OMF for {area} is : {count}")
+        
+        
+        # Total length kilometer per class
+        listClasses = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
+        print(f"Total length in km per class OSM for {area} is : {listClasses}")
+        
+        listClasses = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
+        print(f"Total length in km per class OMF for {area} is : {listClasses}")
+        
+        
+        # Total length kilometer per final class
+        listClasses = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
+        print(f"Total length in km per final class OSM for {area} is : {listClasses}")
+        
+        listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area.capitalize())
+        print(f"Total length in km per final class OMF for {area} is : {listClasses}")
     
     end = time.time()
     print(f"It took {end - start} seconds")
