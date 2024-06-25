@@ -27,6 +27,8 @@ To create the two datasets, please refer to the documentation for each data type
 
 - OpenStreetMap : [OSM_PgRouting.md](./OSM_PgRouting.md)
 
+The data used in this example are from April, so not the last release for OvertureMap nor OpenStreetMap.
+
 # Comparison process
 
 ## Tests zone
