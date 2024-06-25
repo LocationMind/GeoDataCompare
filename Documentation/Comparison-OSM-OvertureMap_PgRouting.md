@@ -335,21 +335,21 @@ SELECT
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_tokyo,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM hamamatsu_with_cost')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM hamamatsu_with_cost')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_hamamatsu,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tateyama_with_cost')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM tateyama_with_cost')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_tateyama;
@@ -363,21 +363,21 @@ SELECT
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_tokyo,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_hamamatsu')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_hamamatsu')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_hamamatsu,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tateyama')
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tateyama')
 		GROUP BY DISTINCT component
 	)
 ) as number_connected_components_tateyama;
@@ -415,21 +415,21 @@ SELECT
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tokyo_with_cost')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_tokyo,
+) as number_strong_components_tokyo,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM hamamatsu_with_cost')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_hamamatsu,
+) as number_strong_components_hamamatsu,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM tateyama_with_cost')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_tateyama;
+) as number_strong_components_tateyama;
 ```
 
 For OMF data, we do not keep only the road inside the bbox as the data have not been prepared for this.
@@ -443,21 +443,21 @@ SELECT
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tokyo')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_tokyo,
+) as number_strong_components_tokyo,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_hamamatsu')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_hamamatsu,
+) as number_strong_components_hamamatsu,
 (
 	SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
 		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM edge_with_cost_tateyama')
 		GROUP BY DISTINCT component
 	)
-) as number_connected_components_tateyama;
+) as number_strong_components_tateyama;
 ```
 
 Just as the connected components, you can use a query to see each strong connected components of the graph with this query:
