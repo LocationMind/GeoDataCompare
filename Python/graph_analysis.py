@@ -12,43 +12,40 @@ def getNumberElements(connection:psycopg2.extensions.connection,
     If filter is true, then the elements will be joined with the given join table using
     the ST_Contains method (usually with a bounding box).
     If so, the area name is necessary and an exception will be raised if not given.
-
+    
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
-
+    
     Returns:
         int: Number of elements in the table.
     """
-    # TODO: Write the function
+    query = f"""SELECT COUNT(*) as cnt FROM {schema}.{tableName} AS e """
+    joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
     
+    if filter:
+        # Check for parameter exception
+        if areaName == "" or areaName is None:
+            raise ValueError("If filter is true, an area name must be given")
+        if joinTable == "" or joinTable is None:
+            raise ValueError("If filter is true, a join table must be given")
+        query += joinQuery
+    else:
+        query += ";"
     
-def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
-                            schema:str,
-                            tableName:str,
-                            filter:bool = False,
-                            joinTable:str = 'bounding_box',
-                            areaName:str = None) -> float:
-    """Return the total length in kilometer of the table.
-    The function used is `CEILING(SUM(ST_Length(geom::geography)) / 1000`
-
-    Args:
-        connection (psycopg2.extensions.connection): Connection token for the database
-        schema (str): Name of the schema.
-        tableName (str): Name of the table to count the number of row
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
-
-    Returns:
-        float: Total length in kilometer of the table
-    """
-    # TODO: Write the function
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
     
+    # Get result
+    row = cursor.fetchone()
+    count = row[0]
+    
+    # close cursor
+    return count
     
 def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
                             schema:str,
@@ -64,7 +61,7 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
 
     Returns:
@@ -87,7 +84,7 @@ def getLengthKilometerByClass(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
 
     Returns:
@@ -110,7 +107,7 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
 
     Returns:
@@ -134,7 +131,7 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to ""
     
     Returns:
@@ -160,7 +157,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Returns:
@@ -187,7 +184,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table,  only necessary if the filter is on. Defaults to False.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on. Defaults to False.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Returns:
@@ -200,7 +197,38 @@ if __name__ == "__main__":
     import time
     start = time.time()
     
+    # Connect to the database and give table template for OSM and OMF dataset
+    database = "pgrouting"
+    connection = utils.getConnection(database)
     
+    osmSchema = 'osm'
+    osmEdgeTableTemplate = "edge_with_cost_{}"
+    osmNodeTableTemplate = "node_{}"
+    
+    omfSchema = 'omf'
+    omfEdgeTableTemplate = "edge_with_cost_{}"
+    omfNodeTableTemplate = "node_{}"
+    
+    listArea = ['tateyama']
+    
+    for area in listArea:
+        osmEdgeTable = osmEdgeTableTemplate.format(area)
+        osmNodeTable = osmNodeTableTemplate.format(area)
+        
+        omfEdgeTable = omfEdgeTableTemplate.format(area)
+        omfNodeTable = omfNodeTableTemplate.format(area)
+        
+        count = getNumberElements(connection, osmSchema, osmEdgeTable)
+        print(f"Number of edges in OSM for {area} is : {count}")
+        
+        count = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
+        print(f"Number of edges in OMF for {area} is : {count}")
+        
+        count = getNumberElements(connection, osmSchema, osmNodeTable)
+        print(f"Number of nodes in OSM for {area} is : {count}")
+        
+        count = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area.capitalize())
+        print(f"Number of nodes in OMF for {area} is : {count}")
     
     end = time.time()
     print(f"It took {end - start} seconds")
