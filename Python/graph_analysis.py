@@ -353,10 +353,7 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
 
 def getConnectedComponents(connection:psycopg2.extensions.connection,
                            schema:str,
-                           tableName:str,
-                           filter:bool = False,
-                           joinTable:str = 'bounding_box',
-                           areaName:str = None) -> int:
+                           tableName:str) -> int:
     """Return the number of connected components of the graph using PgRouting algorithms.
     PgRouting must be installed otherwise it will not work.
 
@@ -364,18 +361,28 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the connected components.
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
-
-    Raises:
-        ValueError: If areaName is None or an empty string. An area name must be given.
-        ValueError: If joinTable is None or an empty string. A join table must be given.
 
     Returns:
         int: Number of connected components for the graph.
     """
-    # TODO: Write the function
+    # General query
+    query = f"""SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{tableName}')
+		GROUP BY DISTINCT component
+	)"""
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    # Get result
+    row = cursor.fetchone()
+    count = row[0]
+    
+    # close cursor
+    cursor.close()
+    
+    return count
     
     
 def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
@@ -394,18 +401,33 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
     Returns:
         int: Number of strong connected components for the graph.
     """
-    # TODO: Write the function
+    # General query
+    query = f"""SELECT COUNT(*) FROM (
+		SELECT COUNT(*)
+		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{tableName}')
+		GROUP BY DISTINCT component
+	)"""
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    # Get result
+    row = cursor.fetchone()
+    count = row[0]
+    
+    # close cursor
+    cursor.close()
+    
+    return count
     
     
 def getOverlapIndicator(connection:psycopg2.extensions.connection,
                         schemaDatasetA:str,
                         tableNameDatasetA:str,
                         schemaDatasetB:str,
-                        tableNameDatasetB:str,
-                        filter:bool = False,
-                        joinTable:str = 'bounding_box',
-                        areaName:str = None) -> float:
+                        tableNameDatasetB:str) -> float:
     """Return the value of the overlap indicator for dataset A over dataset B.
+    Data from one dataset must be filter
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database.
@@ -413,9 +435,6 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         tableNameDatasetA (str): Name of the table for the dataset A.
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Returns:
         float: Overlap indicator in percentage.
@@ -428,7 +447,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
                           tableNameDatasetA:str,
                           schemaDatasetB:str,
                           tableNameDatasetB:str,
-                          filter:bool = False,
+                          filterOnDatasetA:bool = True,
                           joinTable:str = 'bounding_box',
                           areaName:str = None) -> tuple[int, float]:
     """Return the number of corresponding nodes in dataset A, comparing it to dataset B,
@@ -440,7 +459,8 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         tableNameDatasetA (str): Name of the table for the dataset A.
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
-        filter (bool, optional): Choose to apply a filter or not. Defaults to False.
+        filterOnDatasetA (bool, optional): Apply the filter on dataset A if True.
+        If False, it will apply to dataset B. Defaults to True.
         joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
@@ -511,6 +531,22 @@ if __name__ == "__main__":
         
         listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area.capitalize())
         print(f"Total length in km per final class OMF for {area} is : {listClasses}")
+        
+        
+        # Connected components
+        count = getConnectedComponents(connection, osmSchema, osmEdgeTable)
+        print(f"Number of connected components in OSM for {area} is : {count}")
+        
+        count = getConnectedComponents(connection, omfSchema, omfEdgeTable)
+        print(f"Number of connected components in OMF for {area} is : {count}")
+        
+        
+        # Strong connected components
+        count = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable)
+        print(f"Number of strong connected components in OSM for {area} is : {count}")
+        
+        count = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable)
+        print(f"Number of strong connected components in OMF for {area} is : {count}")
     
     end = time.time()
     print(f"It took {end - start} seconds")
