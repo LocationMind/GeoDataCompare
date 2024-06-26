@@ -1024,7 +1024,7 @@ if __name__ == "__main__":
         OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable, idColumnName='osmid')
         print(f"Number of connected components in OSM for {area} is: {OSMValue}")
         
-        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
+        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
         print(f"Number of connected components in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
