@@ -61,7 +61,7 @@ def getNumberElements(connection:psycopg2.extensions.connection,
 
 def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
                             schema:str,
-                            tableName:str,
+                            edgeTableName:str,
                             filter:bool = False,
                             joinTable:str = 'bounding_box',
                             areaName:str = None) -> float:
@@ -74,7 +74,7 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to calculate the total length kilometer.
+        edgeTableName (str): Name of the edge table to calculate the total length kilometer.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
         joinTable (str, optional): Name of the join table, only necessary if the filter is on.
         This table must be in the public schema. Defaults to 'bounding_box'.
@@ -90,7 +90,7 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
         float: Total length in kilometer of the table.
     """
     # General query
-    query = f"""SELECT CEILING(SUM(public.ST_Length(e.geom::geography)) / 1000) as cnt FROM {schema}.{tableName} AS e """
+    query = f"""SELECT CEILING(SUM(public.ST_Length(e.geom::geography)) / 1000) as cnt FROM {schema}.{edgeTableName} AS e """
     
     # Join query if needed
     joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
@@ -120,7 +120,7 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
 
 def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
                                schema:str,
-                               tableName:str,
+                               edgeTableName:str,
                                filter:bool = False,
                                joinTable:str = 'bounding_box',
                                areaName:str = None) -> list[tuple[str, float, int]]:
@@ -134,7 +134,7 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to calculate the length kilometer per class.
+        edgeTableName (str): Name of the edge table to calculate the length kilometer per class.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
         joinTable (str, optional): Name of the join table, only necessary if the filter is on.
         This table must be in the public schema. Defaults to 'bounding_box'.
@@ -154,7 +154,7 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
     SELECT class,
     round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
     COUNT(*) as nb_entity
-    FROM {schema}.{tableName} AS e """
+    FROM {schema}.{edgeTableName} AS e """
     
     # Join query if needed
     joinQuery = f"""
@@ -191,7 +191,7 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
 
 def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
                                       schema:str,
-                                      tableName:str) -> list[tuple[str, float, int]]:
+                                      edgeTableName:str) -> list[tuple[str, float, int]]:
     """Return the length in kilometer of the table per class, in a dict format for OSM data.
     Because it is only for OSM data, no filter is needed.
     The mapping is made from OSM Data to OMF classes.
@@ -201,7 +201,7 @@ def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to calculate the length kilometer per class.
+        edgeTableName (str): Name of the edge table to calculate the length kilometer per class.
 
     Returns:
         list[tuple[str, float, int]]: List representing the total length per classes.
@@ -236,7 +236,7 @@ def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
             WHEN class = 'unclassified' THEN 'unclassified'
             ELSE 'unknown'
         END AS new_class
-        FROM {schema}.{tableName}
+        FROM {schema}.{edgeTableName}
     ),
     final_classes AS (
         SELECT unnest(ARRAY[
@@ -281,7 +281,7 @@ def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
 
 def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
                                       schema:str,
-                                      tableName:str,
+                                      edgeTableName:str,
                                       joinTable:str = 'bounding_box',
                                       areaName:str = None) -> dict[str, float]:
     """Return the length in kilometer of the table per class, in a dict format.
@@ -294,7 +294,7 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to calculate the length kilometer per class.
+        edgeTableName (str): Name of the table to calculate the length kilometer per class.
         joinTable (str, optional): Name of the join table, only necessary if the filter is on.
         This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
@@ -325,7 +325,7 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
         SELECT e.class AS new_class,
         round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
         COUNT(e.class) AS nb_entity
-        FROM {schema}.{tableName} AS e
+        FROM {schema}.{edgeTableName} AS e
         JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom)
         WHERE b.name = '{areaName}'
         GROUP BY class
@@ -359,14 +359,29 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
 
 def getConnectedComponents(connection:psycopg2.extensions.connection,
                            schema:str,
-                           tableName:str) -> int:
+                           edgeTableName:str,
+                           resultAsTable:str = "",
+                           nodeTableName:str = "",
+                           schemaResult:str = "public",
+                           idColumnName:str = "id") -> int:
     """Return the number of connected components of the graph using PgRouting algorithms.
     PgRouting must be installed otherwise it will not work.
-
+    If you want to save the result as table, two queries will be run.
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the connected components.
+        edgeTableName (str): Name of the edge table to count the connected components.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Otherwise, only the percentage will be shown. Defaults to "".
+        nodeTableName (str): Name of the node table.
+        Only necessary if one wants to save the result as table. Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
+        idColumnName (str, optional): Name of the node id column.
+        Not necessary if resultAsTable is empty. Defaults to "id".
+    
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
 
     Returns:
         int: Number of connected components for the graph.
@@ -374,7 +389,7 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     # General query
     query = f"""SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{tableName}')
+		FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
 		GROUP BY DISTINCT component
 	)"""
     
@@ -388,21 +403,61 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     # close cursor
     cursor.close()
     
+    
+    # Add create table statement if the parameter is on
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        if nodeTableName == "":
+            raise ValueError("The node table must be given for the result output")
+        
+        # Add drop / create table statement
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
+		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
+		JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
+		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+        """
+        
+        # Execute query
+        utils.executeQueryWithTransaction(connection, query)
+        
+        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
+        
     return count
 
 
 def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
                                  schema:str,
-                                 tableName:str) -> int:
-    """Return the number of strong connected components
-    of the graph using PgRouting algorithms.
-    No filter is necessary as it would only 
+                                 edgeTableName:str,
+                                 resultAsTable:str = "",
+                                 nodeTableName:str = "",
+                                 schemaResult:str = "public",
+                                 idColumnName:str = "id") -> int:
+    """Return the number of strong connected components of the graph using PgRouting algorithms.
     PgRouting must be installed otherwise it will not work.
+    If you want to save the result as table, two queries will be run.
+    The node table is necessary for this.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
-        tableName (str): Name of the table to count the strong connected components.
+        edgeTableName (str): Name of the edge table to count the strong connected components.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Otherwise, only the percentage will be shown. Defaults to "".
+        nodeTableName (str): Name of the node table.
+        Only necessary if one wants to save the result as table. Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
+        idColumnName (str, optional): Name of the node id column.
+        Not necessary if resultAsTable is empty. Defaults to "id".
+    
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
+        ValueError: If no node table is given when saving the result as table.
     
     Returns:
         int: Number of strong connected components for the graph.
@@ -410,7 +465,7 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
     # General query
     query = f"""SELECT COUNT(*) FROM (
 		SELECT COUNT(*)
-		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{tableName}')
+		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
 		GROUP BY DISTINCT component
 	)"""
     
@@ -424,13 +479,39 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
     # close cursor
     cursor.close()
     
+    # Add create table statement if the parameter is on
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        if nodeTableName == "":
+            raise ValueError("The node table must be given for the result output")
+        
+        # Create table query
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
+		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
+		JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
+		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+        """
+        
+        # Execute query
+        utils.executeQueryWithTransaction(connection, query)
+        
+        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
+        
     return count
 
 
 def getIsolatedNodes(connection:psycopg2.extensions.connection,
                      schema:str,
                      edgeTableName:str,
-                     nodeTableName:str) -> int:
+                     nodeTableName:str,
+                     resultAsTable:str = "",
+                     schemaResult:str = "public") -> int:
+    
     """Return the number of isolated nodes in the graph, by counting
     the number of nodes that do not intersect any roads
 
@@ -439,29 +520,75 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         edgeTableName (str): Name of the edge table.
         nodeTableName (str): Name of the node table.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Otherwise, only the percentage will be shown. Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
+    
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
     
     Returns:
         int: Number of strong connected components for the graph.
     """
+    query = ""
+    # Add create table statement if the parameter is on
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        
+        # Add drop / create table statement
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        """
+        
     # General query
-    query = f"""
-    SELECT COUNT(*) FROM {schema}.{nodeTableName}
-    WHERE geom not in (
-        SELECT n.geom FROM {schema}.{nodeTableName} AS n
-        JOIN {schema}.{edgeTableName} e ON public.ST_Intersects(e.geom, n.geom)
-    )"""
+    query += f"""
+    WITH isolated_nodes AS (
+        SELECT DISTINCT ON (n.geom)
+            n.*,        
+            CASE WHEN public.ST_Intersects(e.geom, n.geom)THEN true
+            ELSE false
+            END AS intersects
+        FROM {schema}.{nodeTableName} AS n
+        LEFT JOIN {schema}.{edgeTableName} e ON public.ST_Intersects(e.geom, n.geom)
+    )
+    """
     
-    # Execute query
-    cursor = utils.executeSelectQuery(connection, query)
+    # Select query (either added to the general query or run on its own)
+    selectPart = """ SELECT intersects, COUNT(*) as nb
+    FROM {}
+    GROUP BY intersects
+    ORDER BY intersects;
+    """
     
-    # Get result
-    row = cursor.fetchone()
-    count = row[0]
+    # If the table is created, we do not sum up the length directly, only after the table is created
+    if resultAsTable !="":
+        query+= " SELECT * FROM isolated_nodes;"
+        
+        # Execute the query to create the table
+        utils.executeQueryWithTransaction(connection, query)
+        
+        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
+        
+        # Select the overlap indicator
+        selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
+        cursor = utils.executeSelectQuery(connection, selectQuery)
+    # Else, we do not put the result in another table and select all elements group by intersects
+    else:
+        query += selectPart.format("isolated_nodes")
+        cursor = utils.executeSelectQuery(connection, query)
     
-    # close cursor
-    cursor.close()
+    isolatedNodes = 0
+    # Fetch result to calculate the indicator
+    for (intersects, nb) in cursor:
+        # We take the overlap length from the result
+        if intersects == False:
+            isolatedNodes = nb
     
-    return count
+    return isolatedNodes
 
 
 def getOverlapIndicator(connection:psycopg2.extensions.connection,
@@ -485,6 +612,9 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         Otherwise, only the percentage will be shown. Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
+    
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
 
     Returns:
         float: Overlap indicator in percentage.
@@ -503,7 +633,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         """
     
     # General query
-    query = f"""
+    query += f"""
     WITH union_buffer AS (
         SELECT public.ST_Union(public.ST_Transform(public.ST_Buffer(geom::geography, 1)::geometry, 4326)) AS buffer,
         true as test
@@ -534,7 +664,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     
     # If the table is created, we do not sum up the length directly, only after the table is created
     if resultAsTable !="":
-        query+= " SELECT * FROM intersect_buffer;"
+        query += " SELECT * FROM intersect_buffer;"
         
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
@@ -593,6 +723,9 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         Otherwise, only the percentage will be shown. Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
+    
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
 
     Returns:
         tuple[int, float]: First value is the number of nodes,
@@ -612,7 +745,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         """
     
     # General query
-    query = f"""
+    query += f"""
     WITH vertices_dataset_a AS (
         SELECT n.*
         FROM {schemaDatasetA}.{tableNameDatasetA} AS n
@@ -634,7 +767,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     )
     """
     
-    # Select query (either added to the general query or run in its own)
+    # Select query (either added to the general query or run on its own)
     selectPart = """SELECT intersects, COUNT(*) as nb
     FROM {}
     GROUP BY intersects
@@ -662,7 +795,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     intersectNodes = 0
     # Fetch result to calculate the indicator
     for (intersects, nb) in cursor:
-        # We take the overlap length from the result
+        # We take the number of intersected nodes
         if intersects == True:
             intersectNodes = nb
         totalNodes += nb
@@ -771,11 +904,8 @@ if __name__ == "__main__":
     now = datetime.datetime.now()
     dateTime = now.strftime("%d-%m-%Y_%Hh%M")
     dateTimeMarkdown = now.strftime("%d/%m/%Y %H:%M")
-    print(dateTime)
-    print(dateTimeMarkdown)
     
     # Path to save the results
-    
     # fileName = f"Automatic_result_{dateTime}.md"
     fileName = "Automatic_result.md"
     pathSave = os.path.join(".", "Documentation", fileName)
@@ -793,7 +923,7 @@ if __name__ == "__main__":
     omfNodeTableTemplate = "node_{}"
     
     # List of area names to assess quality
-    listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka','tateyama', 'tokyo']
+    listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka', 'tateyama', 'tokyo']
     
     # Variable for markdown results
     beforeMappingResult = "### Total kilometer of roads by type (before mapping)"""
@@ -801,6 +931,15 @@ if __name__ == "__main__":
     
     # Data to add to the dataFrame
     data = []
+    
+    # Schema for saving result as tables
+    schemaResult = 'results'
+    # Templates table names for saving (1st : area / 2nd: dataset)
+    connectedComponentsTemplate = "connected_components_{}_{}"
+    strongConnectedComponentsTemplate = "strong_components_{}_{}"
+    isolatedNodesTemplate = "isolated_nodes_{}_{}"
+    overlapIndicatorTemplate = "overlap_indicator_{}_{}"
+    correspondingNodesTemplate = "corresponding_nodes_{}_{}"
     
     for area in listArea:
         print(f"Start quality analysis for {area}")
@@ -878,10 +1017,14 @@ if __name__ == "__main__":
         
         
         # Connected components
-        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable)
+        # Table names for saving
+        resultOSMTable = connectedComponentsTemplate.format(area.lower(), osmSchema)
+        resultOMFTable = connectedComponentsTemplate.format(area.lower(), omfSchema)
+        
+        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable, idColumnName='osmid')
         print(f"Number of connected components in OSM for {area} is: {OSMValue}")
         
-        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable)
+        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
         print(f"Number of connected components in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
@@ -889,10 +1032,14 @@ if __name__ == "__main__":
         
         
         # Strong connected components
-        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable)
+        # Table names for saving
+        resultOSMTable = strongConnectedComponentsTemplate.format(area.lower(), osmSchema)
+        resultOMFTable = strongConnectedComponentsTemplate.format(area.lower(), omfSchema)
+        
+        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable, idColumnName='osmid')
         print(f"Number of strong connected components in OSM for {area} is: {OSMValue}")
         
-        OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable)
+        OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
         print(f"Number of strong connected components in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
@@ -900,10 +1047,14 @@ if __name__ == "__main__":
         
         
         # Isolated nodes
-        OSMValue = getIsolatedNodes(connection, osmSchema, osmEdgeTable, osmNodeTable)
+        # Table names for saving
+        resultOSMTable = isolatedNodesTemplate.format(area.lower(), osmSchema)
+        resultOMFTable = isolatedNodesTemplate.format(area.lower(), omfSchema)
+        
+        OSMValue = getIsolatedNodes(connection, osmSchema, osmEdgeTable, osmNodeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
         print(f"Number of isolated nodes in OSM for {area} is: {OSMValue}")
         
-        OMFValue = getIsolatedNodes(connection, omfSchema, omfEdgeTable, omfNodeTable)
+        OMFValue = getIsolatedNodes(connection, omfSchema, omfEdgeTable, omfNodeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"Number of isolated nodes in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
@@ -915,13 +1066,17 @@ if __name__ == "__main__":
         
         
         # Overlap indicator
-        OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
+        # Table names for saving
+        resultOSMTable = overlapIndicatorTemplate.format(area.lower(), osmSchema)
+        resultOMFTable = overlapIndicatorTemplate.format(area.lower(), omfSchema)
+        
+        OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
         print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSMValue}")
         
         end = time.time()
         print(f"Overlap indicator 1 took {end - start} seconds")
         
-        OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
+        OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMFValue}")
         
         end = time.time()
@@ -932,13 +1087,17 @@ if __name__ == "__main__":
         
         
         # Corresponding nodes
-        OSMValue = getCorrespondingNodes(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
+        # Table names for saving
+        resultOSMTable = correspondingNodesTemplate.format(area.lower(), osmSchema)
+        resultOMFTable = correspondingNodesTemplate.format(area.lower(), omfSchema)
+        
+        OSMValue = getCorrespondingNodes(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
         print(f"Number of corresponding nodes in OSM for {area} is: {OSMValue[0]} ({OSMValue[0]} %)")
         
         end = time.time()
         print(f"Corresponding nodes for OSM took {end - start} seconds")
         
-        OMFValue = getCorrespondingNodes(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
+        OMFValue = getCorrespondingNodes(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"Number of corresponding nodes in OMF for {area} is: {OMFValue[0]} ({OMFValue[1]} %)")
         
         end = time.time()
@@ -967,7 +1126,7 @@ if __name__ == "__main__":
     exportMarkdown = f"""
 # Quality criterias result between OSM and OMF datasets
 
-The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 of OvertureMap data and the OSM data until 2024/06/07.
+The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of OvertureMap data and the OSM data until 2024/06/07.
 
 ## General results
 
