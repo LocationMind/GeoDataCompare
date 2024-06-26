@@ -793,8 +793,8 @@ if __name__ == "__main__":
     omfNodeTableTemplate = "node_{}"
     
     # List of area names to assess quality
-    listArea = ['tateyama', 'higashihiroshima', 'morioka', 'kumamoto', 'hamamatsu', 'tokyo']
-    listArea = ['tateyama', 'higashihiroshima']    
+    listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka','tateyama', 'tokyo']
+    
     # Variable for markdown results
     beforeMappingResult = "### Total kilometer of roads by type (before mapping)"""
     afterMappingResult = "### Total kilometer of roads by type (after mapping)"
