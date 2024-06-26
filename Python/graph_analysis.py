@@ -1,5 +1,6 @@
 import utils
 import os
+import pandas as pd
 import psycopg2
 
 def getNumberElements(connection:psycopg2.extensions.connection,
@@ -677,10 +678,107 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     return intersectNodes, percentage
 
 
+def listsToMardownTable(listOSM:list,
+                        listOMF:list,) -> str:
+    """Merge two list with the same first column into a markdown table.
+    The lists must be list of tuples or list of list, and within each tuples or
+    list, the same number of value is expected.
+    Otherwise, an exception will be raised.
+    Same way if the column do not correspond to the number of column in the list.
+
+    Args:
+        listOSM (list): List of OSM results.
+        listOMF (list): List of OMF results.
+        columnsOSM (list, optional): Name of the OSM list columns.
+        Defaults to ["class", "OMF - Total length (km)", "OMF - Number of entities"].
+        columnsOSM (list, optional): Name of the OMF list columns.
+        Defaults to ["class", "OMF - Total length (km)", "OMF - Number of entities"].
+    
+    Raises:
+        ValueError: If the listOSM parameter is empty.
+        ValueError: If the listOSM parameter is empty.
+        ValueError: If the first entry of both list does not have the same number of columns.
+
+    Returns:
+        str: Mardown table corresponding to the two lists merged.
+    """
+    ## Exceptions
+    # Len of the two lists
+    if len(listOSM) == 0:
+        raise ValueError("The OSM list parameter must not be empty")
+    if len(listOMF) == 0:
+        raise ValueError("The OMF list parameter must not be empty")
+    
+    # Test if the list have the same number of column in the first entry
+    lenOSM = len(listOSM[0])
+    lenOMF = len(listOMF[0])
+    
+    if lenOSM != lenOMF:
+        raise ValueError(f"The two lists does not have the same number of columns in the first entry: len(listOSM[0]) = {lenOSM}, len(listOMF[0]) = {lenOMF})")
+    
+    # Transform list in dataframe
+    columnsOSM = ["class", "length", "entity"]
+    columnsOMF = ["class", "length", "entity"]
+    dfOSM = pd.DataFrame(listOSM, columns=columnsOSM)
+    dfOMF = pd.DataFrame(listOMF, columns=columnsOMF)
+    
+    finalList = []
+    # Iterate over OSM rows first
+    for _, (classDf, lengthOSM, entityOSM) in dfOSM.iterrows():        
+        # Check if the value is also in OMF dataframe
+        valueInOMF = dfOMF.loc[dfOMF['class'] == classDf]
+        
+        # If no value is found, we put 0 as a value
+        if valueInOMF.empty:
+            lengthOMF, entityOMF = 0, 0
+        # Otherwise, we take the value and remove the line from the OMF dataframe
+        else:
+            id = valueInOMF.index
+            lengthOMF = valueInOMF.iloc[0]["length"]
+            entityOMF = valueInOMF.iloc[0]["entity"]
+            # Remove line from the dataFrame
+            dfOMF = dfOMF.drop(id)
+        
+        # Add the value to the final list
+        finalList.append([classDf, lengthOSM, entityOSM, lengthOMF, entityOMF])
+
+    # Iterate over the rest of OMF rows
+    for _, (classDf, lengthOMF, entityOMF) in dfOMF.iterrows():
+        # We already check OSM values so the total number is 0 for OSM dataset
+        lengthOSM, entityOSM = 0, 0
+        # Add the value to the final list
+        finalList.append([classDf, lengthOSM, entityOSM, lengthOMF, entityOMF])
+    
+    # Sort the list by class
+    finalList.sort(key= lambda a: a[0])
+    
+    # Create the dataframe
+    finalColumns = ["class", "OSM - Total length (km)", "OSM - Number of entities", "OMF - Total length (km)", "OMF - Number of entities"]
+    finalDataFrame = pd.DataFrame(finalList, columns=finalColumns)
+    
+    # Export to markdown
+    markdown = finalDataFrame.to_markdown(index=False, tablefmt="github")
+    
+    return markdown
+
+
 if __name__ == "__main__":
     import time
-    import pandas as pd
+    import datetime
     start = time.time()
+    
+    # Get today's date and hour for the result    
+    now = datetime.datetime.now()
+    dateTime = now.strftime("%d-%m-%Y_%Hh%M")
+    dateTimeMarkdown = now.strftime("%d/%m/%Y %H:%M")
+    print(dateTime)
+    print(dateTimeMarkdown)
+    
+    # Path to save the results
+    
+    # fileName = f"Automatic_result_{dateTime}.md"
+    fileName = "Automatic_result.md"
+    pathSave = os.path.join(".", "Documentation", fileName)
     
     # Connect to the database and give table template for OSM and OMF dataset
     database = "pgrouting"
@@ -694,7 +792,12 @@ if __name__ == "__main__":
     omfEdgeTableTemplate = "edge_with_cost_{}"
     omfNodeTableTemplate = "node_{}"
     
-    listArea = ['tokyo', 'tateyama']
+    # List of area names to assess quality
+    listArea = ['tateyama', 'higashihiroshima', 'morioka', 'kumamoto', 'hamamatsu', 'tokyo']
+    listArea = ['tateyama', 'higashihiroshima']    
+    # Variable for markdown results
+    beforeMappingResult = "### Total kilometer of roads by type (before mapping)"""
+    afterMappingResult = "### Total kilometer of roads by type (after mapping)"
     
     # Data to add to the dataFrame
     data = []
@@ -702,6 +805,7 @@ if __name__ == "__main__":
     for area in listArea:
         print(f"Start quality analysis for {area}")
         
+        # Get edge and node tables
         osmEdgeTable = osmEdgeTableTemplate.format(area)
         osmNodeTable = osmNodeTableTemplate.format(area)
         
@@ -710,6 +814,10 @@ if __name__ == "__main__":
         
         # Capitalize the area name to be able to filter with the bounding box
         area = area.capitalize()
+        
+        # Add lines to before and after mapping results
+        beforeMappingResult += f"\n\n#### *{area}*:\n\n"
+        afterMappingResult += f"\n\n#### *{area}*:\n\n"
         
         # Number of edges / nodes
         OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
@@ -743,19 +851,30 @@ if __name__ == "__main__":
         
         
         # Total length kilometer per class
-        listClasses = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km per class OSM for {area} is: {listClasses}")
+        listClassesOSM = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
         
-        listClasses = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
-        print(f"Total length in km per class OMF for {area} is: {listClasses}")
+        listClassesOMF = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
+        
+        markdown = listsToMardownTable(listClassesOSM, listClassesOMF)
+        # Add markdown results
+        beforeMappingResult += markdown
+        
+        
+        print(f"Total length in km per class (before mapping) for {area}:")
+        print(markdown)
         
         
         # Total length kilometer per final class
-        listClasses = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km per final class OSM for {area} is: {listClasses}")
+        listClassesOSM = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
         
-        listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area)
-        print(f"Total length in km per final class OMF for {area} is: {listClasses}")
+        listClassesOMF = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area)
+        
+        markdown = listsToMardownTable(listClassesOSM, listClassesOMF)
+        # Add markdown results
+        afterMappingResult += markdown
+        
+        print(f"Total length in km per class (after mapping) for {area}:")
+        print(markdown)
         
         
         # Connected components
@@ -842,7 +961,28 @@ if __name__ == "__main__":
     
     print()
     # Export to markdown table
-    print(df.to_markdown(index=False, tablefmt="github"))
+    generalResults = df.to_markdown(index=False, tablefmt="github")
+    
+    # Create final markdown
+    exportMarkdown = f"""
+# Quality criterias result between OSM and OMF datasets
+
+The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 of OvertureMap data and the OSM data until 2024/06/07.
+
+## General results
+
+{generalResults}
+
+## Specific results
+
+{beforeMappingResult}
+
+{afterMappingResult}
+"""
+
+    # Export the results to a markdown file
+    with open(pathSave, 'w') as f:
+        f.writelines(exportMarkdown)
     
     end = time.time()
     print(f"It took {end - start} seconds")
