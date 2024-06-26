@@ -67,7 +67,7 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
     """Return the total length in kilometer of the table.
     If filter is true, then only entity contains in the join table will be used.
     The ST_Contains method will be used for this.
-    The function used to calculate length is :
+    The function used to calculate length is:
     `CEILING(SUM(ST_Length(geom::geography)) / 1000`.
 
     Args:
@@ -127,7 +127,7 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
     No mapping is made for each dataset.
     If filter is true, then only entity contains in the join table will be used.
     The ST_Contains method will be used for this.
-    The function used to calculate length is :
+    The function used to calculate length is:
     `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`.
 
     Args:
@@ -194,7 +194,7 @@ def getLengthKilometerByFinalClassOSM(connection:psycopg2.extensions.connection,
     """Return the length in kilometer of the table per class, in a dict format for OSM data.
     Because it is only for OSM data, no filter is needed.
     The mapping is made from OSM Data to OMF classes.
-    The function used to calculate length is :
+    The function used to calculate length is:
     `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`
 
     Args:
@@ -287,7 +287,7 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
     This works only for OMF dataset, therefore a filter is used.
     Only entity contains in the join table will be used, and the ST_Contains method
     will be used for this.
-    The function used to calculate length is :
+    The function used to calculate length is:
     `round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2)`
 
     Args:
@@ -388,8 +388,8 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     cursor.close()
     
     return count
-    
-    
+
+
 def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
                                  schema:str,
                                  tableName:str) -> int:
@@ -412,6 +412,43 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
 		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{tableName}')
 		GROUP BY DISTINCT component
 	)"""
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    # Get result
+    row = cursor.fetchone()
+    count = row[0]
+    
+    # close cursor
+    cursor.close()
+    
+    return count
+
+
+def getIsolatedNodes(connection:psycopg2.extensions.connection,
+                     schema:str,
+                     edgeTableName:str,
+                     nodeTableName:str) -> int:
+    """Return the number of isolated nodes in the graph, by counting
+    the number of nodes that do not intersect any roads
+
+    Args:
+        connection (psycopg2.extensions.connection): Connection token for the database
+        schema (str): Name of the schema.
+        edgeTableName (str): Name of the edge table.
+        nodeTableName (str): Name of the node table.
+    
+    Returns:
+        int: Number of strong connected components for the graph.
+    """
+    # General query
+    query = f"""
+    SELECT COUNT(*) FROM {schema}.{nodeTableName}
+    WHERE geom not in (
+        SELECT n.geom FROM {schema}.{nodeTableName} AS n
+        JOIN {schema}.{edgeTableName} e ON public.ST_Intersects(e.geom, n.geom)
+    )"""
     
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
@@ -526,7 +563,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     # Print info to user
     print(f"Total length is {totalLength} km")
     print(f"Overlap length is {overlapLength} km")
-    print(f"Percentage of road from dataset {schemaDatasetA} in dataset {schemaDatasetB} is : {indicator} %")
+    print(f"Percentage of road from dataset {schemaDatasetA} in dataset {schemaDatasetB} is: {indicator} %")
     
     return indicator
 
@@ -586,7 +623,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         JOIN public.{joinTable} b ON public.ST_Intersects(b.geom, n.geom)
     ),
     vertices_intersect AS (
-        SELECT
+        SELECT DISTINCT ON (va.geom)
             va.*,
             CASE WHEN public.ST_Intersects(va.geom, vb.geom) THEN true
             ELSE false
@@ -635,9 +672,10 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     # Print info to user
     print(f"Total nodes: {totalNodes}")
     print(f"Intersects nodes: {intersectNodes}")
-    print(f"Percentage of corresponding nodes from dataset {schemaDatasetA} in dataset {schemaDatasetB} is : {percentage} %")
+    print(f"Percentage of corresponding nodes from dataset {schemaDatasetA} in dataset {schemaDatasetB} is: {percentage} %")
     
     return intersectNodes, percentage
+
 
 if __name__ == "__main__":
     import time
@@ -662,6 +700,8 @@ if __name__ == "__main__":
     data = []
     
     for area in listArea:
+        print(f"Start quality analysis for {area}")
+        
         osmEdgeTable = osmEdgeTableTemplate.format(area)
         osmNodeTable = osmNodeTableTemplate.format(area)
         
@@ -673,118 +713,136 @@ if __name__ == "__main__":
         
         # Number of edges / nodes
         OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
-        print(f"Number of edges in OSM for {area} is : {OSMValue}")
+        print(f"Number of edges in OSM for {area} is: {OSMValue}")
         
         OMFValue = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
-        print(f"Number of edges in OMF for {area} is : {OMFValue}")
+        print(f"Number of edges in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
-        data.append(["1. Number of nodes", area, OSMValue, OMFValue])
+        data.append(["**1. Number of nodes**", f"*{area}*", OSMValue, OMFValue])
         
         OSMValue = getNumberElements(connection, osmSchema, osmNodeTable)
-        print(f"Number of nodes in OSM for {area} is : {OSMValue}")
+        print(f"Number of nodes in OSM for {area} is: {OSMValue}")
         
         OMFValue = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area)
-        print(f"Number of nodes in OMF for {area} is : {OMFValue}")
+        print(f"Number of nodes in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
-        data.append(["2. Number of edges", area, OSMValue, OMFValue])
+        data.append(["**2. Number of edges**", f"*{area}*", OSMValue, OMFValue])
         
         
         # Total length kilometer
         OSMValue = getTotalLengthKilometer(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km in OSM for {area} is : {OSMValue}")
+        print(f"Total length in km in OSM for {area} is: {OSMValue}")
         
         OMFValue = getTotalLengthKilometer(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
-        print(f"Total length in km in OMF for {area} is : {OMFValue}")
+        print(f"Total length in km in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
-        data.append(["3. Total length (km)", area, OSMValue, OMFValue])
+        data.append(["**3. Total length (km)**", f"*{area}*", OSMValue, OMFValue])
         
         
         # Total length kilometer per class
         listClasses = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km per class OSM for {area} is : {listClasses}")
+        print(f"Total length in km per class OSM for {area} is: {listClasses}")
         
         listClasses = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
-        print(f"Total length in km per class OMF for {area} is : {listClasses}")
+        print(f"Total length in km per class OMF for {area} is: {listClasses}")
         
         
         # Total length kilometer per final class
         listClasses = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km per final class OSM for {area} is : {listClasses}")
+        print(f"Total length in km per final class OSM for {area} is: {listClasses}")
         
         listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area)
-        print(f"Total length in km per final class OMF for {area} is : {listClasses}")
+        print(f"Total length in km per final class OMF for {area} is: {listClasses}")
         
         
         # Connected components
         OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable)
-        print(f"Number of connected components in OSM for {area} is : {OSMValue}")
+        print(f"Number of connected components in OSM for {area} is: {OSMValue}")
         
         OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable)
-        print(f"Number of connected components in OMF for {area} is : {OMFValue}")
+        print(f"Number of connected components in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
-        data.append(["4. Number of connected components", area, OSMValue, OMFValue])
+        data.append(["**4. Number of connected components**", f"*{area}*", OSMValue, OMFValue])
         
         
         # Strong connected components
         OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable)
-        print(f"Number of strong connected components in OSM for {area} is : {OSMValue}")
+        print(f"Number of strong connected components in OSM for {area} is: {OSMValue}")
         
         OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable)
-        print(f"Number of strong connected components in OMF for {area} is : {OMFValue}")
+        print(f"Number of strong connected components in OMF for {area} is: {OMFValue}")
         
         # Add data to the data list
-        data.append(["5. Number of strong connected components", area, OSMValue, OMFValue])
+        data.append(["**5. Number of strong connected components**", f"*{area}*", OSMValue, OMFValue])
+        
+        
+        # Isolated nodes
+        OSMValue = getIsolatedNodes(connection, osmSchema, osmEdgeTable, osmNodeTable)
+        print(f"Number of isolated nodes in OSM for {area} is: {OSMValue}")
+        
+        OMFValue = getIsolatedNodes(connection, omfSchema, omfEdgeTable, omfNodeTable)
+        print(f"Number of isolated nodes in OMF for {area} is: {OMFValue}")
+        
+        # Add data to the data list
+        data.append(["**6. Number of isolated nodes**", f"*{area}*", OSMValue, OMFValue])
+        
         
         end = time.time()
         print(f"Criteria until now took {end - start} seconds")
         
+        
         # Overlap indicator
         OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
-        print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is : {OSMValue}")
+        print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSMValue}")
         
         end = time.time()
         print(f"Overlap indicator 1 took {end - start} seconds")
         
         OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
-        print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is : {OMFValue}")
+        print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMFValue}")
         
         end = time.time()
         print(f"Overlap indicator 2 took {end - start} seconds")
         
         # Add data to the data list
-        data.append(["7. Number of strong connected components", area, OSMValue, OMFValue])
+        data.append(["**7. Number of strong connected components**", f"*{area}*", f"{OSMValue} %", f"{OMFValue} %"])
+        
         
         # Corresponding nodes
         OSMValue = getCorrespondingNodes(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
-        print(f"Number of corresponding nodes in OSM for {area} is : {OSMValue[0]} ({OSMValue[0]} %)")
+        print(f"Number of corresponding nodes in OSM for {area} is: {OSMValue[0]} ({OSMValue[0]} %)")
         
         end = time.time()
         print(f"Corresponding nodes for OSM took {end - start} seconds")
         
         OMFValue = getCorrespondingNodes(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
-        print(f"Number of corresponding nodes in OMF for {area} is : {OMFValue[0]} ({OMFValue[1]} %)")
+        print(f"Number of corresponding nodes in OMF for {area} is: {OMFValue[0]} ({OMFValue[1]} %)")
         
         end = time.time()
         print(f"Corresponding nodes for OMF took {end - start} seconds")
         
         # Add two rows in the dataframe (one for the number and the other for percentage)
-        data.append(["8. Number of corresponding nodes", area, OSMValue[0], OMFValue[0]])
-        
-        # Add data to the data list
-        data.append(["9. Percentage of corresponding nodes", area, f"{OSMValue[1]} %", f"{OMFValue[1]} %"])
+        data.append(["**8. Number of corresponding nodes**", f"*{area}*", OSMValue[0], OMFValue[0]])
+        data.append(["**9. Percentage of corresponding nodes**", f"*{area}*", f"{OSMValue[1]} %", f"{OMFValue[1]} %"])
+    
+        end = time.time()
+        print(f"{area} took {end - start} seconds")
+    
     
     # Sort data per Criterion / Area
     data.sort(key= lambda a: (a[0], a[1]))
     
     # Create dataframe to export as markdown in the end
-    columns = ['Criterion', 'Area', 'OSM Value', 'OMF Value']
+    columns = ['**Criterion**', '**Area**', '**OSM Value**', '**OMF Value**']
     df = pd.DataFrame(data=data, columns=columns)
     
-    print(df)
+    print()
+    # Export to markdown table
+    print(df.to_markdown(index=False, tablefmt="github"))
     
     end = time.time()
     print(f"It took {end - start} seconds")
