@@ -125,7 +125,8 @@ def initialisePostgreSQL(connection:psycopg2.extensions.connection):
 def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
                                 query:str):
     """Execute a query safely by using a SQL transaction.
-    It does not return anything, so this function should not be used for SELECT queries for instance.
+    It does not return anything, so this function should not be used
+    for SELECT queries for instance.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
@@ -149,7 +150,7 @@ def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
 
 def executeSelectQuery(connection:psycopg2.extensions.connection,
                        query:str) -> psycopg2.extensions.cursor:
-    """Execute a select auery and return the cursor.
+    """Execute a select query and return the cursor.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.

@@ -118,6 +118,9 @@ if __name__ == "__main__":
     with open(path_json, "r") as f:
         bboxJson = json.load(f)
     
+    bboxJson["bboxs"] = """{bbox
+        }"""
+    
     # Create tables for each bbox
     for elem in bboxJson["bboxs"]:
         # Get and create the element we need from the json
@@ -410,7 +413,8 @@ if __name__ == "__main__":
                     "bridge1":"bridge",
                     "tunnel1":"tunnel",
                     "service1":"service",
-                    "footway1":"footway", "abutters1":"abutters",
+                    "footway1":"footway",
+                    "abutters1":"abutters",
                     "width1":"width",
                     "junction1":"junction"})
         

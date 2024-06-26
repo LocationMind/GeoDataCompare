@@ -251,7 +251,7 @@ class OverlapIndicator(QgsProcessingAlgorithm):
             feedback.pushWarning("Feedback cancelled")
             return {}
         
-        # Create ooverlap field for sourceReprojected layer
+        # Create overlap field for sourceReprojected layer
         sourceReprojected = processing.run("native:fieldcalculator", {
             'INPUT':sourceReprojected,
             'FIELD_NAME':'overlap',

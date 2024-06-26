@@ -18,7 +18,8 @@ def getNumberElements(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to count the number of row
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on.
+        This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Raises:
@@ -55,7 +56,8 @@ def getNumberElements(connection:psycopg2.extensions.connection,
     
     # close cursor
     return count
-    
+
+
 def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
                             schema:str,
                             tableName:str,
@@ -73,7 +75,8 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to calculate the total length kilometer.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on.
+        This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Raises:
@@ -132,7 +135,8 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
         schema (str): Name of the schema.
         tableName (str): Name of the table to calculate the length kilometer per class.
         filter (bool, optional): Choose to apply a filter or not. Defaults to False.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on.
+        This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Raises:
@@ -290,7 +294,8 @@ def getLengthKilometerByFinalClassOMF(connection:psycopg2.extensions.connection,
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
         tableName (str): Name of the table to calculate the length kilometer per class.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on.
+        This table must be in the public schema. Defaults to 'bounding_box'.
         areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
 
     Raises:
@@ -419,15 +424,18 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
     cursor.close()
     
     return count
-    
-    
+
+
 def getOverlapIndicator(connection:psycopg2.extensions.connection,
                         schemaDatasetA:str,
                         tableNameDatasetA:str,
                         schemaDatasetB:str,
-                        tableNameDatasetB:str) -> float:
+                        tableNameDatasetB:str,
+                        resultAsTable:str = "",
+                        schemaResult:str = "public") -> float:
     """Return the value of the overlap indicator for dataset A over dataset B.
-    Data from one dataset must be filter
+    The result can be write as a table if resultAsTable parameter is not empty.
+    If so, a DROP TABLE / CREATE TABLE statement will be added to the query.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database.
@@ -435,23 +443,105 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         tableNameDatasetA (str): Name of the table for the dataset A.
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Otherwise, only the percentage will be shown. Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
 
     Returns:
         float: Overlap indicator in percentage.
     """
-    # TODO: Write the function
+    query = ""
+    # Add create table statement if the parameter is on
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        
+        # Add drop / create table statement
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        """
     
+    # General query
+    query = f"""
+    WITH union_buffer AS (
+        SELECT public.ST_Union(public.ST_Transform(public.ST_Buffer(geom::geography, 1)::geometry, 4326)) AS buffer,
+        true as test
+        FROM {schemaDatasetB}.{tableNameDatasetB}
+    ),
+    intersect_buffer AS (
+        SELECT
+            CASE
+                WHEN b.test is true THEN true
+                ELSE false
+            END AS overlap,
+            os.*
+        FROM {schemaDatasetA}.{tableNameDatasetA} AS os
+        LEFT JOIN union_buffer b ON public.ST_Contains(b.buffer, os.geom)
+        ORDER BY id asc
+    )
+    """
     
+    # Select query (either added to the general query or run in its own)
+    selectPart = """
+    SELECT
+        overlap,
+        round((SUM(public.ST_Length(geom::geography)) / 1000)::numeric, 2) AS length_kilometer
+    FROM {}
+    GROUP BY overlap
+    ORDER BY overlap;
+    """
+    
+    # If the table is created, we do not sum up the length directly, only after the table is created
+    if resultAsTable !="":
+        query+= " SELECT * FROM intersect_buffer;"
+        
+        # Execute the query to create the table
+        utils.executeQueryWithTransaction(connection, query)
+        
+        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
+        
+        # Select the overlap indicator
+        selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
+        cursor = utils.executeSelectQuery(connection, selectQuery)
+    # Else, we do not put the result in another table and select only the overlap part
+    else:
+        query += selectPart.format("intersect_buffer")
+        cursor = utils.executeSelectQuery(connection, query)
+    
+    totalLength = 0
+    overlapLength = 0
+    # Fetch result to calculate the indicator
+    for (overlap, length) in cursor:
+        # We take the overlap length from the result
+        if overlap == True:
+            overlapLength = length
+        totalLength += length
+    
+    # Calculate indicator
+    indicator = round((overlapLength / totalLength) * 100, 2)
+    
+    # Print info to user
+    print(f"Total length is {totalLength} km")
+    print(f"Overlap length is {overlapLength} km")
+    print(f"Percentage of road from dataset {schemaDatasetA} in dataset {schemaDatasetB} is : {indicator} %")
+    
+    return indicator
+
+
 def getCorrespondingNodes(connection:psycopg2.extensions.connection,
                           schemaDatasetA:str,
                           tableNameDatasetA:str,
                           schemaDatasetB:str,
                           tableNameDatasetB:str,
-                          filterOnDatasetA:bool = True,
                           joinTable:str = 'bounding_box',
-                          areaName:str = None) -> tuple[int, float]:
+                          resultAsTable:str = "",
+                          schemaResult:str = "public") -> tuple[int, float]:
     """Return the number of corresponding nodes in dataset A, comparing it to dataset B,
     and the percentage of nodes.
+    Both tables are filtered using the join table.
 
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database.
@@ -459,19 +549,99 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         tableNameDatasetA (str): Name of the table for the dataset A.
         schemaDatasetB (str): Name of the schema for the dataset B.
         tableNameDatasetB (str): Name of the table for the dataset B.
-        filterOnDatasetA (bool, optional): Apply the filter on dataset A if True.
-        If False, it will apply to dataset B. Defaults to True.
-        joinTable (str, optional): Name of the join table, only necessary if the filter is on. This table must be in the public schema. Defaults to 'bounding_box'.
-        areaName (str, optional): Name of the area for the filer, only necessary if the filter is on. Defaults to "".
+        joinTable (str, optional): Name of the join table, only necessary if the filter is on.
+        This table must be in the public schema. Defaults to 'bounding_box'.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Otherwise, only the percentage will be shown. Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
 
     Returns:
         tuple[int, float]: First value is the number of nodes,
         second value is the percentage of nodes.
     """
-    # TODO: Write the function
+    query = ""
+    # Add create table statement if the parameter is on
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        
+        # Add drop / create table statement
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        """
+    
+    # General query
+    query = f"""
+    WITH vertices_dataset_a AS (
+        SELECT n.*
+        FROM {schemaDatasetA}.{tableNameDatasetA} AS n
+        JOIN public.{joinTable} b ON public.ST_Intersects(b.geom, n.geom)
+    ),
+    vertices_dataset_b AS (
+        SELECT n.*
+        FROM {schemaDatasetB}.{tableNameDatasetB} AS n
+        JOIN public.{joinTable} b ON public.ST_Intersects(b.geom, n.geom)
+    ),
+    vertices_intersect AS (
+        SELECT
+            va.*,
+            CASE WHEN public.ST_Intersects(va.geom, vb.geom) THEN true
+            ELSE false
+            END AS intersects
+        FROM vertices_dataset_a AS va
+        LEFT JOIN vertices_dataset_b vb ON public.ST_Intersects(va.geom, vb.geom)
+    )
+    """
+    
+    # Select query (either added to the general query or run in its own)
+    selectPart = """SELECT intersects, COUNT(*) as nb
+    FROM {}
+    GROUP BY intersects
+    ORDER BY intersects;
+    """
+    
+    # If the table is created, we do not sum up the length directly, only after the table is created
+    if resultAsTable !="":
+        query+= " SELECT * FROM vertices_intersect;"
+        
+        # Execute the query to create the table
+        utils.executeQueryWithTransaction(connection, query)
+        
+        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
+        
+        # Select the overlap indicator
+        selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
+        cursor = utils.executeSelectQuery(connection, selectQuery)
+    # Else, we do not put the result in another table and select all elements group by intersects
+    else:
+        query += selectPart.format("vertices_intersect")
+        cursor = utils.executeSelectQuery(connection, query)
+    
+    totalNodes = 0
+    intersectNodes = 0
+    # Fetch result to calculate the indicator
+    for (intersects, nb) in cursor:
+        # We take the overlap length from the result
+        if intersects == True:
+            intersectNodes = nb
+        totalNodes += nb
+    
+    # Calculate indicator
+    percentage = round((intersectNodes / totalNodes) * 100, 2)
+    
+    # Print info to user
+    print(f"Total nodes: {totalNodes}")
+    print(f"Intersects nodes: {intersectNodes}")
+    print(f"Percentage of corresponding nodes from dataset {schemaDatasetA} in dataset {schemaDatasetB} is : {percentage} %")
+    
+    return intersectNodes, percentage
 
 if __name__ == "__main__":
     import time
+    import pandas as pd
     start = time.time()
     
     # Connect to the database and give table template for OSM and OMF dataset
@@ -486,7 +656,10 @@ if __name__ == "__main__":
     omfEdgeTableTemplate = "edge_with_cost_{}"
     omfNodeTableTemplate = "node_{}"
     
-    listArea = ['tokyo']
+    listArea = ['tokyo', 'tateyama']
+    
+    # Data to add to the dataFrame
+    data = []
     
     for area in listArea:
         osmEdgeTable = osmEdgeTableTemplate.format(area)
@@ -495,33 +668,45 @@ if __name__ == "__main__":
         omfEdgeTable = omfEdgeTableTemplate.format(area)
         omfNodeTable = omfNodeTableTemplate.format(area)
         
+        # Capitalize the area name to be able to filter with the bounding box
+        area = area.capitalize()
+        
         # Number of edges / nodes
-        count = getNumberElements(connection, osmSchema, osmEdgeTable)
-        print(f"Number of edges in OSM for {area} is : {count}")
+        OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
+        print(f"Number of edges in OSM for {area} is : {OSMValue}")
         
-        count = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
-        print(f"Number of edges in OMF for {area} is : {count}")
+        OMFValue = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
+        print(f"Number of edges in OMF for {area} is : {OMFValue}")
         
-        count = getNumberElements(connection, osmSchema, osmNodeTable)
-        print(f"Number of nodes in OSM for {area} is : {count}")
+        # Add data to the data list
+        data.append(["1. Number of nodes", area, OSMValue, OMFValue])
         
-        count = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area.capitalize())
-        print(f"Number of nodes in OMF for {area} is : {count}")
+        OSMValue = getNumberElements(connection, osmSchema, osmNodeTable)
+        print(f"Number of nodes in OSM for {area} is : {OSMValue}")
+        
+        OMFValue = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area)
+        print(f"Number of nodes in OMF for {area} is : {OMFValue}")
+        
+        # Add data to the data list
+        data.append(["2. Number of edges", area, OSMValue, OMFValue])
         
         
         # Total length kilometer
-        count = getTotalLengthKilometer(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km in OSM for {area} is : {count}")
+        OSMValue = getTotalLengthKilometer(connection, osmSchema, osmEdgeTable)
+        print(f"Total length in km in OSM for {area} is : {OSMValue}")
         
-        count = getTotalLengthKilometer(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
-        print(f"Total length in km in OMF for {area} is : {count}")
+        OMFValue = getTotalLengthKilometer(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
+        print(f"Total length in km in OMF for {area} is : {OMFValue}")
+        
+        # Add data to the data list
+        data.append(["3. Total length (km)", area, OSMValue, OMFValue])
         
         
         # Total length kilometer per class
         listClasses = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
         print(f"Total length in km per class OSM for {area} is : {listClasses}")
         
-        listClasses = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area.capitalize())
+        listClasses = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
         print(f"Total length in km per class OMF for {area} is : {listClasses}")
         
         
@@ -529,24 +714,77 @@ if __name__ == "__main__":
         listClasses = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
         print(f"Total length in km per final class OSM for {area} is : {listClasses}")
         
-        listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area.capitalize())
+        listClasses = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area)
         print(f"Total length in km per final class OMF for {area} is : {listClasses}")
         
         
         # Connected components
-        count = getConnectedComponents(connection, osmSchema, osmEdgeTable)
-        print(f"Number of connected components in OSM for {area} is : {count}")
+        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable)
+        print(f"Number of connected components in OSM for {area} is : {OSMValue}")
         
-        count = getConnectedComponents(connection, omfSchema, omfEdgeTable)
-        print(f"Number of connected components in OMF for {area} is : {count}")
+        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable)
+        print(f"Number of connected components in OMF for {area} is : {OMFValue}")
+        
+        # Add data to the data list
+        data.append(["4. Number of connected components", area, OSMValue, OMFValue])
         
         
         # Strong connected components
-        count = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable)
-        print(f"Number of strong connected components in OSM for {area} is : {count}")
+        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable)
+        print(f"Number of strong connected components in OSM for {area} is : {OSMValue}")
         
-        count = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable)
-        print(f"Number of strong connected components in OMF for {area} is : {count}")
+        OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable)
+        print(f"Number of strong connected components in OMF for {area} is : {OMFValue}")
+        
+        # Add data to the data list
+        data.append(["5. Number of strong connected components", area, OSMValue, OMFValue])
+        
+        end = time.time()
+        print(f"Criteria until now took {end - start} seconds")
+        
+        # Overlap indicator
+        OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
+        print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is : {OSMValue}")
+        
+        end = time.time()
+        print(f"Overlap indicator 1 took {end - start} seconds")
+        
+        OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
+        print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is : {OMFValue}")
+        
+        end = time.time()
+        print(f"Overlap indicator 2 took {end - start} seconds")
+        
+        # Add data to the data list
+        data.append(["7. Number of strong connected components", area, OSMValue, OMFValue])
+        
+        # Corresponding nodes
+        OSMValue = getCorrespondingNodes(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable)
+        print(f"Number of corresponding nodes in OSM for {area} is : {OSMValue[0]} ({OSMValue[0]} %)")
+        
+        end = time.time()
+        print(f"Corresponding nodes for OSM took {end - start} seconds")
+        
+        OMFValue = getCorrespondingNodes(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable)
+        print(f"Number of corresponding nodes in OMF for {area} is : {OMFValue[0]} ({OMFValue[1]} %)")
+        
+        end = time.time()
+        print(f"Corresponding nodes for OMF took {end - start} seconds")
+        
+        # Add two rows in the dataframe (one for the number and the other for percentage)
+        data.append(["8. Number of corresponding nodes", area, OSMValue[0], OMFValue[0]])
+        
+        # Add data to the data list
+        data.append(["9. Percentage of corresponding nodes", area, f"{OSMValue[1]} %", f"{OMFValue[1]} %"])
+    
+    # Sort data per Criterion / Area
+    data.sort(key= lambda a: (a[0], a[1]))
+    
+    # Create dataframe to export as markdown in the end
+    columns = ['Criterion', 'Area', 'OSM Value', 'OMF Value']
+    df = pd.DataFrame(data=data, columns=columns)
+    
+    print(df)
     
     end = time.time()
     print(f"It took {end - start} seconds")
