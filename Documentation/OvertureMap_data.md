@@ -10,6 +10,7 @@
 		- [SQL Dumps](#sql-dumps)
 - [PgRouting test](#pgrouting-test)
 	- [Notes](#notes)
+	- [Process explanation](#process-explanation)
 	- [Tables creation](#tables-creation)
 		- [bounding\_box table (not mandatory)](#bounding_box-table-not-mandatory)
 		- [Extract data from the desired bbox](#extract-data-from-the-desired-bbox)
@@ -147,11 +148,49 @@ All the SQL scripts are also available in the *SQL_Scripts/OvertureMap_PgRouting
 In this section, "road" and "connector" are used respectively to mentionned the original data of the segment and connector tables, whereas "edge" and "vertice" respectively correspond to final edges and vertices of the graph (with their own id, cost and reverse_cost for the edges etc.).
 The two tables `road_tokyo` and `connector_tokyo` are used in the next sections.
 
-## Tables creation
+## Process explanation
 
 OvertureMap data are well structured, with roads corresponding to the roads without duplication, connectors exactly on the road and corresponding to a possible decision when crossing a road and it is possible to have information quite easily about the speed limit or other restrictions.
-However, we cannot use the data directly with PgRouting because the road are not cut between each connector. Also, no costs are created for each edges, and there are not enough information about the relation between edges and vertices.
-Therefore, it is necessary to transform OvertureMap data in order to use PgRouting.
+However, we cannot use the data directly with PgRouting because the road are not cut between each connector.
+Also, no costs are created for each edges, and there are not enough information about the relation between edges and vertices.
+
+Each road have a `connector_ids` parameter with all connectors sorted from the beginning of the road to the end.
+To transform OvertureMap data into PgRouting compatible data, we need to cut the roads between two following connectors.
+The images above show the initial data we have on one road and 5 connectors, and what we want to have as a result.
+
+**Initial data**:
+
+![Road before transformation](./Images/Graph_before_transform.png)
+
+**Expected results**:
+
+![Road before transformation](./Images/Graph_after_transform.png)
+
+This is just an example and it does not explain the whole process.
+We can split the process in the 5 following steps:
+
+1. Create a new table that store for each road one row per connector, with the connector geometry and the position of the connector in the list.
+It does not agregate the results, therefore a connector stored in two `connector_ids` parameter of different roads for instance will appear twice in the database.
+Even with identical geometry, the attributs of the row will be different, as a row is related to a road.
+
+2. Count, for each connector, the number of roads connected to it.
+This table will then be used to create the edge table.
+
+3. Create the edge table by cutting each road between two following connectors.
+For each edge, we keep the initial id of the road and create another id in the format `road_id-i`, where i correspond to the index of the edge, ie `1` is the first one and `n-1` is the last one, with `n` being the number of connectors for the initial road.
+
+4. Create join tables between edge ids / connector ids and an integer to be compatible with pgr_djikstra (currently it is impossible to run `pgr_djikstra` algorithm with string ids). We cannot do this process before, as each edge-id might change.
+
+5. Creating the edge with cost view, by transforming the edge, source and target ids with their corresponding integer ids, and setting the cost / reverse cost of the edge depending on the value of the access parameter with the length of the road (using `ST_Length(geom::geography)` for accurate results).
+
+These steps are not mandatory, there might be other ways to do this using SQL requests.
+Also, it might be possible to change the OvertureMap graph using python, especially the geopandas package, but for the moment it has not been done.
+What is important to keep in mind is that we only want to split the roads between connectors to have a routing graph.
+
+## Tables creation
+
+A python script has been made to facilate the tables creation process.
+You can find it here : [OvertureMap_data_to_graph.py](../Python/OvertureMap_data_to_graph.py).
 
 ### bounding_box table (not mandatory)
 
@@ -188,12 +227,10 @@ Then, run this SQL code by replacing `wkt_geom` by your real WKT bbox and `Area 
 
 ```sql
 INSERT INTO public.bounding_box(
-	geom, name)
-	VALUES (ST_GeomFromText('wkt_geom'),
+	geom, wkt_geom, name)
+	VALUES (ST_GeomFromText('wkt_geom', 4326),
+	'wkt_geom',
     'Area name');
-
-UPDATE public.bounding_box
-	SET wkt_geom = ST_AsText(geom);
 ```
 
 ### Extract data from the desired bbox
@@ -270,7 +307,7 @@ If you decide to give them another name, please change it everywhere.
 
 ### roads_connectors table
 
-The `roads_connectors` table is created to have, a link between a road and the connectors that are connected to it.
+The `roads_connectors` table is created to have a link between a road and the connectors that are connected to it.
 These connectors are stored in the `connector_ids` column initially.
 Using `json_array_elements_text`, we can have a row per connector stored in connector_ids.
 The SQL code is given here, and includes the index creations too :
@@ -529,7 +566,7 @@ ALTER TABLE IF EXISTS public.join_connector_str_to_int
     OWNER to postgres;
 
 -- Index creation
-CREATE INDEX join_id_idx
+CREATE INDEX join_id_idx_connector_table
     ON public.join_connector_str_to_int USING btree
     (id ASC NULLS LAST);
 
@@ -587,17 +624,6 @@ FROM edge AS e
 LEFT JOIN join_connector_str_to_int AS s ON source=s.connector_id
 LEFT JOIN join_connector_str_to_int AS t ON target=t.connector_id
 LEFT JOIN join_edge_str_to_int AS j ON e.id=j.edge_id
-
-WHERE class NOT IN ('alley',
-					'pedestrian',
-					'footway',
-					'sidewalk',
-					'crosswalk',
-					'steps',
-					'path',
-					'track',
-					'cycleway',
-					'bridleway');
 ```
 
 
@@ -661,10 +687,21 @@ Then, copy the integer ids and run the following request :
 SELECT seq, edge, dij."cost", geom
 FROM pgr_dijkstra(
     'SELECT id, source, target, cost, reverse_cost
-    FROM edge_with_cost'::text,
+    FROM edge_with_cost
+	WHERE class NOT IN (
+		''alley'',
+		''pedestrian'',
+		''footway'',
+		''sidewalk'',
+		''crosswalk'',
+		''steps'',
+		''path'',
+		''track'',
+		''cycleway'',
+		''bridleway'');'::text,
     8024959,
 	8024811,
-	directed := false) dij
+	directed := true) dij
 JOIN edge_with_cost AS e ON edge = e.id;
 ```
 
