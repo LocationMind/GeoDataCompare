@@ -103,7 +103,7 @@ I think that we should probably first create the table(empty) and insert data ac
 2. If `u1 = v2 AND u2 = v1`, then it is possible that the road is two directions (forward and backward). To verify this, we can check for each roads that validate this condition (with a group by or window function it may be possible to verify for each road verifying this condition) if the buffer of one road contains the other road and vice versa. If so, it is the same road and we can make a row in the table, with `cost = reverse_cost = length(geometry)`. If it is not, then we check if other roads verifying `u1 = v2 AND u2 = v1` exists and we do the same tests. If no roads verify this condition, then we insert a row in the table with `length(geometry)` as the `cost` (or `reverse_cost`, depending on the value of `reversed`).
 3. For other roads that do not verify the two conditions above, we insert a row in the table with `length(geometry)` as the `cost` (or `reverse_cost`, depending on the value of `reversed`).
 
-This is in theory, in practice I haven't succeed yet to do so.
+It is possible to do this using GeoPandas: see the [OSM_pgrouting.py](../Python/OSM_pgrouting.py) file for more information.
 
 ## pgr_djikstra with initial graph provided by OSMnx
 

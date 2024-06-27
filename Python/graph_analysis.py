@@ -908,7 +908,7 @@ if __name__ == "__main__":
     # Path to save the results
     # fileName = f"Automatic_result_{dateTime}.md"
     fileName = "Automatic_result.md"
-    pathSave = os.path.join(".", "Documentation", fileName)
+    pathSave = os.path.join(".", "Data", "Results", fileName)
     
     # Connect to the database and give table template for OSM and OMF dataset
     database = "pgrouting"
@@ -1091,13 +1091,13 @@ if __name__ == "__main__":
         resultOSMTable = correspondingNodesTemplate.format(area.lower(), osmSchema)
         resultOMFTable = correspondingNodesTemplate.format(area.lower(), omfSchema)
         
-        OSMValue = getCorrespondingNodes(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
+        OSMValue = getCorrespondingNodes(connection, osmSchema, osmNodeTable, omfSchema, omfNodeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
         print(f"Number of corresponding nodes in OSM for {area} is: {OSMValue[0]} ({OSMValue[0]} %)")
         
         end = time.time()
         print(f"Corresponding nodes for OSM took {end - start} seconds")
         
-        OMFValue = getCorrespondingNodes(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
+        OMFValue = getCorrespondingNodes(connection, omfSchema, omfNodeTable, osmSchema, osmNodeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"Number of corresponding nodes in OMF for {area} is: {OMFValue[0]} ({OMFValue[1]} %)")
         
         end = time.time()

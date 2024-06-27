@@ -1,6 +1,0 @@
-tokyo - OSM Value : 0.9951701666324003
-tokyo - OMF Value : 0.9497752056735539
-hamamatsu - OSM Value : 0.9999887204603766
-hamamatsu - OMF Value : 0.9589573506679484
-tateyama - OSM Value : 1.0
-tateyama - OMF Value : 0.9156967604894616
