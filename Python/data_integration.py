@@ -143,6 +143,7 @@ def createRoadTable(pathSegmentData: str,
     createIndexId(tableName, schema = schema)
     createGeometry(tableName, schema = schema)
 
+
 def createRoadTableV2(pathSegmentData: str,
                       tableName: str = 'road',
                       dropTableIfExists:bool = True,
@@ -185,6 +186,7 @@ def createRoadTableV2(pathSegmentData: str,
     # Create index id and geometry
     createIndexId(tableName, schema = schema)
     createGeometry(tableName, schema = schema)
+
 
 def createConnectorTable(pathConnectorData: str,
                          tableName: str = 'connector',
@@ -293,6 +295,7 @@ def createBuildingPartTable(pathBuildingPartData: str,
     # Create index id and geometry
     createIndexId(tableName, schema = schema)
     createGeometry(tableName, schema = schema)
+
 
 def createLocalityTable(pathLocality:str,
                         pathLocalityArea:str,
