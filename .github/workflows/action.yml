@@ -1,24 +1,26 @@
 name: Test
 on: 
+  - push
   - pull_request
 jobs:
   job_init:
-    runs-on: windows-2022
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
       - name: Python setup
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v4
         with:
           python-version: '3.12.3'
       
       - name: Dependencies installation
         run: |
           python -m pip install --upgrade pip
-          pip install pip-tools
-          pip-compile
           pip install -r requirements.txt
       
+      - name: Docker setup
+        run: docker compose up -d
+
       - name: Run tests
         run: pytest -v 
