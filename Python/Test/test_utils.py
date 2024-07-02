@@ -6,9 +6,10 @@ from Python import utils
 
 # Connections to the database
 dbname = 'pgrouting'
-connection = utils.getConnection(dbname)
-engine = utils.getEngine(dbname)
-utils.initialiseDuckDB(dbname)
+host = "localhost"
+connection = utils.getConnection(dbname, host = host)
+engine = utils.getEngine(dbname, host = host)
+utils.initialiseDuckDB(dbname, host = host)
 
 # Create test table
 query = """
