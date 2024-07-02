@@ -22,5 +22,21 @@ jobs:
       - name: Docker setup
         run: docker compose up -d
 
+      - name: Wait for PostgreSQL to be ready
+        run: |
+          until docker compose exec pgrouting pg_isready -U postgres; do
+            echo "Waiting for PostgreSQL to be ready..."
+            sleep 5
+          done
+
+      - name: Debug Docker Compose Status
+        run: docker compose ps
+
+      - name: Debug PostgreSQL Logs
+        run: docker logs $(docker ps -q --filter "name=pgrouting")
+        
+      - name: Print Environment Variables
+        run: env
+
       - name: Run tests
         run: pytest -v 
