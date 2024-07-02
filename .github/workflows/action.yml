@@ -29,14 +29,5 @@ jobs:
             sleep 5
           done
 
-      - name: Debug Docker Compose Status
-        run: docker compose ps
-
-      - name: Debug PostgreSQL Logs
-        run: docker logs $(docker ps -q --filter "name=pgrouting")
-        
-      - name: Print Environment Variables
-        run: env
-
       - name: Run tests
         run: pytest -v 
