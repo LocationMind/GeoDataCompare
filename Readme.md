@@ -111,7 +111,7 @@ It is thanks to the bbox JSON file that all can be done automatically, so please
 
 # Database
 
-Data integration and quality assessment revolves around a database.
+Data integration and quality assessment revolve around a database.
 The version of the different database tools used are:
 
 | **Tool** | Version |
