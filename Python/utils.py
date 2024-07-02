@@ -2,11 +2,11 @@ import duckdb
 import psycopg2
 import sqlalchemy
 
-def bboxCSVTobboxWKT(bboxCSV:str) -> str:
+def bboxCSVToBboxWKT(bboxCSV:str) -> str:
     """Transform a bounding box in CSV format to its equivalent in OGC WKT format.
 
     Args:
-        bboxCSV (str): Bbox in the format 'E, S, W, N'.
+        bboxCSV (str): Bbox in the format 'W, S, E, N'.
 
     Returns:
         str: Bbox in OGC WKT format : 'POLYGON ((W S, E S, E N, W N, W S))'.
@@ -16,10 +16,25 @@ def bboxCSVTobboxWKT(bboxCSV:str) -> str:
     return bboxWKT
 
 
+def bboxCSVToTuple(bboxCSV:str) -> tuple[float, float, float, float]:
+    """Tranform a bbox in a CSV format to a tuple.
+    The bbox is in format west, south, east, north
+    The tuple will be as (north, south, east, west)
+
+    Args:
+        bboxCSV (str): Bbox in the format 'W, S, E, N'.
+
+    Returns:
+        (tuple(float, float, float, float)): bbox in the format (north, south, east, west)
+    """
+    (west, south, east, north) = bboxCSV.split(',')
+    return (float(north), float(south), float(east), float(west))
+
+
 def initialiseDuckDB(dbname: str,
-               host: str= '127.0.0.1',
-               user: str= 'postgres',
-               password: str= 'postgres'):
+                     host: str= '127.0.0.1',
+                     user: str= 'postgres',
+                     password: str= 'postgres'):
     """Initialise duckdb and connect it to a postgresql database.
     It also create postgis and pgrouting extension if not installed yet.
     

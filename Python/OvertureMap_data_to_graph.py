@@ -27,6 +27,7 @@ def createIndex(connection:psycopg2.extensions.connection,
     # And execute it
     utils.executeQueryWithTransaction(connection, sqlQuery)
 
+
 def createGeomIndex(connection:psycopg2.extensions.connection,
                     tableName:str,
                     geomColumnName:str = 'geom',
@@ -48,6 +49,7 @@ def createGeomIndex(connection:psycopg2.extensions.connection,
     
     # And execute it
     utils.executeQueryWithTransaction(connection, sqlQuery)
+
 
 def createBoundingboxTable(connection:psycopg2.extensions.connection,
                            tableName:str = 'bounding_box',
@@ -90,9 +92,9 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
     The geometry is provided in the WKT format.
 
     Args:
+        connection (psycopg2.extensions.connection): Database connection token.
         wktGeom (str): Geometry in OGC WKT format.
         aeraName (str): Name of the area.
-        connection (psycopg2.extensions.connection): Database connection token.
         tableName (str, optional): Name of the table to create. Defaults to 'bounding_box'.
     
     Return:
@@ -380,6 +382,57 @@ def addSplitLineFromPointsFunction(connection):
     utils.executeQueryWithTransaction(connection, sqlAddFunction)
 
 
+def addGetEdgeCostFunction(connection):
+    """Add a custom function named "get_edge_cost" to the public schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+    """
+    
+    # Create and add the function
+    sqlAddFunction = """
+    CREATE OR REPLACE FUNCTION public.get_edge_cost(
+        len double precision,
+        access_restrictions json,
+        direction character varying,
+        start_fraction double precision,
+        end_fraction double precision
+    )
+    RETURNS double precision AS
+    $BODY$
+    DECLARE
+        access json;
+    BEGIN
+        FOR access IN SELECT json_array_elements(access_restrictions) AS restrictions
+        LOOP
+
+            IF access->>'access_type' = 'denied'
+            AND access->'when'->>'heading' = direction
+            AND(
+                (start_fraction >= (access->'between'->>0)::double precision
+                AND end_fraction <= (access->'between'->>1)::double precision)
+                OR access->>'between' is null) THEN
+                -- Access denied, no cost
+                RETURN -1;
+            END IF;
+        END LOOP;
+        
+        -- Access granted, return length of the edge
+        RETURN len;
+    END
+    $BODY$
+    LANGUAGE plpgsql;
+
+    ALTER FUNCTION public.get_edge_cost(double precision, json, character varying, double precision, double precision)
+        OWNER TO postgres;
+
+    COMMENT ON FUNCTION public.get_edge_cost(double precision, json, character varying, double precision, double precision)
+        IS 'args: len, access_restrictions, direction, start_fraction, end_fraction -
+        Return cost of the edge with the right direction and start and end of line fraction.';"""
+    
+    utils.executeQueryWithTransaction(connection, sqlAddFunction)
+
+
 def createEdgeTable(extractedRoadTable:str,
                     connection:psycopg2.extensions.connection,
                     schema:str = 'public',
@@ -418,8 +471,10 @@ def createEdgeTable(extractedRoadTable:str,
         "source",
         target,
         -- GEOMETRY CREATION
-        public.ST_SplitLineFromPoints(r.geom, t.first_geom, t.second_geom) AS geom,
+		public.ST_SplitLineFromPoints(r.geom, t.first_geom, t.second_geom) as geom,
         public.ST_Length(public.ST_SplitLineFromPoints(r.geom, t.first_geom, t.second_geom)::geography) AS len,
+		public.ST_LineLocatePoint(r.geom, t.first_geom) AS start_value,
+    	public.ST_LineLocatePoint(r.geom, t.second_geom) AS end_value,
         t.version,
         t.update_time,
         t.sources,
@@ -615,19 +670,33 @@ def createEdgeWithCostTable(connection:psycopg2.extensions.connection,
         j.id,
         s.id AS "source",
         t.id AS "target",
+        e.start_value,
+        e.end_value,
+        public.get_edge_cost(e.len, e.access_restrictions, 'forward', e.start_value, e.end_value) AS cost,
+        public.get_edge_cost(e.len, e.access_restrictions, 'backward', e.start_value, e.end_value) AS reverse_cost,
         CASE
             WHEN access_restrictions -> 0 ->> 'access_type' = 'denied'
             AND access_restrictions -> 0 -> 'when' ->> 'heading' = 'forward'
             THEN '-1'
             ELSE len
-        END AS cost,
+        END AS cost_bis,
         CASE
             WHEN access_restrictions -> 0 ->> 'access_type' = 'denied'
             AND access_restrictions -> 0 -> 'when' ->> 'heading' = 'backward'
             THEN '-1'
             ELSE len
-        END AS reverse_cost,
+        END AS reverse_cost_bis,
         e.class,
+        e.access_restrictions,
+        e.level_rules,
+        e.prohibited_transitions,
+        e.road_surface,
+        e.road_flags,
+        e.speed_limits,
+        e.width_rules,
+        e.update_time,
+        e.sources,
+        e.primary_name,
         e.geom
     FROM {schema}.{edgeTable} AS e
 
@@ -849,7 +918,7 @@ def createPgRoutingTables(bboxCSV:str,
     if start is None or type(start) != float:
         start = time.time()
     # Tranform bbox to OGC WKT format and create bounding box table 
-    wktGeom = utils.bboxCSVTobboxWKT(bboxCSV)
+    wktGeom = utils.bboxCSVToBboxWKT(bboxCSV)
 
     # Insert bbox in it and get bbox id
     id = insertBoundingBox(connection = connection,
@@ -897,12 +966,8 @@ def createPgRoutingTables(bboxCSV:str,
                                    dropTableIfExists = dropTablesIfExist)
     end = time.time()
     print(f"createConnectorsRoadCountTable : {end - start} seconds")
-
-    # Add a function to postres and create edge table
-    addSplitLineFromPointsFunction(connection)
-    end = time.time()
-    print(f"addSplitLineFromPointsFunction : {end - start} seconds")
     
+    # Create edge table
     createEdgeTable(extractedRoadTable = extractedRoadTable ,
                     connection = connection,
                     schema = schema,
@@ -952,6 +1017,7 @@ def createPgRoutingTables(bboxCSV:str,
     end = time.time()
     print(f"createnodeTable : {end - start} seconds")
 
+
 if __name__ == "__main__":
     import time
     import json
@@ -968,6 +1034,15 @@ if __name__ == "__main__":
     
     # Create bbox table
     createBoundingboxTable(connection)
+    
+    # Add functions to postres
+    addSplitLineFromPointsFunction(connection)
+    end = time.time()
+    print(f"addSplitLineFromPointsFunction : {end - start} seconds")
+    
+    addGetEdgeCostFunction(connection)
+    end = time.time()
+    print(f"addGetEdgeCostFunction : {end - start} seconds")
     
     end = time.time()
     print(f"createBoundingboxTable : {end - start} seconds")
