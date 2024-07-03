@@ -1,5 +1,14 @@
 # Useful commands
 
+- [Useful commands](#useful-commands)
+  - [Create virtual environnment](#create-virtual-environnment)
+  - [Ugrade pip](#ugrade-pip)
+  - [Install dependencies](#install-dependencies)
+  - [Push to a new branch on github](#push-to-a-new-branch-on-github)
+  - [Install act (tool to run github actions locally)](#install-act-tool-to-run-github-actions-locally)
+  - [Path of python in windows](#path-of-python-in-windows)
+
+
 ## Create virtual environnment
 
 **Delete directory**
