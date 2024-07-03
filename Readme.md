@@ -37,7 +37,10 @@ The repository have 3 main folders :
 
 - [*Python*](#python): contains all python scripts, including test scripts.
 
-The two files [requirements.in](requirements.in) and [requirements.txt](requirements.txt) are used for control version.
+The files `requirements_*.in` and `requirements_*.txt` are used for control version.
+The number correspond to the version of python they must be used for.
+requirements_*.in / requirements_*.in are for python version 3.11, and requirements_*.in / requirements_*.in are for python version 3.12.
+Both of these are necessary in order to work with multiple packages that have dependencies conflict (it is the case for overturemaps.py tool and apache-superset for instance)
 
 ## Data
 

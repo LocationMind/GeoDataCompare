@@ -24,7 +24,13 @@ To activate the virtual environnment:
 To deactivate it:
 
 ```console
-.venv\Scripts\activate
+.venv\Scripts\deactivate.bat
+```
+
+## Ugrade pip
+
+```console
+python.exe -m pip install --upgrade pip
 ```
 
 ## Install dependencies
@@ -79,3 +85,10 @@ wsl --install
 ```
 
 Then type your username and password (mathis for both).
+
+## Path of python in windows
+
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python312\Scripts\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python312\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python310\Scripts\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python310\
