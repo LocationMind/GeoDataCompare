@@ -38,6 +38,12 @@ It should be possible to construct a QGIS plugin to create dashboard, but I do n
 
 ## Apache-superset
 
+[Apache-superset](https://superset.apache.org/) is, according to the website an "open-source modern data exploration and visualization platform".
+The github project can be find [here](https://github.com/apache/superset).
+Apache-superset is a powerful tool to create dashboard and is a no-code tool, meaning that aside from the installation and configuration, it is possible to create dashboard etc. without being a software developer.
+It provides a full web architecture allowing multiple users with different roles, connection to multiple databases and more.
+It is supported by the [Apache Software Fundation](https://www.apache.org/) and is under the [Apache 2.0 License](https://apache.org/licenses/LICENSE-2.0)
+
 ### Installation
 
 To install apache-superset without using docker, the best is to use a python virtual environnment.
