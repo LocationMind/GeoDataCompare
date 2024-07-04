@@ -13,6 +13,10 @@ The draft made for the final web application is provided [here](./OSM_Overture_v
     - [Configuration](#configuration)
     - [Using apache-superset](#using-apache-superset)
     - [Review](#review)
+  - [Streamlit](#streamlit)
+    - [Installation](#installation-1)
+    - [Using Streamlit](#using-streamlit)
+    - [Review](#review-1)
 
 
 # QGIS
@@ -162,3 +166,45 @@ however, I am not sure that it is a good idea to use it with geospatial informat
 Depending on the other frameworks, this tool might be chosen.
 
 The more convenient thing about apache-superset is that it is quite easy to use, and it seems to have a whole architecture already develop, including differents roles for different users.
+
+## Streamlit
+
+[Streamlit](https://streamlit.io/) is, according to the website, a python package "that transform python scripts into interactive web apps in minutes, instead of week".
+With Streamlit, it is possible to create dashboards and also web visualisation for geospatial information.
+The github project can be find [here](https://github.com/streamlit/streamlit).
+An example of what it is possible to do for geospatial information can be found on this [github page](https://github.com/opengeos/streamlit-geospatial) or directly in [this website](https://huggingface.co/spaces/giswqs/Streamlit).
+This specific project is under the [MIT license](https://github.com/opengeos/streamlit-geospatial?tab=MIT-1-ov-file). 
+Streamlit is [Apache 2.0 License](https://apache.org/licenses/LICENSE-2.0)
+
+### Installation
+
+You can find the Streamlit documentation [here](https://docs.streamlit.io/).
+
+Streamlit is really easy to install, just with `pip install streamlit`, it is enough.
+
+You can then run `streamlit hello` to have a demo app open in your browser.
+
+### Using Streamlit
+
+To use streamlit with a custom python file, create a pyton file and then run in a command line 
+
+```
+streamlit run your_script.py
+```
+
+You can click on the `Alway rerun` button in the right top of your web app to synchronise your python file and the app.
+This way, every time you will make some change in your python file and save it, the app will rerun your script.
+It allows to develop easily the application.
+
+The documentation is really well done so the best is probably to use follow the recommendation of this documentation to understand how it works.
+
+### Review
+
+Streamlit is really easy to use, and the documentation is well done too.
+It is possible to use maps and charts, and possibly to create dashboard too. 
+However, using layer from postgis directly is complicated, as streamlit struggle to display the layer if there are too many entities.
+When using a geodataframe, it is not possible to use `st.map(gdf)`, as this function needs to have a lat and lon column specified in the geodataframe.
+As it is, I think that this tool is really powerful but maybe not adapted to be used with postgis as it is.
+
+It would be interesting to try and use a GeoServer for instance to query the map features in OGC Standards (WMS or WFS, depending on what we want to do), as it would probably be less demanding for the client.
+But a GeoServer is a bit tricky to use and to set, so this question really needs to be think about carefully.
