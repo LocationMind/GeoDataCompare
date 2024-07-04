@@ -12,6 +12,7 @@
   - [Data](#data)
   - [Documentation](#documentation)
   - [Python](#python)
+  - [Requirements](#requirements)
 - [Database](#database)
   - [Schemas](#schemas)
   - [Table names](#table-names)
@@ -37,10 +38,7 @@ The repository have 3 main folders :
 
 - [*Python*](#python): contains all python scripts, including test scripts.
 
-The files `requirements_*.in` and `requirements_*.txt` are used for control version.
-The number correspond to the version of python they must be used for.
-requirements_*.in / requirements_*.in are for python version 3.11, and requirements_*.in / requirements_*.in are for python version 3.12.
-Both of these are necessary in order to work with multiple packages that have dependencies conflict (it is the case for overturemaps.py tool and apache-superset for instance)
+- [*Requirements*](#requirements): contains requirements files for control version
 
 ## Data
 
@@ -111,6 +109,20 @@ All these criteria are described in this document: [Comparison-OSM-OvertureMap_P
 Except for the [utils.py](./Python/utils.py) file, all the other scripts needs to be run in this order (you can invert OSM and OMF data integration of course) so the graph analysis can be runned.
 
 It is thanks to the bbox JSON file that all can be done automatically, so please update it if you want to work on different areas for instance.
+
+## Requirements
+
+
+The files `requirements_*.in` and `requirements_*.txt` are used for control version.
+For each requirement file, usually one python virtual environment is created.
+Please check the [Virtual environment section](./Documentation/command.md#virtual-environnment) for explaination about how to create a python virtual environment and using the requirement files.
+Python version and explaination of each type of file is given here:
+
+- The [`requirements_base.in`](./Requirements/requirements_base.in) file is used as the main requirement file, for integrating OSM and OMF data into the database and for data quality assessment.
+The python version used for this one is **Python 3.12.3**.
+
+- The [`requirements_apache-superset.in`](./Requirements/requirements_apache-superset.in) file is used as the requirement file necessary for testing Apache-superset.
+The python version used for this one is **Python 3.11.9**.
 
 # Database
 
