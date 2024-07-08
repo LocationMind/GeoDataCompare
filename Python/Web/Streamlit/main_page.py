@@ -59,7 +59,7 @@ def app():
     
     gdfOSM['length'] = gdfOSMProj['geom'].length / 1000
     
-    gdf = gdfOSM[['class', 'length']].groupby('class').agg('sum', 'count')
+    gdf = gdfOSM[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
     
     gdf
     
@@ -73,7 +73,9 @@ def app():
     
     gdfOMF['length'] = gdfOMFProj['geom'].length / 1000
     
-    gdf = gdfOMF[['class', 'length']].groupby('class').agg('sum')
+    gdf = gdfOMF[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
+    
+    gdf
     
     st.bar_chart(gdf)
         
