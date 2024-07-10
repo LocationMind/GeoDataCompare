@@ -58,7 +58,7 @@ filelock==3.15.4
     # via gdown
 folium==0.17.0
     # via leafmap
-fonttools==4.53.0
+fonttools==4.53.1
     # via matplotlib
 gdown==5.2.0
     # via leafmap
@@ -108,7 +108,7 @@ jinja2==3.1.4
     #   branca
     #   folium
     #   pydeck
-jsonschema==4.22.0
+jsonschema==4.23.0
     # via
     #   altair
     #   pystac
@@ -120,8 +120,10 @@ jupyterlab-widgets==3.0.11
     # via ipywidgets
 kiwisolver==1.4.5
     # via matplotlib
-leafmap==0.35.7
+leafmap==0.35.9
     # via -r Requirements\requirements_streamlit.in
+lxml==5.2.2
+    # via owslib
 markdown-it-py==3.0.0
     # via rich
 markupsafe==2.1.5
@@ -147,6 +149,8 @@ numpy==2.0.0
     #   pyogrio
     #   shapely
     #   streamlit
+owslib==0.31.0
+    # via -r Requirements\requirements_streamlit.in
 packaging==24.1
     # via
     #   altair
@@ -169,7 +173,9 @@ pillow==10.4.0
     #   matplotlib
     #   streamlit
 plotly==5.22.0
-    # via leafmap
+    # via
+    #   -r Requirements\requirements_streamlit.in
+    #   leafmap
 prompt-toolkit==3.0.47
     # via ipython
 protobuf==5.27.2
@@ -205,11 +211,16 @@ python-box==7.2.0
 python-dateutil==2.9.0.post0
     # via
     #   matplotlib
+    #   owslib
     #   pandas
     #   pystac
     #   pystac-client
 pytz==2024.1
-    # via pandas
+    # via
+    #   owslib
+    #   pandas
+pyyaml==6.0.1
+    # via owslib
 referencing==0.35.1
     # via
     #   jsonschema
@@ -218,11 +229,12 @@ requests[socks]==2.32.3
     # via
     #   folium
     #   gdown
+    #   owslib
     #   pystac-client
     #   streamlit
 rich==13.7.1
     # via streamlit
-rpds-py==0.18.1
+rpds-py==0.19.0
     # via
     #   jsonschema
     #   referencing
@@ -244,7 +256,7 @@ stack-data==0.6.3
     # via ipython
 streamlit==1.36.0
     # via -r Requirements\requirements_streamlit.in
-tenacity==8.4.2
+tenacity==8.5.0
     # via
     #   plotly
     #   streamlit
