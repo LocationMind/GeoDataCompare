@@ -5,7 +5,8 @@ import geopandas as gpd
 import leafmap.foliumap as foliumap
 import plotly.graph_objects as go
 import streamlit as st
-from owslib.wms import (WebMapService, wms111, wms130)
+import folium
+from owslib.wms import WebMapService
 
 # conn = st.connection("pgrouting")
 
@@ -90,7 +91,6 @@ def app():
     url = st.text_input(
         "Enter a WMS URL:", value="http://localhost:8080/geoserver/test/wms?"
     )
-    empty = st.empty()
 
     if url:
         try:
@@ -98,64 +98,136 @@ def app():
             
             options = list(wms.contents)
             
-            layers = empty.multiselect(
-                "Select WMS layers to add to the map:", options
-            )
+            optionDisplay = [elem.replace(":", "\:") for elem in options]
             
-            fig = go.Figure()
-            fig.add_trace(go.Scattermapbox())
+            col1, col2 = st.columns([1, 1])
             
-            mapURL = wms.getOperationByName('GetMap').methods[0]['url']
-            version = wms.identification.version
+            with col1:
+                st.title("Figure Plotly")
+                
+                empty_left = st.empty()
+                
+                
+                layer_left = empty_left.radio(
+                    "Select WMS layers to add to the left map:", optionDisplay, key="left_radio"
+                )
+                
+                layer_left = layer_left.replace("\:", ":")
+                
+                attribution_left = st.text_input("Attribution", "OpenStreetMap", key="left")
+                
+                fig = go.Figure()
+                fig.add_trace(go.Scattermapbox())
+                
+                mapURL = wms.getOperationByName('GetMap').methods[0]['url']
+                version = wms.identification.version
 
-            source = "{}&VERSION={}&request=GetMap&layers={}&bbox={{bbox-epsg-3857}}&width=256&height=256&TRANSPARENT=True&crs=EPSG:3857&format=image/png"
+                source = "{}&VERSION={}&request=GetMap&layers={}&bbox={{bbox-epsg-3857}}&width=256&height=256&TRANSPARENT=True&crs=EPSG:3857&format=image/png"
 
-            # Set parameters
-            fig.update_layout(
-                margin ={'l':0,'t':0,'b':0,'r':0},
-                mapbox = {
-                    'center': {'lon': 139.7912, 'lat': 35.7327},
-                    'zoom': 10,
-                    'style': "open-street-map",
-                    },
-                width=600,
-                height=600)
+                # Set parameters
+                fig.update_layout(
+                    margin ={'l':0,'t':0,'b':0,'r':0},
+                    mapbox = {
+                        'center': {'lon': 139.7912, 'lat': 35.7327},
+                        'zoom': 10,
+                        'style': "open-street-map",
+                        },
+                    width=600,
+                    height=600)
+                
+                
             
-            m = foliumap.Map(center=(35.7327, 139.7912), zoom=10)
-            
-            if layers is not None:
-                mapbox_layers = []
-                for layer in layers:
+                if layer_left is not None:
+                    mapbox_layers = []
                     
                     # Mapbox version
-                    layerSource = source.format(mapURL, version, layer)
+                    layerSource = source.format(mapURL, version, layer_left)
                     
                     mapbox_layers.append(
                         {
                             "sourcetype": "raster",
-                            "name":layer,
-                            "sourceattribution": "OvertureMap Fundation",
+                            "name":layer_left,
+                            "sourceattribution": attribution_left,
                             "source":[layerSource]
                         })
                     
                     fig.update_layout(mapbox_layers=mapbox_layers)
-                    
-                    # LeafMap version
-                    m.add_wms_layer(
-                            url, layers=layer, name=layer, attribution="OvertureMap Fundation", transparent=True
-                    )
-                    
-            
-            col1, col2 = st.columns([1, 1])
-            with col1:
-                st.title("Figure Plotly")
+                
                 st.plotly_chart(fig)
+            
             
             with col2:
                 st.title("Figure Leafmap")
-                m.to_streamlit()
                 
-        except:
+                empty_right = st.empty()
+                
+                layer_right = empty_right.radio(
+                    "Select WMS layers to add to the right map:", optionDisplay, key="right_radio"
+                )
+                
+                layer_right = layer_right.replace("\:", ":")
+                
+                attribution_right = st.text_input("Attribution", "OvertureMap Fundation", key="right")
+                
+                m = foliumap.Map(center=(35.7327, 139.7912), zoom=10)
+                
+                if layer_right is not None:
+                    tileLayer = folium.WmsTileLayer(
+                        url=url,
+                        layers=layer_right,
+                        name=layer_right,
+                        attr=attribution_right,
+                        fmt="image/png",
+                        transparent=True,
+                    )
+                        
+                    # LeafMap version
+                    m.add_layer(tileLayer)
+                
+                m.to_streamlit()
+            
+            ## Splite map
+            
+            st.title("Split map")
+            m2 = foliumap.Map(center=(35.7327, 139.7912), zoom=10)
+            
+            left_layer = ""
+            
+            try:
+                left_layer = folium.WmsTileLayer(
+                    url=url,
+                    layers=layer_left,
+                    name=layer_left,
+                    attr=attribution_left,
+                    fmt="image/png",
+                    transparent=True,
+                )
+            except Exception as e:
+                left_layer = ""
+            
+            right_layer = ""
+            
+            try:
+                right_layer = folium.WmsTileLayer(
+                    url=url,
+                    layers=layer_right,
+                    name=layer_right,
+                    attr=attribution_right,
+                    fmt="image/png",
+                    transparent=True,
+                )
+            except Exception as e:
+                right_layer = ""
+            
+            m2.split_map(
+                left_layer=left_layer,
+                right_layer= right_layer
+            )
+            
+            m2.to_streamlit()
+            
+        except Exception as e:
             st.error("The url is not valid, no WMS layers could be added")
+            st.error(e)
 
 app()

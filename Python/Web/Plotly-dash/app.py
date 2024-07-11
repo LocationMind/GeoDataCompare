@@ -46,7 +46,7 @@ fig.add_trace(go.Scattermapbox())
 
 source = "http://localhost:8080/geoserver/test/wms?SERVICE=WMS&VERSION=1.1.0&request=GetMap&layers=test:{}&bbox={{bbox-epsg-3857}}&width=256&height=256&TRANSPARENT=True&crs=EPSG:3857&styles=&format=image/png"
 
-layerName = "edge_with_cost_tokyo"
+layerName = "edge_with_cost_tokyo_osm"
 
 # Set parameters
 fig.update_layout(
