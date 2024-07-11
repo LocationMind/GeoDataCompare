@@ -22,13 +22,17 @@ The draft made for the final web application is provided [here](./OSM_Overture_v
     - [Installation](#installation-2)
     - [Using Dash](#using-dash)
     - [Review](#review-2)
+  - [Shiny for Python](#shiny-for-python)
+    - [Installation](#installation-3)
+    - [Using Shiny](#using-shiny)
+    - [Review](#review-3)
 - [GeoServer](#geoserver)
   - [Why using GeoServer?](#why-using-geoserver)
   - [Installing GeoServer with Docker](#installing-geoserver-with-docker)
   - [Configuring GeoServer](#configuring-geoserver)
     - [Adding layers with the app](#adding-layers-with-the-app)
     - [Adding layers with REST API](#adding-layers-with-rest-api)
-    - [Review](#review-3)
+    - [Review](#review-4)
 
 
 # QGIS
@@ -261,6 +265,36 @@ It is probably possible to succeed but I did not manage to use the bbox as it wa
 PyPlot charts (not only maps) can be displayed with Streamlit too, using `st.plotly_chart(fig)`.
 
 Here again, it would be interesting to try to use a GeoServer for instance to query the map features in OGC Standards (WMS or WFS, depending on what we want to do), as it would probably be less demanding for the client.
+
+## Shiny for Python
+
+[Shiny for Python](https://shiny.posit.co/py/) or simply Shiny can, according to the website, create "Effortless Python web applications with the power of reactive programming".
+With Shiny, it is possible to create dashboards and also web visualisation for geospatial information.
+The github project can be find [here](https://github.com/posit-dev/py-shiny/).
+Streamlit is under the [MIT License](https://github.com/posit-dev/py-shiny/blob/main/LICENSE).
+
+### Installation
+
+You can find the Shiny for Python documentation [here](https://shiny.posit.co/py/docs/overview.html).
+
+Shiny for python is really easy to install, just with `pip install shiny`.
+
+You can then run `shiny create --template dashboard-tips` to create a first application with a preview of what it is possible to do with Shiny for Python.
+You will have to chose if you want to use Shiny Express or not, and the folder you will want to create the application in.
+Shiny Express is a more compact way for writing python files using Shiny, so you might want to use it.
+To see it, you might need to download the other python packages that you will find in the `requirements.txt` file created in the folder that you have chosen before.
+
+### Using Shiny
+
+
+
+### Review
+
+The Shiny for Python website provides an article for a comparison between frameworks, including Streamlit framework.
+This article can be find [here](https://shiny.posit.co/py/docs/comp-streamlit.html).
+This article is written by Shiny for Python team, so of course the conclusion is that Shiny for Python is better than Streamlit in a way.
+Still, this article explains some core differences between the two framwork, and Shiny for Python seems less intuitive than Streamlit and probably less user-friendly at first sight, but Shiny seems to be more adapted for managing bigger database.
+One of the difference is the reloading of the entire script every time that a change is made with the User Interface (UI) while shiny will only reload the components 
 
 # GeoServer
 
