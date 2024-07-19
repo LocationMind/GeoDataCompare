@@ -141,6 +141,7 @@ prompt-toolkit==3.0.36
     # via
     #   ipython
     #   questionary
+    #   shiny
 psycopg2==2.9.9
     # via -r Requirements\requirements_shiny.in
 psygnal==0.11.1
@@ -178,7 +179,7 @@ shapely==2.0.4
     # via
     #   geopandas
     #   lonboard
-shiny==0.10.2
+shiny==1.0.0
     # via
     #   -r Requirements\requirements_shiny.in
     #   shinywidgets
@@ -233,3 +234,6 @@ widgetsnbextension==4.0.11
     # via ipywidgets
 xyzservices==2024.6.0
     # via ipyleaflet
+
+# The following packages are considered to be unsafe in a requirements file:
+# setuptools

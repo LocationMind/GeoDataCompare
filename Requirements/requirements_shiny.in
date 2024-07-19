@@ -5,6 +5,6 @@ pandas==2.2.2
 plotly==5.22.0
 psycopg2==2.9.9
 ridgeplot==0.1.25
-shiny==0.10.2
+shiny==1.0.0
 shinywidgets==0.3.2
 sqlalchemy==2.0.30
