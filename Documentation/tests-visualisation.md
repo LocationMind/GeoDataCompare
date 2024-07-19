@@ -7,32 +7,44 @@ The draft made for the final web application is provided [here](./OSM_Overture_v
 
 - [Test of different framework or tools for data visualisation](#test-of-different-framework-or-tools-for-data-visualisation)
 - [QGIS](#qgis)
-- [Web visualisation](#web-visualisation)
-  - [Virtual environments and requirements files](#virtual-environments-and-requirements-files)
-  - [Apache-superset](#apache-superset)
-    - [Installation](#installation)
-    - [Configuration](#configuration)
-    - [Using apache-superset](#using-apache-superset)
-    - [Review](#review)
-  - [Streamlit](#streamlit)
-    - [Installation](#installation-1)
-    - [Using Streamlit](#using-streamlit)
-    - [Review](#review-1)
-  - [Plotly Dash](#plotly-dash)
-    - [Installation](#installation-2)
-    - [Using Dash](#using-dash)
-    - [Review](#review-2)
-  - [Shiny for Python](#shiny-for-python)
-    - [Installation](#installation-3)
-    - [Using Shiny](#using-shiny)
-    - [Review](#review-3)
 - [GeoServer](#geoserver)
   - [Why using GeoServer?](#why-using-geoserver)
   - [Installing GeoServer with Docker](#installing-geoserver-with-docker)
   - [Configuring GeoServer](#configuring-geoserver)
     - [Adding layers with the app](#adding-layers-with-the-app)
     - [Adding layers with REST API](#adding-layers-with-rest-api)
+    - [Review](#review)
+- [Web visualisation](#web-visualisation)
+  - [Virtual environments and requirements files](#virtual-environments-and-requirements-files)
+  - [Apache-superset](#apache-superset)
+    - [Installation](#installation)
+    - [Configuration](#configuration)
+    - [Using apache-superset](#using-apache-superset)
+    - [Review](#review-1)
+  - [Streamlit](#streamlit)
+    - [Installation](#installation-1)
+    - [Using Streamlit](#using-streamlit)
+    - [Review](#review-2)
+  - [Plotly Dash](#plotly-dash)
+    - [Installation](#installation-2)
+    - [Using Dash](#using-dash)
+    - [Review](#review-3)
+  - [Shiny for Python](#shiny-for-python)
+    - [Installation](#installation-3)
+    - [Using Shiny](#using-shiny)
     - [Review](#review-4)
+  - [LonBoard](#lonboard)
+    - [Installation](#installation-4)
+    - [Using LonBoard](#using-lonboard)
+    - [Review](#review-5)
+- [Shiny x Lonboard: Creating the dashboard](#shiny-x-lonboard-creating-the-dashboard)
+  - [Installation](#installation-5)
+  - [Running the application](#running-the-application)
+  - [Dashboard usage](#dashboard-usage)
+  - [Limit and possible improvements](#limit-and-possible-improvements)
+    - [Features not yet implemented](#features-not-yet-implemented)
+    - [Improvements](#improvements)
+    - [Review](#review-6)
 
 
 # QGIS
@@ -53,6 +65,169 @@ For the visualisation, QGIs could be used.
 However, it is not possible to add easily statistical information on QGIS main application.
 Some work exists online for QGIS dashboards but they are not really as expected.
 It should be possible to construct a QGIS plugin to create dashboard, but I do not know if it is worth it as it would take some time to create it,, and maybe using another technology for web visualisation would be more worthy.
+
+
+# GeoServer
+
+[GeoServer](https://geoserver.org) is, according to the website, "an open source server for sharing geospatial data".
+It is mainly used for spatial information, as it implements a lot of OGC Standards.
+Among them, the Web Services (WMS, WFS, WMTS...) are particularly interesting.
+
+These steps and some usages are inspired from a class project that I did this year.
+The GitHub associated with this project can be find [here](https://github.com/VGiudicelli1/TSI_stage/tree/dev).
+
+## Why using GeoServer?
+
+After testing Apache-Superset, Streamlit and Plotly Dash, it is quite obvious that whatever the package used, the amount of data is too important to try to use it directly from PostGIS.
+By connecting the database in local to GeoServer, it is then possible to request PostGIS data with OGC Standards Web Services, particularly WMS or WFS.
+It is way ligther for the client, as only images are sent.
+Of course, it is complicated then to apply different styles, or at least not as easy as with vector layers directly.
+But because it is WMS or WFS flows, most of the libraries can used flows sent by GeoServer.
+
+## Installing GeoServer with Docker
+
+GeoServer is very powerful, but installing and maintening it can be a bit complicated.
+However, using Docker installing GeoServer is not that complicated.
+Indeed, there are offical release of GeoServer images up-to-date, and it can be easily installed on local devices only for the moment.
+The one that we use is `docker.osgeo.org/geoserver:2.25.2`.
+You can find the website [here]()
+
+To install it, it is really easy because the [docker-compose.yml](..\GeoServer\docker-compose.yml) file has already been created.
+For Windows user, please make sure to install and start [Docker Desktop](https://docs.docker.com/desktop/install/windows-install/) in order to use docker.
+
+Once Docker Desktop is installed and started, run this command line to create the image and containers:
+
+```cmd
+docker-compose -f .\GeoServer\docker-compose.yml up -d
+```
+
+Of course, if your file is in another location, please change it in the command too.
+
+Once the image has been pulled and the container has been created, you can access geoserver at [`http://localhost:8080/geoserver/`](http://localhost:8080/geoserver/).
+You should be on a page that looks like this:
+
+![Index page of GeoServer](./Images/Test-frameworks/index_geoserver.png)
+
+## Configuring GeoServer
+
+Even though there are environment variables in the docker-compose file for the username and password, it seems that it does not work.
+Therefore, to connect please use `admin`,`geoserver` respectively for `username` and `password`.
+You should arrive on this page:
+
+![Index page after connect](./Images/Test-frameworks/after_connect_geoserver.png)
+
+To add layers, there are two possibilities:
+
+- [Adding them with the app](#adding-layers-with-the-app)
+
+- [Using REST API to add them](#adding-layers-with-rest-api)
+
+### Adding layers with the app
+
+First, add a **Workspace**.
+To do so, click on `Workspaces` in the `Data` section.
+Then, click on `Add new workspace` and enter a name and an uri.
+You can click on `Default Workspace` if you want (it is not mandatory ut it is good to have one default workspace).
+The URI does not have to be a real URI pointing to a real object.
+I chose `http://locationmind.com/test` for my URI, with `test` being the name of my workspace.
+
+Then, we need to add a store, i.e. our database connection.
+Click on `Stores` in the `Data` section.
+Then, click on `Add new Store` and on `PostGIS` to add a PostGIS database.
+Choose your workspace, the data source name and the description.
+For the `Data Source Name`, it is better to avoid using spaces, dashes or any "special" character and rather using underscores.
+This does not apply for the description.
+
+The most important parameter is the host.
+As a docker container is used, it is not possible to put `localhost` or `127.0.0.1` for the host.
+Instead, please put `host.docker.internal` in order to connect to your database in local.
+The other parameters are the one from your database, and the schema can be important too if you have several schemas with different layers inside.
+
+![Connection parameters for the PostGIS connection](./Images/Test-frameworks/connection_parameter_db_geoserver.png)
+
+
+Then, click on save, and you shoud arrive to a page for adding a new layer, like this:
+
+![Adding a new layer](./Images/Test-frameworks/add_new_layer_geoserver.png)
+
+You can also access to this page by clicking on `Layers` in the `Data` section, and then on `Add a new layer`.
+You simply have to choose a store with the select box, and you will find the same page.
+
+Choose the layer that you want to add and click on publish.
+On the new page, you can add metadata or change features properties for instance.
+To avoid confusion with layers from different sources (i.e. to make the difference betwwen OSM and OMF layers), you can rename the name and title of the layer by adding at the end or at the beginning of the name the datasource where it comes from (`edge_with_cost_tokyo_osm` instead of `edge_with_cost_tokyo` for instance).
+On the `Bounding Boxes` section, please click on `Compute from native bounds` to add the bounding box of the layer.
+
+![Bounding box section when adding a layer](./Images/Test-frameworks/bounding_box_section_geoserver.png)
+
+Then, simply click on save to add the layer.
+
+You can see what it looks like by clicking on `Layer Preview` in the `Data` section.
+Click on the format that you want to visualise the layer.
+
+The layer is then accessible via WMS for instance using a HTML request like this:
+
+`http://localhost:8080/geoserver/test/wms?service=WMS&version=1.1.0&request=GetMap&layers=<workspace>:<layer_name>&bbox=<bbox>&width=256&height=256&srs=EPSG:4326&styles=&format=<desired_format>`
+
+With:
+
+- `<workspace>`: Name of your workspace (`test` in this example);
+- `<layer_name>`: Name of the layer, as you have chosen it, so not necessarely the name of the layer in the database (`edge_with_cost_tokyo_osm` in this example);
+- `<bbox>`: Bbox in `W,S,E,N` format (`139.74609375,35.67514419555664,139.833984375,35.74651336669922` for instance, to see over the tokyo area);
+- `<desired_format>`: Depending on the format you want (`application/openlayers` to see with openlayer, or `image/png` to have a png image for instance).
+
+Please check the [geoserver website](https://docs.geoserver.org/stable/en/user/services/wms/reference.html) to have more information about WMS requests.
+
+### Adding layers with REST API
+
+All of these steps are also available using HTML request with the REST API of GeoServer.
+More information about the GeoServer REST API can be find [here](https://docs.geoserver.org/latest/en/user/rest/index.html).
+
+The [`init.sh`](../GeoServer/init.sh) file contains all the request necessary to add two layers from OMF.
+The database connection paramaters are located in the [`connect_omf.xml`](../GeoServer/connect_omf.xml) file, so please change parameters if there are not the same.
+If you change the store name, you will have to change it in the queries too.
+It is the same for the username and password in the `-u admin:geoserver` option.
+
+**Add a workspace**
+
+```bash
+curl -v -u admin:geoserver -POST -d "<workspace><name>test</name></workspace>" -H "Content-type: text/xml"  http://localhost:8080/geoserver/rest/workspaces
+```
+
+**Add a store**
+
+```bash
+curl -v -u admin:geoserver -POST -T .\connect_omf.xml -H "Content-type: text/xml" http://localhost:8080/geoserver/rest/workspaces/test/datastores
+```
+
+**Add a layer**
+
+```bash
+curl -v -u admin:geoserver -XPOST -H "Content-type: text/xml" -d "<featureType><name>edge_with_cost_tokyo_omf</name><nativeName>edge_with_cost_tokyo</nativeName><title>edge_with_cost_tokyo_omf</title></featureType>" http://localhost:8080/geoserver/rest/workspaces/test/datastores/pgrouting_omf/featuretypes
+```
+
+The nativeName tag must correspond to the table name in the database.
+You can change the rest as you want.
+
+**Change roles for all users**
+
+```bash
+curl -v -u admin:geoserver -POST -H  "accept: application/json" -H  "content-type: application/xml" -d "<rules><rule resource=\"PgRouting_OMF.edge_with_cost_tokyo .r\">*</rule></rules>" http://localhost:8080/geoserver/rest/security/acl/layers
+
+```
+
+This last command is not mandatory, but it was present in the original file so I let it here.
+
+### Review
+
+GeoServer is really powerful and with the REST API, it is possible to add multiple layers quite easily.
+It requires space and if it comes to be used by multiple users, then it will require also more power.
+However, with the different way to query the features (WMS to render and WFS to display information).
+There are more ways to configure GeoServer, especially for the WMS / WMTS flows, with specific values and parameters for each layer.
+Also, it is possible to change the style of WMS layers, and with the vectortiles extension, it should be possible to query vector tiles to display them.
+GeoServer, or another open-source solution with the same features, is probably the best way to make the desire web application.
+
+
 
 # Web visualisation
 
@@ -286,7 +461,9 @@ To see it, you might need to download the other python packages that you will fi
 
 ### Using Shiny
 
-
+To run a custom app, run in a command line : `shiny run .\Python\Web\Shiny\app.py`, where the last part is your path to you python script.
+You can also add the `--reload` option if you want to make changes in your script and reload the app automatically whenever you save it.
+You can then access your app in your browser with this URL : `http://127.0.0.1:8000`
 
 ### Review
 
@@ -294,164 +471,92 @@ The Shiny for Python website provides an article for a comparison between framew
 This article can be find [here](https://shiny.posit.co/py/docs/comp-streamlit.html).
 This article is written by Shiny for Python team, so of course the conclusion is that Shiny for Python is better than Streamlit in a way.
 Still, this article explains some core differences between the two framwork, and Shiny for Python seems less intuitive than Streamlit and probably less user-friendly at first sight, but Shiny seems to be more adapted for managing bigger database.
-One of the difference is the reloading of the entire script every time that a change is made with the User Interface (UI) while shiny will only reload the components 
+One of the difference is the reloading of the entire script every time that a change is made with the User Interface (UI) while shiny will only reload the components.
 
-# GeoServer
+## LonBoard
 
-[GeoServer](https://geoserver.org) is, according to the website, "an open source server for sharing geospatial data".
-It is mainly used for spatial information, as it implements a lot of OGC Standards.
-Among them, the Web Services (WMS, WFS, WMTS...) are particularly interesting.
+[LonBoard](https://developmentseed.org/lonboard/latest/) is, according to the website, a "Python library for fast, interactive geospatial vector data visualization in Jupyter".
+Lonboard uses technologies as GeoArrow or GeoParquet and also deck.gl to "enable visualizing large geospatial datasets interactively through a simple interface".
+The github project can be find [here](https://github.com/developmentseed/lonboard).
+Lonboard is under the [MIT License](https://github.com/developmentseed/lonboard/blob/main/LICENSE).
 
-These steps and some usages are inspired from a class project that I did this year.
-The GitHub associated with this project can be find [here](https://github.com/VGiudicelli1/TSI_stage/tree/dev).
+### Installation
 
-## Why using GeoServer?
+You can find the Lonboard documentation [here](https://developmentseed.org/lonboard/latest/).
 
-After testing Apache-Superset, Streamlit and Plotly Dash, it is quite obvious that whatever the package used, the amount of data is too important to try to use it directly from PostGIS.
-By connecting the database in local to GeoServer, it is then possible to request PostGIS data with OGC Standards Web Services, particularly WMS or WFS.
-It is way ligther for the client, as only images are sent.
-Of course, it is complicated then to apply different styles, or at least not as easy as with vector layers directly.
-But because it is WMS or WFS flows, most of the libraries can used flows sent by GeoServer.
+Lonboard is really easy to install, just with `pip install lonboard`.
 
-## Installing GeoServer with Docker
+### Using LonBoard
 
-GeoServer is very powerful, but installing and maintening it can be a bit complicated.
-However, using Docker installing GeoServer is not that complicated.
-Indeed, there are offical release of GeoServer images up-to-date, and it can be easily installed on local devices only for the moment.
-The one that we use is `docker.osgeo.org/geoserver:2.25.2`.
-You can find the website [here]()
-
-To install it, it is really easy because the [docker-compose.yml](..\GeoServer\docker-compose.yml) file has already been created.
-For Windows user, please make sure to install and start [Docker Desktop](https://docs.docker.com/desktop/install/windows-install/) in order to use docker.
-
-Once Docker Desktop is installed and started, run this command line to create the image and containers:
-
-```cmd
-docker-compose -f .\GeoServer\docker-compose.yml up -d
-```
-
-Of course, if your file is in another location, please change it in the command too.
-
-Once the image has been pulled and the container has been created, you can access geoserver at [`http://localhost:8080/geoserver/`](http://localhost:8080/geoserver/).
-You should be on a page that looks like this:
-
-![Index page of GeoServer](./Images/Test-frameworks/index_geoserver.png)
-
-## Configuring GeoServer
-
-Even though there are environment variables in the docker-compose file for the username and password, it seems that it does not work.
-Therefore, to connect please use `admin`,`geoserver` respectively for `username` and `password`.
-You should arrive on this page:
-
-![Index page after connect](./Images/Test-frameworks/after_connect_geoserver.png)
-
-To add layers, there are two possibilities:
-
-- [Adding them with the app](#adding-layers-with-the-app)
-
-- [Using REST API to add them](#adding-layers-with-rest-api)
-
-### Adding layers with the app
-
-First, add a **Workspace**.
-To do so, click on `Workspaces` in the `Data` section.
-Then, click on `Add new workspace` and enter a name and an uri.
-You can click on `Default Workspace` if you want (it is not mandatory ut it is good to have one default workspace).
-The URI does not have to be a real URI pointing to a real object.
-I chose `http://locationmind.com/test` for my URI, with `test` being the name of my workspace.
-
-Then, we need to add a store, i.e. our database connection.
-Click on `Stores` in the `Data` section.
-Then, click on `Add new Store` and on `PostGIS` to add a PostGIS database.
-Choose your workspace, the data source name and the description.
-For the `Data Source Name`, it is better to avoid using spaces, dashes or any "special" character and rather using underscores.
-This does not apply for the description.
-
-The most important parameter is the host.
-As a docker container is used, it is not possible to put `localhost` or `127.0.0.1` for the host.
-Instead, please put `host.docker.internal` in order to connect to your database in local.
-The other parameters are the one from your database, and the schema can be important too if you have several schemas with different layers inside.
-
-![Connection parameters for the PostGIS connection](./Images/Test-frameworks/connection_parameter_db_geoserver.png)
-
-
-Then, click on save, and you shoud arrive to a page for adding a new layer, like this:
-
-![Adding a new layer](./Images/Test-frameworks/add_new_layer_geoserver.png)
-
-You can also access to this page by clicking on `Layers` in the `Data` section, and then on `Add a new layer`.
-You simply have to choose a store with the select box, and you will find the same page.
-
-Choose the layer that you want to add and click on publish.
-On the new page, you can add metadata or change features properties for instance.
-To avoid confusion with layers from different sources (i.e. to make the difference betwwen OSM and OMF layers), you can rename the name and title of the layer by adding at the end or at the beginning of the name the datasource where it comes from (`edge_with_cost_tokyo_osm` instead of `edge_with_cost_tokyo` for instance).
-On the `Bounding Boxes` section, please click on `Compute from native bounds` to add the bounding box of the layer.
-
-![Bounding box section when adding a layer](./Images/Test-frameworks/bounding_box_section_geoserver.png)
-
-Then, simply click on save to add the layer.
-
-You can see what it looks like by clicking on `Layer Preview` in the `Data` section.
-Click on the format that you want to visualise the layer.
-
-The layer is then accessible via WMS for instance using a HTML request like this:
-
-`http://localhost:8080/geoserver/test/wms?service=WMS&version=1.1.0&request=GetMap&layers=<workspace>:<layer_name>&bbox=<bbox>&width=256&height=256&srs=EPSG:4326&styles=&format=<desired_format>`
-
-With:
-
-- `<workspace>`: Name of your workspace (`test` in this example);
-- `<layer_name>`: Name of the layer, as you have chosen it, so not necessarely the name of the layer in the database (`edge_with_cost_tokyo_osm` in this example);
-- `<bbox>`: Bbox in `W,S,E,N` format (`139.74609375,35.67514419555664,139.833984375,35.74651336669922` for instance, to see over the tokyo area);
-- `<desired_format>`: Depending on the format you want (`application/openlayers` to see with openlayer, or `image/png` to have a png image for instance).
-
-Please check the [geoserver website](https://docs.geoserver.org/stable/en/user/services/wms/reference.html) to have more information about WMS requests.
-
-### Adding layers with REST API
-
-All of these steps are also available using HTML request with the REST API of GeoServer.
-More information about the GeoServer REST API can be find [here](https://docs.geoserver.org/latest/en/user/rest/index.html).
-
-The [`init.sh`](../GeoServer/init.sh) file contains all the request necessary to add two layers from OMF.
-The database connection paramaters are located in the [`connect_omf.xml`](../GeoServer/connect_omf.xml) file, so please change parameters if there are not the same.
-If you change the store name, you will have to change it in the queries too.
-It is the same for the username and password in the `-u admin:geoserver` option.
-
-**Add a workspace**
-
-```bash
-curl -v -u admin:geoserver -POST -d "<workspace><name>test</name></workspace>" -H "Content-type: text/xml"  http://localhost:8080/geoserver/rest/workspaces
-```
-
-**Add a store**
-
-```bash
-curl -v -u admin:geoserver -POST -T .\connect_omf.xml -H "Content-type: text/xml" http://localhost:8080/geoserver/rest/workspaces/test/datastores
-```
-
-**Add a layer**
-
-```bash
-curl -v -u admin:geoserver -XPOST -H "Content-type: text/xml" -d "<featureType><name>edge_with_cost_tokyo_omf</name><nativeName>edge_with_cost_tokyo</nativeName><title>edge_with_cost_tokyo_omf</title></featureType>" http://localhost:8080/geoserver/rest/workspaces/test/datastores/pgrouting_omf/featuretypes
-```
-
-The nativeName tag must correspond to the table name in the database.
-You can change the rest as you want.
-
-**Change roles for all users**
-
-```bash
-curl -v -u admin:geoserver -POST -H  "accept: application/json" -H  "content-type: application/xml" -d "<rules><rule resource=\"PgRouting_OMF.edge_with_cost_tokyo .r\">*</rule></rules>" http://localhost:8080/geoserver/rest/security/acl/layers
-
-```
-
-This last command is not mandatory, but it was present in the original file so I let it here.
+I did not used Lonboard on Jupyter, but you can check the [Shiny x Lonboard](#shiny-x-lonboard-creating-the-dashboard) section to have a review of the possibilities using Lonboard with Shiny.
 
 ### Review
 
-GeoServer is really powerful and with the REST API, it is possible to add multiple layers quite easily.
-It requires space and if it comes to be used by multiple users, then it will require also more power.
-However, with the different way to query the features (WMS to render and WFS to display information).
-There are more ways to configure GeoServer, especially for the WMS / WMTS flows, with specific values and parameters for each layer.
-Also, it is possible to change the style of WMS layers, and with the vectortiles extension, it should be possible to query vector tiles to display them.
-GeoServer, or another open-source solution with the same features, is probably the best way to make the desire web application.
+Though LonBoard can be used only with Jupyter, it is possible to use the different widets with Shiny for instance, allowing to create web apps that can load data directly from PostGIS without having to use any other dependencies such as GeoServer or Map Tiles.
+Lonboard is quite recent and still under development, so there are few examples and usage online and it can be a bit complicated to have sometime basic things that we would expect from a mapping library, such as layers visibility control or even attribution.
+But Lonboard relies on [deck.gl](https://deck.gl/), and for that reason it is quite efficient and Lonboard is likely to have new features added in future releases.
+
+# Shiny x Lonboard: Creating the dashboard
+
+As mentionned before, it is possible to use Shiny and Lonboard to create a dashboard.
+
+## Installation
+
+To be able to launch the dashboard, please make sure to install all the necessary dependencies with the [requirements_shiny.in](../Requirements/requirements_shiny.in) file.
+
+## Running the application
+
+As it is a Shiny application, it is quite easy to run it, just by running in a command line:
+
+```
+shiny run --reload .\Python\Web\Dashboard\app.py
+```
+
+The `--reload` option is not mandatory, it is more useful for development purpose.
+The [Dashboard](../Python/Web/Dashboard) folder contains the main application [app.py](../Python/Web/Dashboard/app.py) and a subfolder [www](../Python/Web/Dashboard/www/) that contains the different ressources for the application, such as a custom CSS file or the LocationMind logo.
+It is important to keep that structure as with shiny express, the www folder is mounted directly to the application.
+
+## Dashboard usage
+
+Here is what the dashboard looks like.
+
+![Example of the dashboard for the overlap indicator in Tokyo area](./Images/Test-frameworks/dashboard_result.png)
+
+The main features of the Dashboard are the possibility to visualise the data for the different area (contains in the bounding_box table in the database), and then to choose one criterion to display (or the original data).
+It is also possible to change the style of the different layers, such as the width or color.
+The two maps are synchronized to be able to compare them.
+
+## Limit and possible improvements
+
+### Features not yet implemented
+
+The dashboard is useful but lack some features that have not been implemented yet, such as:
+
+- Adding the attribution to the map or just on the website;
+
+- Possibility to add more classes for the (strong) connected components style;
+
+- Dynamically (or by clicking on a button) change the color of the dataframe cells when changing the color;
+
+- Add an help section with information to give more context to the dashboard (who did it, from when are the data, where can we find the GitHub project...);
+
+- Filter the data dynamically by classes (with the dataframe) or by other values;
+
+Some of them are important and quite easy to do, but others seem easy but are more complicated that it looks like.
+
+### Improvements
+
+The biggest weakness of this Dashboard is the lack of robutness to possible changes.
+Indeed, if we want to add a criterion for instance, it is quite complicated.
+The code has not been really documented for the moment and it has not been refactored too.
+It is probably possible to refactor the code, at least for the different criterion.
+With an interface `Criterion`, we could have attributes and methods, such as the dataframe, the column on which the style should be applyed or the lonboard layer, with a method to construct it and another to get the important feature info (percentage, number of isolated nodes etc.).
+Working with a python class would probably make it easier and smoother to read and understand, but most of it, it would permit to add criterion (and other type of layers too) quite easily, just by creating the proper criterion class.
+
+### Review
+
+With this dashboard, it is possible to see how much lonboard (and so deck.gl) is efficient to load layer.
+Combined to shiny for python, it is possible to do really good things.
+The only thing that is a bit frustrating is that it is not possible to add layers to lonboard map after creating it.
+For that reason, each time we change the layers, the map has to be reloaded.
+But the application is smooth enough to be used without being really annoyed by this.
