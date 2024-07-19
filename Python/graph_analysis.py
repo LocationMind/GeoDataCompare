@@ -926,8 +926,7 @@ if __name__ == "__main__":
     listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka', 'tateyama', 'tokyo']
     
     # Variable for markdown results
-    beforeMappingResult = "### Total kilometer of roads by type (before mapping)"""
-    afterMappingResult = "### Total kilometer of roads by type (after mapping)"
+    mappingResult = "### Total kilometer of roads by class"
     
     # Data to add to the dataFrame
     data = []
@@ -955,18 +954,9 @@ if __name__ == "__main__":
         area = area.capitalize()
         
         # Add lines to before and after mapping results
-        beforeMappingResult += f"\n\n#### *{area}*:\n\n"
-        afterMappingResult += f"\n\n#### *{area}*:\n\n"
+        mappingResult += f"\n\n#### *{area}*:\n\n"
         
         # Number of edges / nodes
-        OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
-        print(f"Number of edges in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
-        print(f"Number of edges in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**1. Number of nodes**", f"*{area}*", OSMValue, OMFValue])
         
         OSMValue = getNumberElements(connection, osmSchema, osmNodeTable)
         print(f"Number of nodes in OSM for {area} is: {OSMValue}")
@@ -974,6 +964,15 @@ if __name__ == "__main__":
         OMFValue = getNumberElements(connection, omfSchema, omfNodeTable, filter = True, areaName = area)
         print(f"Number of nodes in OMF for {area} is: {OMFValue}")
         
+        # Add data to the data list
+        data.append(["**1. Number of nodes**", f"*{area}*", OSMValue, OMFValue])
+        
+        
+        OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
+        print(f"Number of edges in OSM for {area} is: {OSMValue}")
+        
+        OMFValue = getNumberElements(connection, omfSchema, omfEdgeTable, filter = True, areaName = area)
+        print(f"Number of edges in OMF for {area} is: {OMFValue}")
         # Add data to the data list
         data.append(["**2. Number of edges**", f"*{area}*", OSMValue, OMFValue])
         
@@ -996,23 +995,9 @@ if __name__ == "__main__":
         
         markdown = listsToMardownTable(listClassesOSM, listClassesOMF)
         # Add markdown results
-        beforeMappingResult += markdown
+        mappingResult += markdown
         
-        
-        print(f"Total length in km per class (before mapping) for {area}:")
-        print(markdown)
-        
-        
-        # Total length kilometer per final class
-        listClassesOSM = getLengthKilometerByFinalClassOSM(connection, osmSchema, osmEdgeTable)
-        
-        listClassesOMF = getLengthKilometerByFinalClassOMF(connection, omfSchema, omfEdgeTable, areaName = area)
-        
-        markdown = listsToMardownTable(listClassesOSM, listClassesOMF)
-        # Add markdown results
-        afterMappingResult += markdown
-        
-        print(f"Total length in km per class (after mapping) for {area}:")
+        print(f"Total length in km per class for {area}:")
         print(markdown)
         
         
@@ -1021,7 +1006,7 @@ if __name__ == "__main__":
         resultOSMTable = connectedComponentsTemplate.format(area.lower(), osmSchema)
         resultOMFTable = connectedComponentsTemplate.format(area.lower(), omfSchema)
         
-        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable, idColumnName='osmid')
+        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
         print(f"Number of connected components in OSM for {area} is: {OSMValue}")
         
         OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
@@ -1036,7 +1021,7 @@ if __name__ == "__main__":
         resultOSMTable = strongConnectedComponentsTemplate.format(area.lower(), osmSchema)
         resultOMFTable = strongConnectedComponentsTemplate.format(area.lower(), omfSchema)
         
-        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable, idColumnName='osmid')
+        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
         print(f"Number of strong connected components in OSM for {area} is: {OSMValue}")
         
         OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
@@ -1083,7 +1068,7 @@ if __name__ == "__main__":
         print(f"Overlap indicator 2 took {end - start} seconds")
         
         # Add data to the data list
-        data.append(["**7. Number of strong connected components**", f"*{area}*", f"{OSMValue} %", f"{OMFValue} %"])
+        data.append([f"**7. Overlap indicator (%)**", f"*{area}*", OSMValue, OMFValue])
         
         
         # Corresponding nodes
@@ -1105,7 +1090,7 @@ if __name__ == "__main__":
         
         # Add two rows in the dataframe (one for the number and the other for percentage)
         data.append(["**8. Number of corresponding nodes**", f"*{area}*", OSMValue[0], OMFValue[0]])
-        data.append(["**9. Percentage of corresponding nodes**", f"*{area}*", f"{OSMValue[1]} %", f"{OMFValue[1]} %"])
+        data.append(["**9. Percentage of corresponding nodes (%)**", f"*{area}*", OSMValue[1], OMFValue[1]])
     
         end = time.time()
         print(f"{area} took {end - start} seconds")
@@ -1118,13 +1103,14 @@ if __name__ == "__main__":
     columns = ['**Criterion**', '**Area**', '**OSM Value**', '**OMF Value**']
     df = pd.DataFrame(data=data, columns=columns)
     
+    df['**Difference (abs)**'] = abs(df["**OSM Value**"] - df["**OMF Value**"])
+    
     print()
     # Export to markdown table
     generalResults = df.to_markdown(index=False, tablefmt="github")
     
     # Create final markdown
-    exportMarkdown = f"""
-# Quality criterias result between OSM and OMF datasets
+    exportMarkdown = f"""# Quality criterias result between OSM and OMF datasets
 
 The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of OvertureMap data and the OSM data until 2024/06/07.
 
@@ -1134,9 +1120,7 @@ The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of 
 
 ## Specific results
 
-{beforeMappingResult}
-
-{afterMappingResult}
+{mappingResult}
 """
 
     # Export the results to a markdown file

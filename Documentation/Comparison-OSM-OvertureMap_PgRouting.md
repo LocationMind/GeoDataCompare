@@ -1,6 +1,6 @@
-# Comparison betweem OpenStreetMap and OvertureMap Foundation data with PgRouting
+# Comparison between OpenStreetMap and OvertureMap Foundation data with PgRouting
 
-- [Comparison betweem OpenStreetMap and OvertureMap Foundation data with PgRouting](#comparison-betweem-openstreetmap-and-overturemap-foundation-data-with-pgrouting)
+- [Comparison between OpenStreetMap and OvertureMap Foundation data with PgRouting](#comparison-between-openstreetmap-and-overturemap-foundation-data-with-pgrouting)
 - [Dataset creation](#dataset-creation)
 - [Comparison process](#comparison-process)
 	- [Tests zone](#tests-zone)
