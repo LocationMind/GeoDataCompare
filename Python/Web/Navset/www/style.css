@@ -1,0 +1,36 @@
+#colorPickerPoint .widget-inline-hbox, #colorPickerLine .widget-inline-hbox {
+    align-items:center;
+}
+
+.bslib-card .card-header {
+    font-size: 1.5em;
+}
+
+/* .card_data .card-header {
+    background-color:blanchedalmond;
+}
+
+.background-grey {
+    background-color: #f8f8f8;
+} */
+
+.widget-colorpicker > .widget-colorpicker-input {
+    min-width: auto;
+}
+
+.widget-colorpicker {
+    width: auto;
+}
+
+.widget-inline-hbox .widget-label {
+    width: fit-content;
+}
+
+.widget-inline-hbox {
+    align-items: center;
+    justify-content: flex-end;
+}
+
+button#submit_component_style {
+    width:inherit;
+}

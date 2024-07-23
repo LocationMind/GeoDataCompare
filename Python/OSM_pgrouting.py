@@ -321,6 +321,56 @@ def createGeomIndex(connection:psycopg2.extensions.connection,
     
     utils.executeQueryWithTransaction(connection, sql_create_index)
 
+def createMappedClasses(connection:psycopg2.extensions.connection,
+                        area:str,
+                        schema:str = "public"):
+    """Create the mapped class as a new attribute class.
+    The mapping is made from OSM classes to OMF classes.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        area (str): Name of the area.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Create class column
+    sql_create_class_column = f"""
+    ALTER TABLE IF EXISTS {schema}.edge_with_cost_{area}
+    ADD COLUMN class character varying;
+    """
+    
+    utils.executeQueryWithTransaction(connection, sql_create_class_column)
+    
+    # Update the table
+    sql_class_omf = f"""
+    UPDATE {schema}.edge_with_cost_{area}
+    SET "class" =
+    CASE
+        WHEN highway = 'motorway' OR highway = 'motorway_link' THEN 'motorway'
+        WHEN highway = 'trunk' OR highway = 'trunk_link' THEN 'trunk'
+        WHEN highway = 'primary' OR highway = 'primary_link' THEN 'primary'
+        WHEN highway = 'secondary' OR highway = 'secondary_link' THEN 'secondary'
+        WHEN highway = 'tertiary' OR highway = 'tertiary_link' THEN 'tertiary'
+        WHEN highway = 'residential' OR (highway = 'unclassified' AND abutters = 'residential') THEN 'residential'
+        WHEN highway = 'living_street' THEN 'living_street'
+        WHEN highway = 'service' AND service = 'parking_aisle' THEN 'parking_aisle'
+        WHEN highway = 'service' AND service = 'driveway' THEN 'driveway'
+        WHEN highway = 'service' AND service = 'alley' THEN 'alley'
+        WHEN highway = 'pedestrian' THEN 'pedestrian'
+        WHEN (highway = 'footway' OR highway = 'path') AND footway = 'sidewalk' THEN 'sidewalk'
+        WHEN (highway = 'footway' OR highway = 'path') AND footway = 'crosswalk' THEN 'crosswalk'
+        WHEN highway = 'footway' THEN 'footway'
+        WHEN highway = 'path' THEN 'path'
+        WHEN highway = 'steps' THEN 'steps'
+        WHEN highway = 'track' THEN 'track'
+        WHEN highway = 'cycleway' THEN 'cycleway'
+        WHEN highway = 'bridleway' THEN 'bridleway'
+        WHEN highway = 'unclassified' THEN 'unclassified'
+        ELSE 'unknown'
+    END
+    """
+    
+    utils.executeQueryWithTransaction(connection, sql_class_omf)
+
 if __name__ == "__main__":
     import json
     import os
@@ -359,15 +409,15 @@ if __name__ == "__main__":
         end = time.time()
         print(f"Start download {area} :  {end - start} seconds")
     
-        ## 1st step : Download data with OSMnx
+        ## Download data with OSMnx
         # Get network data for a specific bbox
         node, edge = downloadOSMData(bbox)
         
         end = time.time()
         print(f"Load graph : {end - start} seconds")
 
-        # Save nodes to postgresql
-        node.to_postgis(nodeTable, engine, if_exists="replace", schema=schema, index=True)
+        # Save nodes to postgresql by renaming the osmid column
+        node.to_postgis(nodeTable, engine, if_exists="replace", schema=schema, index=True, index_label="id")
 
         end = time.time()
         print(f"Save node to postgis : {end - start} seconds")
@@ -423,7 +473,7 @@ if __name__ == "__main__":
                     "oneway1":"oneway",
                     "ref1":"ref",
                     "name1":"name",
-                    "highway1":"class",
+                    "highway1":"highway",
                     "lanes1":"lanes",
                     "maxspeed1":"maxspeed",
                     "access1":"access",
@@ -447,7 +497,7 @@ if __name__ == "__main__":
             "oneway",
             "ref",
             "name",
-            "class",
+            "highway",
             "lanes",
             "maxspeed",
             "access",
@@ -473,6 +523,12 @@ if __name__ == "__main__":
         
         end = time.time()
         print(f"Geom index with cost to postgis took {end - start} seconds")
+        
+        # Create mapped classes
+        createMappedClasses(connection, area, schema)
+        
+        end = time.time()
+        print(f"Create mapped classes took {end - start} seconds")
         
         end = time.time()
         print(f"Download {area} took {end - start} seconds")

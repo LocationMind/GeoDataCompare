@@ -1,0 +1,6 @@
+dash==2.17.0
+geopandas==1.0.1
+dash-bootstrap-components==1.6.0
+duckdb==0.10.2
+psycopg2==2.9.9
+sqlalchemy==2.0.30

@@ -674,18 +674,6 @@ def createEdgeWithCostTable(connection:psycopg2.extensions.connection,
         e.end_value,
         public.get_edge_cost(e.len, e.access_restrictions, 'forward', e.start_value, e.end_value) AS cost,
         public.get_edge_cost(e.len, e.access_restrictions, 'backward', e.start_value, e.end_value) AS reverse_cost,
-        CASE
-            WHEN access_restrictions -> 0 ->> 'access_type' = 'denied'
-            AND access_restrictions -> 0 -> 'when' ->> 'heading' = 'forward'
-            THEN '-1'
-            ELSE len
-        END AS cost_bis,
-        CASE
-            WHEN access_restrictions -> 0 ->> 'access_type' = 'denied'
-            AND access_restrictions -> 0 -> 'when' ->> 'heading' = 'backward'
-            THEN '-1'
-            ELSE len
-        END AS reverse_cost_bis,
         e.class,
         e.access_restrictions,
         e.level_rules,
@@ -1034,6 +1022,8 @@ if __name__ == "__main__":
     
     # Create bbox table
     createBoundingboxTable(connection)
+    end = time.time()
+    print(f"createBoundingboxTable : {end - start} seconds")
     
     # Add functions to postres
     addSplitLineFromPointsFunction(connection)
@@ -1044,8 +1034,6 @@ if __name__ == "__main__":
     end = time.time()
     print(f"addGetEdgeCostFunction : {end - start} seconds")
     
-    end = time.time()
-    print(f"createBoundingboxTable : {end - start} seconds")
     
     # Load the 3 bbox that we will use from the json file
     path_json = os.path.join(".", "Data", "Bbox", "bboxs.json")

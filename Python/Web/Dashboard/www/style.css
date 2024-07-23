@@ -1,0 +1,111 @@
+.nav:not(.nav-hidden) {
+    align-items: center;
+}
+
+
+[data-bs-theme="light"], [data-bs-theme="dark"] {
+
+    
+    #colorPickerPoint .widget-inline-hbox, #colorPickerLine .widget-inline-hbox {
+        align-items:center;
+    }
+    
+    th {
+        color:black;
+    }
+
+    .card-header {
+        font-size: 1.5em;
+    }
+
+    .widget-colorpicker > .widget-colorpicker-input {
+        min-width: auto;
+    }
+
+    .widget-colorpicker {
+        width: auto;
+    }
+
+    .widget-inline-hbox .widget-label {
+        width: fit-content;
+    }
+
+    .widget-inline-hbox {
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    button#submit_component_style {
+        width:inherit;
+    }
+
+}
+
+
+[data-bs-theme="light"] {
+    
+    .card-header {
+        background-color:blanchedalmond;
+    }
+/* 
+    .card-body {
+        background-color: #e7f3ff;
+    } */
+    
+    .bslib-sidebar-layout>.sidebar, .background-grey, .card-body {
+        background-color: #f4f8fc;
+    }
+
+    .navbar.navbar-default, .value-box div, button.accordion-button {
+        /* background-color: #a5ccf4; */
+        background-color: #dfefff !important;
+    }
+}
+
+
+[data-bs-theme="dark"] {
+
+    body {
+        background-color:black;
+    }
+
+    select.shiny-bound-input, input.shiny-bound-input {
+        background-color:black;
+    }
+    
+    .card-header {
+        background-color:#825c22;
+    }
+
+    .bslib-sidebar-layout>.sidebar, .background-grey, .card-body {
+        background-color: #0c1821;
+    }
+
+    .navbar.navbar-default, .value-box div , button.accordion-button{
+        background-color: #04122e !important;
+    }
+
+
+    .widget-inline-hbox .widget-label, .widget-label {
+        color:white;
+    }
+
+    div.widget-colorpicker-input input[type="text"] {
+        color:var(--bs-body-color);
+        background-color: black;
+    }
+
+    code {
+        background-color: #323232;
+    }
+
+}
+
+div[data-value="Help"] *a, div[data-value="Licenses"] p a {
+    color: red;
+}
+
+.navbar>.container-fluid {
+    flex-direction: row-reverse;
+    -webkit-flex-direction: row-reverse;
+}

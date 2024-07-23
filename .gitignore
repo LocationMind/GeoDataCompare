@@ -1,3 +1,6 @@
 .venv
 __pycache__/
 cache/
+.streamlit/
+tiles
+other.py
