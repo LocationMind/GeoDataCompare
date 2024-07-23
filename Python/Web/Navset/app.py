@@ -15,48 +15,36 @@ import lonboard as lon
 from pathlib import Path
 from lonboard.colormap import apply_categorical_cmap
 from matplotlib.colors import is_color_like, to_hex, to_rgb
-from dotenv import load_dotenv
-import os
 
-def getEngine():
-    dotenv_path =  Path(__file__).parent / ".env"
+def getEngine(database:str,
+              host:str="127.0.0.1",
+              user:str="postgres",
+              password:str="postgres",
+              port:str="5432") -> sqlalchemy.engine.base.Engine:
+    """Get sqlalchemy engine to connect to the database.
+    
+    Args:
+        database (str): Database to connect to.
+        host (str, optional): Ip address for the database connection. The default is "127.0.0.1"
+        user (str, optional): Username for the database connection. The default is "postgres".
+        password (str, optional): Password for the database connection. The default is "postgres".
+        port (str, optional): Port for the connection. The default is "5432".
 
-    ## Read environnment variable
-    load_dotenv(dotenv_path)
-
-    database = os.getenv("POSTGRES_DATABASE")
-    host = os.getenv("POSTGRES_HOST")
-    user = os.getenv("POSTGRES_USER")
-    password = os.getenv("POSTGRES_PASSWORD")
-    port = os.getenv("POSTGRES_PORT")
-
+    Returns:
+        sqlalchemy.engine.base.Engine: Engine with the database connection.
+    """
     engine = sqlalchemy.create_engine(f"postgresql://{user}:{password}@{host}:{port}/{database}")
     return engine
 
-
-def getAllAreas(columnName:str = "name",
-                tableName:str = "bounding_box",
-                schema:str = "public"):
-    # Get all the area through the bounding box table
-    sqlQueryTable = f"""SELECT * FROM {schema}.{tableName}"""
-
-    bounding_box = gpd.GeoDataFrame.from_postgis(sqlQueryTable, engine)
-    
-    # Convert the dataframe to a list
-    areas = bounding_box[columnName].tolist()
-    areas.sort()
-    
-    return areas
-
 # Engine for geodatframe query
-engine = getEngine()
+engine = getEngine("pgrouting")
 
 # Variable for the map rendering
 radiusMinPixels = 2
 widthMinPixels = 2
 
 quality_criterias = {
-    "base": "Original dataset",
+    "base": "Original dataset / Length per class",
     "conn_comp":"Connected components",
     "strongly_comp":"Strongly connected components",
     "isolated_nodes":"Isolated nodes",
@@ -118,22 +106,67 @@ currentArea = reactive.value("")
 currentCriterion = reactive.value("")
 currentNbClasses = reactive.value(0)
 
-# Get all areas stored in the bounding box table
-areas = getAllAreas()
+# Get all the area through the bounding box table
+sqlQueryTable = """SELECT * FROM public.bounding_box"""
+
+bounding_box = gpd.GeoDataFrame.from_postgis(sqlQueryTable, engine)
+
+areas = bounding_box['name'].tolist()
+
+areas.sort()
+
+
+@reactive.effect
+@reactive.event(input.submit)
+def getData():
+    # Get input
+    area = input.select_area()
+    criterion = input.select_criterion()
+    
+    # Read and get the value
+    currentAreaValue = currentArea()
+    currentCriterionValue = currentCriterion()
+    
+    # If the area has changed, the data must change too
+    if currentAreaValue != area:
+        # Change the last area chosen
+        currentArea.set(area)
+    
+        # Get data for the Area
+        nodeOSM.set(gpd.GeoDataFrame())
+        edgeOSM.set(gpd.GeoDataFrame())
+        nodeOMF.set(gpd.GeoDataFrame())
+        edgeOMF.set(gpd.GeoDataFrame())
+        
+        nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
+        edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
+        nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
+        edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
+    
+    # If the area changed or the criterion changed, we download the data for the criterion
+    if (currentCriterionValue != criterion) or (currentAreaValue != area):
+        # Change the last criterion chosen
+        currentCriterion.set(criterion)
+        
+        # Empty the variable
+        qualityOSM.set(gpd.GeoDataFrame())
+        qualityOMF.set(gpd.GeoDataFrame())
+        
+        # If the criterion is base, then the data is already download
+        if criterion != "base":
+            
+            osmTable = template_layers_name[criterion]["OSM"][0][0]
+            omfTable = template_layers_name[criterion]["OMF"][0][0]
+            
+            qualityOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
+            qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
 
 ### Add main content ###
+
 # Add icon
 logo = "LM_icon_32-32.png"
 
-# Include CSS
-ui.head_content(
-    ui.tags.link(href="style.css", rel="stylesheet"),
-    ui.tags.link(rel="icon", type="image/png", sizes="32x32", href=str(logo)),
-)
-
-# Get path of help.md and licenses.md files
-pathHelpMD = Path(__file__).parent / "help.md"
-pathLicensesMD = Path(__file__).parent / "licenses.md"
+ui.head_content(ui.tags.link(rel="icon", type="image/png", sizes="32x32", href=str(logo)))
 
 ## Add page title and sidebar
 ui.page_opts(title="OSM and OMF dataset comparison : Japan example",
@@ -142,142 +175,138 @@ ui.page_opts(title="OSM and OMF dataset comparison : Japan example",
              fillable=True
             )
 
-### Sidebar ###
 with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
 
-    ui.input_select("select_area", "Area", choices = areas)
+        ui.input_select("select_area", "Area", choices = areas)
 
-    ui.input_select("select_criterion", "Show", choices = quality_criterias)
-    
-    ui.input_action_button("submit", "Load layers", class_ = "btn btn-outline-warning")
-    
-    with ui.accordion(id="acc", open=True):
-        with ui.accordion_panel("Common styles", class_= "background-grey"):
-            
-            ui.input_numeric("radius_min_pixels", "Radius min pixel", 2, min=1, max=10)
-            
-            ui.input_numeric("width_min_pixels", "Width min pixel", 2, min=1, max=10)
-            
-        with ui.accordion_panel("Style base", class_= "background-grey"):
-            
-            @render_widget
-            def colorPickerPoint():
-                color_picker_point = ipywidgets.ColorPicker(concise=True, description='Point color', value='#0000FF')
-                return color_picker_point
-
-            @render_widget
-            def colorPickerLine():
-                color_picker_line = ipywidgets.ColorPicker(concise=True, description='Line color', value='#FF0000')
-                return color_picker_line
-            
-        with ui.accordion_panel("Style components", class_= "background-grey"):
-            
-            "Choose a color and copy it to the table"
-            
-            @render_widget
-            def colorPickerComponents():
-                color_picker_components = ipywidgets.ColorPicker(id = "color-picker-components")
-                return color_picker_components
-            
-            ui.div(style = "padding: 0.5em;")
-            
-            @render.data_frame
-            def legendComponents():
-                data = {
-                    "Min value":[1, 6, 16, 251],
-                    "Max value":[5, 15, 250, "max"],
-                    "Colors":["#0e9f0e", "#ffa601", "#01f2ff", "#ffd7ad"]
-                }
-                
-                dataFrame = pd.DataFrame(data)
-                
-                # Style of the dataframe
-                stylesDF = [
-                    {
-                        "class":"text-center",
-                        "style": {"th { font-weight": "bold; }"},
-                    },
-                    # Highlight with the good colors
-                    {
-                        "cols": [2],
-                        "rows": [0],
-                        "class":"first-color-df",
-                        "style": {"background-color": data["Colors"][0]},
-                    },
-                    {
-                        "cols": [2],
-                        "rows": [1],
-                        "class":"second-color-df",
-                        "style": {"background-color": data["Colors"][1]},
-                    },
-                    {
-                        "cols": [2],
-                        "rows": [2],
-                        "class":"third-color-df",
-                        "style": {"background-color": data["Colors"][2]},
-                    },
-                    {
-                        "cols": [2],
-                        "rows": [3],
-                        "class":"fourth-color-df",
-                        "style": {"background-color": data["Colors"][3]},
-                    },
-                    
-                ]
-                
-                return render.DataGrid(
-                    dataFrame,
-                    styles = stylesDF,
-                    editable=True
-                )
-            
-        with ui.accordion_panel("Style isolated nodes", class_= "background-grey"):
-            
-            @render_widget
-            def colorPickerIsolated():
-                color_picker_isolated = ipywidgets.ColorPicker(concise=True, description='Isolated nodes color', value='#FF0000')
-                return color_picker_isolated
-
-            @render_widget
-            def colorPickerNotIsolated():
-                color_picker_not_isolated = ipywidgets.ColorPicker(concise=True, description='Non isolated nodes color', value='#00FF00')
-                return color_picker_not_isolated
-            
-        with ui.accordion_panel("Style overlap indicator", class_= "background-grey"):
+        ui.input_select("select_criterion", "Show", choices = quality_criterias)
         
-            @render_widget
-            def colorPickerOverlap():
-                color_picker_overlap = ipywidgets.ColorPicker(concise=True, description='Overlap color', value='#00FF00')
-                return color_picker_overlap
+        ui.input_action_button("submit", "Load layers", class_ = "btn btn-outline-warning")
+        
+        with ui.accordion(id="acc", open=True):
+            with ui.accordion_panel("Common styles", class_= "background-grey"):
+                
+                ui.input_numeric("radius_min_pixels", "Radius min pixel", 2, min=1, max=10)
+                
+                ui.input_numeric("width_min_pixels", "Width min pixel", 2, min=1, max=10)
+                
+            with ui.accordion_panel("Style base", class_= "background-grey"):
+                
+                @render_widget
+                def colorPickerPoint():
+                    color_picker_point = ipywidgets.ColorPicker(concise=True, description='Point color', value='#0000FF')
+                    return color_picker_point
 
-            @render_widget
-            def colorPickerNotOverlap():
-                color_picker_not_overlap = ipywidgets.ColorPicker(concise=True, description='Non overlap color', value='#FF0000')
-                return color_picker_not_overlap
+                @render_widget
+                def colorPickerLine():
+                    color_picker_line = ipywidgets.ColorPicker(concise=True, description='Line color', value='#FF0000')
+                    return color_picker_line
+                
+            with ui.accordion_panel("Style components", class_= "background-grey"):
+                
+                "Choose a color and copy it to the table"
+                
+                @render_widget
+                def colorPickerComponents():
+                    color_picker_components = ipywidgets.ColorPicker()
+                    return color_picker_components
+                
+                @render.data_frame
+                def legendComponents():
+                    data = {
+                        "Min value":[1, 6, 16, 251],
+                        "Max value":[5, 15, 250, "max"],
+                        "Colors":["#0e9f0e", "#ffa601", "#01f2ff", "#ffd7ad"]
+                    }
+                    
+                    dataFrame = pd.DataFrame(data)
+                    
+                    # Style of the dataframe
+                    stylesDF = [
+                        {
+                            "class":"text-center",
+                            "style": {"th { font-weight": "bold; }"},
+                        },
+                        # Highlight with the good colors
+                        {
+                            "cols": [2],
+                            "rows": [0],
+                            "class":"first-color-df",
+                            "style": {"background-color": data["Colors"][0]},
+                        },
+                        {
+                            "cols": [2],
+                            "rows": [1],
+                            "class":"second-color-df",
+                            "style": {"background-color": data["Colors"][1]},
+                        },
+                        {
+                            "cols": [2],
+                            "rows": [2],
+                            "class":"third-color-df",
+                            "style": {"background-color": data["Colors"][2]},
+                        },
+                        {
+                            "cols": [2],
+                            "rows": [3],
+                            "class":"fourth-color-df",
+                            "style": {"background-color": data["Colors"][3]},
+                        },
+                        
+                    ]
+                    
+                    return render.DataGrid(
+                        dataFrame,
+                        styles = stylesDF,
+                        editable=True
+                    )
+                
+            with ui.accordion_panel("Style isolated nodes", class_= "background-grey"):
+                
+                @render_widget
+                def colorPickerIsolated():
+                    color_picker_isolated = ipywidgets.ColorPicker(concise=True, description='Isolated nodes color', value='#FF0000')
+                    return color_picker_isolated
+
+                @render_widget
+                def colorPickerNotIsolated():
+                    color_picker_not_isolated = ipywidgets.ColorPicker(concise=True, description='Non isolated nodes color', value='#00FF00')
+                    return color_picker_not_isolated
+                
+            with ui.accordion_panel("Style overlap indicator", class_= "background-grey"):
             
-        with ui.accordion_panel("Style corresponding nodes", class_= "background-grey"):
-            
-            @render_widget
-            def colorPickerCorresponding():
-                color_picker_corresponding = ipywidgets.ColorPicker(concise=True, description='Corresponding color', value='#00FF00')
-                return color_picker_corresponding
+                @render_widget
+                def colorPickerOverlap():
+                    color_picker_overlap = ipywidgets.ColorPicker(concise=True, description='Overlap color', value='#00FF00')
+                    return color_picker_overlap
 
-            @render_widget
-            def colorPickerNotCorresponding():
-                color_picker_not_corresponding = ipywidgets.ColorPicker(concise=True, description='Non corresponding color', value='#FF0000')
-                return color_picker_not_corresponding
+                @render_widget
+                def colorPickerNotOverlap():
+                    color_picker_not_overlap = ipywidgets.ColorPicker(concise=True, description='Non overlap color', value='#FF0000')
+                    return color_picker_not_overlap
+                
+            with ui.accordion_panel("Style corresponding nodes", class_= "background-grey"):
+                
+                @render_widget
+                def colorPickerCorresponding():
+                    color_picker_corresponding = ipywidgets.ColorPicker(concise=True, description='Corresponding color', value='#00FF00')
+                    return color_picker_corresponding
 
-### Dasboard ###
+                @render_widget
+                def colorPickerNotCorresponding():
+                    color_picker_not_corresponding = ipywidgets.ColorPicker(concise=True, description='Non corresponding color', value='#FF0000')
+                    return color_picker_not_corresponding
+
+## Cards ##
 with ui.nav_panel("Dashboard"):
-    
-    ## Cards ##
     with ui.layout_columns(fill=False):
-        with ui.card():
+        
+        with ui.card(class_ = "card_data"):
             
             ui.card_header(ICONS["nodes"], " Number of nodes")
             
             with ui.layout_column_wrap(width=1 / 2):
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OSM"
                     
                     @render.text
@@ -285,38 +314,38 @@ with ui.nav_panel("Dashboard"):
                         return nodeOSM().shape[0]
                     
                 
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OMF"
                     
                     @render.text
                     def getOMFNodes():
                         return nodeOMF().shape[0]
         
-        with ui.card():
+        with ui.card(class_ = "card_data"):
             
             ui.card_header(ICONS["edges"], " Number of edges")
             
             with ui.layout_column_wrap(width=1 / 2):
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OSM"
                     
                     @render.text
                     def getOSMEdges():
                         return edgeOSM().shape[0]
                 
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OMF"
                     
                     @render.text
                     def getOMFEdges():
                         return edgeOMF().shape[0]
         
-        with ui.card():
+        with ui.card(class_ = "card_data"):
             
             ui.card_header(ICONS["length"], " Total length (in kilometer)")
             
             with ui.layout_column_wrap(width=1 / 2):
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OSM"
                     
                     @render.text
@@ -328,7 +357,7 @@ with ui.nav_panel("Dashboard"):
                             value = round(df["sum"].sum())
                         return value
                 
-                with ui.value_box(class_ = "value-box"):
+                with ui.value_box():
                     "OMF"
                     
                     @render.text
@@ -340,7 +369,6 @@ with ui.nav_panel("Dashboard"):
                             value = round(df["sum"].sum())
                         return value
         
-        
         with ui.panel_conditional("input.select_criterion != 'base'"):
             with ui.card(id = "card_quality_criterion", class_ = "card_data"):
                 
@@ -348,43 +376,32 @@ with ui.nav_panel("Dashboard"):
                     
                     @render.ui
                     def getCardHeader():
-                        return getCardHeader()
+                        return get_card_header()
                 
                 with ui.layout_column_wrap(width=1 / 2):
-                    with ui.value_box(class_ = "value-box"):
+                    with ui.value_box():
                         "OSM"
                         
                         @render.text
                         @reactive.event(input.submit)
                         def getOSMQualityValue():
-                            OSMValue, _ = getCriterionInformation()
+                            OSMValue, OMFValue = getCriterionInformation()
                             return OSMValue
                     
-                    with ui.value_box(class_ = "value-box"):
+                    with ui.value_box():
                         "OMF"
                         
                         @render.text
                         @reactive.event(input.submit)
                         def getOMFQualityValue():
-                            _, OMFValue = getCriterionInformation()
+                            OSMValue, OMFValue = getCriterionInformation()
                             return OMFValue
 
-    ## Maps and dataframes
+## Maps and dataframes
     with ui.layout_columns(col_widths=[6, 6, 6, 6], row_heights=[2, 1]):
-        
-        # Map OSM
         with ui.card(full_screen=True):
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
-                @render.text
-                def getMapHeaderOSM():
-                    if currentCriterion() in quality_criterias:
-                        if currentArea() != "":
-                            header = f"OSM - {currentArea()} : {quality_criterias[currentCriterion()]}"
-                        else:
-                            header = f"OSM - {currentArea()} : {quality_criterias[currentCriterion()]}"
-                    else:
-                        header = "OSM"
-                    return header
+                "OSM Dataset"
 
             @render_widget
             @reactive.event(input.submit)
@@ -432,20 +449,10 @@ with ui.nav_panel("Dashboard"):
                         
                         layers = [layer]
                 return lon.Map(layers = layers)
-        
-        # Map OMF
+
         with ui.card(full_screen=True):
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
-                @render.text
-                def getMapHeaderOMF():
-                    if currentCriterion() in quality_criterias:
-                        if currentArea() != "":
-                            header = f"OMF - {currentArea()} : {quality_criterias[currentCriterion()]}"
-                        else:
-                            header = f"OMF - {currentArea()} : {quality_criterias[currentCriterion()]}"
-                    else:
-                        header = "OMF"
-                    return header
+                "OMF Dataset"
                 
             @render_widget
             @reactive.event(input.submit)
@@ -493,109 +500,28 @@ with ui.nav_panel("Dashboard"):
                 
                 return lon.Map(layers = layers)
 
-        # Dataframe OSM
         with ui.card(full_screen=True):
             
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
-                @render.text
-                def getDFHeaderOSM():
-                    if currentArea() != "":
-                        header = f"OSM: Number of edges and total length (in km) per class in {currentArea()}"
-                    else:
-                        header = "OSM: Number of edges and total length (in km) per class"
-                    return header
+                "OSM"
                 
             @render.data_frame
             def printLengthPerClassOSM():
                 df = getLengthPerClassOSM()
-                df = df.rename(columns = {
-                    "class":"Class",
-                    "sum": "Total length (km)",
-                    "count":"Number of entity",
-                })
                 return render.DataGrid(df.round(2), selection_mode="rows") 
-
-        # Dataframe OMF
+            
+            
         with ui.card(full_screen=True):
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
-                @render.text
-                def getDFHeaderOMF():
-                    if currentArea() != "":
-                        header = f"OMF: Number of edges and total length (in km) per class in {currentArea()}"
-                    else:
-                        header = "OMF: Number of edges and total length (in km) per class"
-                    return header
+                "OMF"
             
             @render.data_frame
             def printLengthPerClassOMF():
                 df = getLengthPerClassOMF()
-                df = df.rename(columns = {
-                    "class":"Class",
-                    "sum": "Total length (km)",
-                    "count":"Number of entity",
-                })
                 return render.DataGrid(df.round(2), selection_mode="rows")
-
-### Help ###
-with ui.nav_panel("Help"):
-    with open(pathHelpMD, 'r') as f:
-        helpMD = f.read()
-    ui.markdown(helpMD)
-
-### Ressources ###
-with ui.nav_panel("Licenses"):
-    with open(pathLicensesMD, 'r') as f:
-        licensesMD = f.read()
-    ui.markdown(licensesMD)
-
-with ui.nav_control():
-    ui.input_dark_mode()
-
-### Reactive functions and calculations ###
-@reactive.effect
-@reactive.event(input.submit)
-def getData():
-    # Get input
-    area = input.select_area()
-    criterion = input.select_criterion()
-    
-    # Read and get the value
-    currentAreaValue = currentArea()
-    currentCriterionValue = currentCriterion()
-    
-    # If the area has changed, the data must change too
-    if currentAreaValue != area:
-        # Change the last area chosen
-        currentArea.set(area)
-    
-        # Get data for the Area
-        nodeOSM.set(gpd.GeoDataFrame())
-        edgeOSM.set(gpd.GeoDataFrame())
-        nodeOMF.set(gpd.GeoDataFrame())
-        edgeOMF.set(gpd.GeoDataFrame())
         
-        nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
-        edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
-        nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
-        edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
-    
-    # If the area changed or the criterion changed, we download the data for the criterion
-    if (currentCriterionValue != criterion) or (currentAreaValue != area):
-        # Change the last criterion chosen
-        currentCriterion.set(criterion)
-        
-        # Empty the variable
-        qualityOSM.set(gpd.GeoDataFrame())
-        qualityOMF.set(gpd.GeoDataFrame())
-        
-        # If the criterion is base, then the data is already download
-        if criterion != "base":
-            
-            osmTable = template_layers_name[criterion]["OSM"][0][0]
-            omfTable = template_layers_name[criterion]["OMF"][0][0]
-            
-            qualityOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
-            qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+with ui.nav_panel("Ressources"):
+    "lol B"
 
 
 @reactive.calc
@@ -617,6 +543,13 @@ def getLengthPerClassOSM():
         gdfSumup.reset_index(inplace=True)
     
     return gdfSumup
+
+@reactive.calc
+def get_card_header():
+    if currentCriterion() != "base" and currentCriterion() != "":
+        return ICONS[currentCriterion()], f" {quality_criterias[currentCriterion()]}"
+    else:
+        return ""
     
 @reactive.calc
 @reactive.event(input.submit)
@@ -639,13 +572,6 @@ def getLengthPerClassOMF():
     
     return gdfSumup
 
-
-@reactive.calc
-def getCardHeader():
-    if currentCriterion() != "base" and currentCriterion() != "":
-        return ICONS[currentCriterion()], f" {quality_criterias[currentCriterion()]}"
-    else:
-        return ""
 
 @reactive.calc
 @reactive.event(input.submit)
@@ -1065,3 +991,4 @@ def getColorComponents(cardinality:int,
     else:
         color = data[3][2]
     return color
+

@@ -163,6 +163,8 @@ python-dateutil==2.9.0.post0
     #   matplotlib
     #   pandas
     #   shinywidgets
+python-dotenv==1.0.1
+    # via -r Requirements\requirements_shiny.in
 python-multipart==0.0.9
     # via shiny
 pytz==2024.1
