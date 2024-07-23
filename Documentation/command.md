@@ -1,14 +1,29 @@
 # Useful commands
 
-## Create virtual environnment
+- [Useful commands](#useful-commands)
+  - [Virtual environnment](#virtual-environnment)
+    - [Delete directory](#delete-directory)
+    - [Create and activate virtual environment](#create-and-activate-virtual-environment)
+    - [Ugrade pip](#ugrade-pip)
+    - [Install dependencies](#install-dependencies)
+  - [Push to a new branch on github](#push-to-a-new-branch-on-github)
+  - [Install act (tool to run github actions locally)](#install-act-tool-to-run-github-actions-locally)
+    - [Install scoop](#install-scoop)
+    - [Install act](#install-act)
+    - [Install docker](#install-docker)
+    - [Install wls](#install-wls)
+  - [Path of python in windows](#path-of-python-in-windows)
 
-**Delete directory**
+
+## Virtual environnment
+
+### Delete directory
 
 ```console
 rmdir /S /Q .venv 
 ```
 
-**Create and activate virtual environment**
+### Create and activate virtual environment
 
 ```console
 python -m venv .venv
@@ -24,10 +39,18 @@ To activate the virtual environnment:
 To deactivate it:
 
 ```console
-.venv\Scripts\activate
+.venv\Scripts\deactivate.bat
 ```
 
-## Install dependencies
+### Ugrade pip
+
+```console
+python.exe -m pip install --upgrade pip
+```
+
+### Install dependencies
+
+Replace `requirements.in` by the name of your requirements file.
 
 ```console
 pip install pip-tools
@@ -51,7 +74,7 @@ git push --set-upstream origin tests_functions
 
 Following this document : https://gist.github.com/sweetlilmre/758818d0b2a0fdfd79595e396d1e608d.
 
-**Install scoop**
+### Install scoop
 
 In a powershell command
 
@@ -60,22 +83,30 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
 ```
 
-**Install act**
+### Install act
+
 ```console
 scoop bucket add main
 scoop install main/act
 ```
 
-**Install docker**
+### Install docker
 
 On this website : https://www.docker.com/products/docker-desktop/
 
 Download the installer and follow the procedure
 
-**Install wls**
+### Install wls
 
 ```console
 wsl --install
 ```
 
 Then type your username and password (mathis for both).
+
+## Path of python in windows
+
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python312\Scripts\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python312\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python310\Scripts\
+C:\Users\Mathis.Rouillard\AppData\Local\Programs\Python\Python310\

@@ -1,0 +1,7 @@
+streamlit==1.36.0
+sqlalchemy==2.0.31
+psycopg2==2.9.9
+geopandas==1.0.1
+owslib==0.31.0
+plotly==5.22.0
+leafmap==0.35.9
