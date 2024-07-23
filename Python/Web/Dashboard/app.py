@@ -56,7 +56,7 @@ radiusMinPixels = 2
 widthMinPixels = 2
 
 quality_criterias = {
-    "base": "Original dataset",
+    "base":"Original dataset",
     "conn_comp":"Connected components",
     "strongly_comp":"Strongly connected components",
     "isolated_nodes":"Isolated nodes",
@@ -101,6 +101,7 @@ ICONS = {
     "isolated_nodes":fa.icon_svg("circle-dot"),
     "overlap_indicator":fa.icon_svg("grip-lines"),
     "corresponding_nodes":fa.icon_svg("clone"),
+    "github":fa.icon_svg("github", height="2em", width="2em"),
 }
 
 # GeoDataFrame with the node and edge of the area
@@ -121,14 +122,63 @@ currentNbClasses = reactive.value(0)
 # Get all areas stored in the bounding box table
 areas = getAllAreas()
 
+
+### Reactive functions and calculations ###
+@reactive.effect
+@reactive.event(input.submit)
+def getData():
+    # Get input
+    area = input.select_area()
+    criterion = input.select_criterion()
+    
+    # Read and get the value
+    currentAreaValue = currentArea()
+    currentCriterionValue = currentCriterion()
+    
+    # If the area has changed, the data must change too
+    if currentAreaValue != area:
+        # Change the last area chosen
+        currentArea.set(area)
+    
+        # Get data for the Area
+        nodeOSM.set(gpd.GeoDataFrame())
+        edgeOSM.set(gpd.GeoDataFrame())
+        nodeOMF.set(gpd.GeoDataFrame())
+        edgeOMF.set(gpd.GeoDataFrame())
+        
+        nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
+        edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
+        nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
+        edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
+    
+    # If the area changed or the criterion changed, we download the data for the criterion
+    if (currentCriterionValue != criterion) or (currentAreaValue != area):
+        # Change the last criterion chosen
+        currentCriterion.set(criterion)
+        
+        # Empty the variable
+        qualityOSM.set(gpd.GeoDataFrame())
+        qualityOMF.set(gpd.GeoDataFrame())
+        
+        # If the criterion is base, then the data is already download
+        if criterion != "base":
+            
+            osmTable = template_layers_name[criterion]["OSM"][0][0]
+            omfTable = template_layers_name[criterion]["OMF"][0][0]
+            
+            qualityOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
+            qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+
+
 ### Add main content ###
 # Add icon
 logo = "LM_icon_32-32.png"
+logo_omf = "logo-omf.png"
 
 # Include CSS
 ui.head_content(
     ui.tags.link(href="style.css", rel="stylesheet"),
-    ui.tags.link(rel="icon", type="image/png", sizes="32x32", href=str(logo)),
+    ui.tags.link(rel="icon", type="image/png", sizes="32x32", href=logo),
 )
 
 # Get path of help.md and licenses.md files
@@ -136,11 +186,16 @@ pathHelpMD = Path(__file__).parent / "help.md"
 pathLicensesMD = Path(__file__).parent / "licenses.md"
 
 ## Add page title and sidebar
-ui.page_opts(title="OSM and OMF dataset comparison : Japan example",
-             full_width=True,
-             window_title="Test Dashboard shiny / lonboard",
-             fillable=True
-            )
+ui.page_opts(
+    title="OpenStreetMap (OSM) and Overture Maps Fundation (OMF) dataset comparison : Japan example",
+    full_width=True,
+    window_title="Test Dashboard shiny / lonboard",
+    fillable=True
+)
+
+### Switch dark / light mode ###
+with ui.nav_control():
+    ui.input_dark_mode()
 
 ### Sidebar ###
 with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
@@ -538,65 +593,61 @@ with ui.nav_panel("Dashboard"):
 
 ### Help ###
 with ui.nav_panel("Help"):
-    with open(pathHelpMD, 'r') as f:
+    with open(pathHelpMD, 'r', encoding="utf-8") as f:
         helpMD = f.read()
     ui.markdown(helpMD)
 
 ### Ressources ###
 with ui.nav_panel("Licenses"):
-    with open(pathLicensesMD, 'r') as f:
+    with open(pathLicensesMD, 'r', encoding="utf-8") as f:
         licensesMD = f.read()
     ui.markdown(licensesMD)
 
+### Links ###
 with ui.nav_control():
-    ui.input_dark_mode()
+    ui.a(
+        ui.img(
+            src=logo,
+            alt="LocationMind Inc. logo",
+            style="width:32px;height:32px;"
+        ),
+        href = "https://locationmind.com",
+        target = "_blank",
+        rel = "noopener noreferrer"
+    )
+    
+with ui.nav_control():
+    ui.a(
+        ICONS["github"],
+        href = "https://github.com/LocationMind/OSM_Overture_Works",
+        target = "_blank",
+        rel = "noopener noreferrer"
+    )
 
-### Reactive functions and calculations ###
-@reactive.effect
-@reactive.event(input.submit)
-def getData():
-    # Get input
-    area = input.select_area()
-    criterion = input.select_criterion()
-    
-    # Read and get the value
-    currentAreaValue = currentArea()
-    currentCriterionValue = currentCriterion()
-    
-    # If the area has changed, the data must change too
-    if currentAreaValue != area:
-        # Change the last area chosen
-        currentArea.set(area)
-    
-        # Get data for the Area
-        nodeOSM.set(gpd.GeoDataFrame())
-        edgeOSM.set(gpd.GeoDataFrame())
-        nodeOMF.set(gpd.GeoDataFrame())
-        edgeOMF.set(gpd.GeoDataFrame())
-        
-        nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
-        edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
-        nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
-        edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
-    
-    # If the area changed or the criterion changed, we download the data for the criterion
-    if (currentCriterionValue != criterion) or (currentAreaValue != area):
-        # Change the last criterion chosen
-        currentCriterion.set(criterion)
-        
-        # Empty the variable
-        qualityOSM.set(gpd.GeoDataFrame())
-        qualityOMF.set(gpd.GeoDataFrame())
-        
-        # If the criterion is base, then the data is already download
-        if criterion != "base":
-            
-            osmTable = template_layers_name[criterion]["OSM"][0][0]
-            omfTable = template_layers_name[criterion]["OMF"][0][0]
-            
-            qualityOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
-            qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+with ui.nav_control():
+    ui.a(
+        ui.img(
+            src="https://upload.wikimedia.org/wikipedia/commons/thumb/b/b0/Openstreetmap_logo.svg/32px-Openstreetmap_logo.svg.png?20220919103849",
+            alt="OpenStreetMaps logo",
+            style="width:32px;height:32px;",
+        ),
+        href = "https://openstreetmaps.org",
+        target = "_blank",
+        rel = "noopener noreferrer",
+        title = "Ken Vermette based on https://commons.wikimedia.org/wiki/File:OpenStreetMap-Logo-2006.svg, CC BY-SA 2.0 &lt;https://creativecommons.org/licenses/by-sa/2.0&gt;, via Wikimedia Commons"
+    )
 
+with ui.nav_control():
+    ui.a(
+        ui.img(
+            src = logo_omf,
+            alt="Overture Maps Fundation logo",
+            style="width:32px;height:32px;"
+        ),
+        href = "https://overturemaps.org/",
+        target = "_blank",
+        rel = "noopener noreferrer",
+    )
 
 @reactive.calc
 @reactive.event(input.submit)
@@ -757,20 +808,15 @@ def getCorrespondingNodes(gdf:gpd.GeoDataFrame,
 
 ## Handle dataframe modification
 @legendComponents.set_patches_fn
-def patchesFn(*, patches: list[render.CellPatch]):
+async def patchesFn(*, patches: list[render.CellPatch]):
     # Get former data
-    originalData = legendComponents.data()
     currentData = legendComponents.data_view()
-    
     currentData = currentData.values.tolist()
-    originalData = originalData.values.tolist()
     
     returnPatches = []
-    
-    
-    
-    # Check if first min value and last max value are different
-    if (originalData[0][0] != currentData[0][0]) and (originalData[-1][1] != currentData[-1][1]):
+    # Check if the data view is sorted
+    if legendComponents.sort():
+        await legendComponents.update_sort(None)
         return returnPatches
     
     # Else, we check the changes

@@ -95,5 +95,17 @@
         background-color: black;
     }
 
+    code {
+        background-color: #323232;
+    }
 
+}
+
+div[data-value="Help"] *a, div[data-value="Licenses"] p a {
+    color: red;
+}
+
+.navbar>.container-fluid {
+    flex-direction: row-reverse;
+    -webkit-flex-direction: row-reverse;
 }
