@@ -220,6 +220,7 @@ def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
     
     return bi
 
+
 def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
                             area:str,
                             schema:str = 'public',
@@ -303,6 +304,7 @@ def aggregateBiRoads(bi:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     
     return bi_without_parallel
 
+
 def createGeomIndex(connection:psycopg2.extensions.connection,
                     area:str,
                     schema:str = "public"):
@@ -320,6 +322,7 @@ def createGeomIndex(connection:psycopg2.extensions.connection,
     """
     
     utils.executeQueryWithTransaction(connection, sql_create_index)
+
 
 def createMappedClasses(connection:psycopg2.extensions.connection,
                         area:str,
@@ -371,6 +374,7 @@ def createMappedClasses(connection:psycopg2.extensions.connection,
     
     utils.executeQueryWithTransaction(connection, sql_class_omf)
 
+
 if __name__ == "__main__":
     import json
     import os
@@ -399,136 +403,143 @@ if __name__ == "__main__":
     
     # Create tables for each bbox
     for elem in bboxJson["bboxs"]:
+        
         # Get and create the element we need from the json
         bbox = elem["bbox"]
         area = elem["area"].lower()
         
-        edgeTable = f"edge_{area}"
-        nodeTable = f"node_{area}"
+        # Check if the area is already done
+        if not utils.isProcessAlreadyDone(connection, area, schema):
         
-        end = time.time()
-        print(f"Start download {area} :  {end - start} seconds")
+            edgeTable = f"edge_{area}"
+            nodeTable = f"node_{area}"
+            
+            end = time.time()
+            print(f"Start download {area} :  {end - start} seconds")
     
-        ## Download data with OSMnx
-        # Get network data for a specific bbox
-        node, edge = downloadOSMData(bbox)
-        
-        end = time.time()
-        print(f"Load graph : {end - start} seconds")
+            ## Download data with OSMnx
+            # Get network data for a specific bbox
+            node, edge = downloadOSMData(bbox)
+            
+            end = time.time()
+            print(f"Load graph : {end - start} seconds")
 
-        # Save nodes to postgresql by renaming the osmid column
-        node.to_postgis(nodeTable, engine, if_exists="replace", schema=schema, index=True, index_label="id")
+            # Save nodes to postgresql by renaming the osmid column
+            node.to_postgis(nodeTable, engine, if_exists="replace", schema=schema, index=True, index_label="id")
 
-        end = time.time()
-        print(f"Save node to postgis : {end - start} seconds")
+            end = time.time()
+            print(f"Save node to postgis : {end - start} seconds")
 
-        # Save edges to postgresql
-        edge.to_postgis(edgeTable, engine, if_exists="replace", schema=schema, index=True)
+            # Save edges to postgresql
+            edge.to_postgis(edgeTable, engine, if_exists="replace", schema=schema, index=True)
 
-        end = time.time()
-        print(f"Save edge to postgis : {end - start} seconds")
-        
-        # Add missing columns if needed to the edge table
-        addMissingColumns(connection, edgeTable, schema=schema)
-        
-        end = time.time()
-        print(f"Add missing columns took {end - start} seconds")
-        
-        # Create table to aggregate parallel edges
-        createTableToAggregateEdges(connection, edgeTable, area, schema)
-        
-        end = time.time()
-        print(f"Execute query took {end - start} seconds")
-        
-        # Get bidirectional and unidirectional roads
-        bi = getBidirectionalRoads(engine, area, schema)
-        
-        end = time.time()
-        print(f"Bidirectional roads took {end - start} seconds")
-        
-        uni = getUnidirectionalRoads(engine, area, schema)
+            end = time.time()
+            print(f"Save edge to postgis : {end - start} seconds")
+            
+            # Add missing columns if needed to the edge table
+            addMissingColumns(connection, edgeTable, schema=schema)
+            
+            end = time.time()
+            print(f"Add missing columns took {end - start} seconds")
+            
+            # Create table to aggregate parallel edges
+            createTableToAggregateEdges(connection, edgeTable, area, schema)
+            
+            end = time.time()
+            print(f"Execute query took {end - start} seconds")
+            
+            # Get bidirectional and unidirectional roads
+            bi = getBidirectionalRoads(engine, area, schema)
+            
+            end = time.time()
+            print(f"Bidirectional roads took {end - start} seconds")
+            
+            uni = getUnidirectionalRoads(engine, area, schema)
 
-        end = time.time()
-        print(f"Unidirectional roads took {end - start} seconds")
-        
-        # Agregate bidirectional roads into one
-        bi_without_parallel = aggregateBiRoads(bi)
+            end = time.time()
+            print(f"Unidirectional roads took {end - start} seconds")
+            
+            # Agregate bidirectional roads into one
+            bi_without_parallel = aggregateBiRoads(bi)
 
-        end = time.time()
-        print(f"Removing parallel edges took {end - start} seconds")
+            end = time.time()
+            print(f"Removing parallel edges took {end - start} seconds")
 
-        # We concatenate the two dataframes to recreate the whole road network
-        edge_with_cost = pd.concat([bi_without_parallel, uni])
+            # We concatenate the two dataframes to recreate the whole road network
+            edge_with_cost = pd.concat([bi_without_parallel, uni])
 
-        end = time.time()
-        print(f"Concat dataframes took {end - start} seconds")
+            end = time.time()
+            print(f"Concat dataframes took {end - start} seconds")
 
-        # Rename useful columns
-        edge_with_cost = edge_with_cost.rename(
-            columns= {"id1":"original_id",
-                    "u1":"source",
-                    "v1":"target",
-                    "geom1":"geom",
-                    "osmid1":"osmid",
-                    "oneway1":"oneway",
-                    "ref1":"ref",
-                    "name1":"name",
-                    "highway1":"highway",
-                    "lanes1":"lanes",
-                    "maxspeed1":"maxspeed",
-                    "access1":"access",
-                    "bridge1":"bridge",
-                    "tunnel1":"tunnel",
-                    "service1":"service",
-                    "footway1":"footway",
-                    "abutters1":"abutters",
-                    "width1":"width",
-                    "junction1":"junction"})
-        
-        # Keep only these columns
-        edge_with_cost = edge_with_cost[[
-            "original_id",
-            "source",
-            "target",
-            "cost",
-            "reverse_cost",
-            "geom",
-            "osmid",
-            "oneway",
-            "ref",
-            "name",
-            "highway",
-            "lanes",
-            "maxspeed",
-            "access",
-            "bridge",
-            "tunnel",
-            "service",
-            "footway",
-            "abutters",
-            "width",
-            "junction"]]
+            # Rename useful columns
+            edge_with_cost = edge_with_cost.rename(
+                columns= {"id1":"original_id",
+                        "u1":"source",
+                        "v1":"target",
+                        "geom1":"geom",
+                        "osmid1":"osmid",
+                        "oneway1":"oneway",
+                        "ref1":"ref",
+                        "name1":"name",
+                        "highway1":"highway",
+                        "lanes1":"lanes",
+                        "maxspeed1":"maxspeed",
+                        "access1":"access",
+                        "bridge1":"bridge",
+                        "tunnel1":"tunnel",
+                        "service1":"service",
+                        "footway1":"footway",
+                        "abutters1":"abutters",
+                        "width1":"width",
+                        "junction1":"junction"})
+            
+            # Keep only these columns
+            edge_with_cost = edge_with_cost[[
+                "original_id",
+                "source",
+                "target",
+                "cost",
+                "reverse_cost",
+                "geom",
+                "osmid",
+                "oneway",
+                "ref",
+                "name",
+                "highway",
+                "lanes",
+                "maxspeed",
+                "access",
+                "bridge",
+                "tunnel",
+                "service",
+                "footway",
+                "abutters",
+                "width",
+                "junction"]]
 
-        # Set the geometry to the geom column
-        edge_with_cost = edge_with_cost.set_geometry("geom")
-        
-        # Load dataframe into postgis table
-        edge_with_cost.to_postgis(f"edge_with_cost_{area}", engine, if_exists="replace", index=True, index_label = 'id', schema = schema)
-        
-        end = time.time()
-        print(f"Edge with cost to postgis took {end - start} seconds")
-        
-        # Create geom index
-        createGeomIndex(connection, area, schema)
-        
-        end = time.time()
-        print(f"Geom index with cost to postgis took {end - start} seconds")
-        
-        # Create mapped classes
-        createMappedClasses(connection, area, schema)
-        
-        end = time.time()
-        print(f"Create mapped classes took {end - start} seconds")
-        
-        end = time.time()
-        print(f"Download {area} took {end - start} seconds")
+            # Set the geometry to the geom column
+            edge_with_cost = edge_with_cost.set_geometry("geom")
+            
+            # Load dataframe into postgis table
+            edge_with_cost.to_postgis(f"edge_with_cost_{area}", engine, if_exists="replace", index=True, index_label = 'id', schema = schema)
+            
+            end = time.time()
+            print(f"Edge with cost to postgis took {end - start} seconds")
+            
+            # Create geom index
+            createGeomIndex(connection, area, schema)
+            
+            end = time.time()
+            print(f"Geom index with cost to postgis took {end - start} seconds")
+            
+            # Create mapped classes
+            createMappedClasses(connection, area, schema)
+            
+            end = time.time()
+            print(f"Create mapped classes took {end - start} seconds")
+            
+            end = time.time()
+            print(f"Download {area} took {end - start} seconds")
+            
+        else:
+            print(f"{area} has already been downloaded")

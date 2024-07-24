@@ -4,3 +4,4 @@ cache/
 .streamlit/
 tiles
 other.py
+.temp

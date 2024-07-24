@@ -907,7 +907,8 @@ if __name__ == "__main__":
     
     # Path to save the results
     # fileName = f"Automatic_result_{dateTime}.md"
-    fileName = "Automatic_result.md"
+    # fileName = "Automatic_result.md"
+    fileName = "Automatic_result_paris.md"
     pathSave = os.path.join(".", "Data", "Results", fileName)
     
     # Connect to the database and give table template for OSM and OMF dataset
@@ -924,6 +925,7 @@ if __name__ == "__main__":
     
     # List of area names to assess quality
     listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka', 'tateyama', 'tokyo']
+    listArea = ['paris']
     
     # Variable for markdown results
     mappingResult = "### Total kilometer of roads by class"
