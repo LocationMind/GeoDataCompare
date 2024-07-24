@@ -18,35 +18,311 @@ from matplotlib.colors import is_color_like, to_hex, to_rgb
 from dotenv import load_dotenv
 import os
 
-def getEngine():
+
+### Functions used in the rest of the script ###
+def getEngine() -> sqlalchemy.engine.base.Engine:
+    """Get engine from .env file.
+    This file must be in the same folder than the app.py script.
+
+    Returns:
+        sqlalchemy.engine.base.Engine:
+        Engine used for (geo)pandas sql queries.
+    """
+    # Create .env path
     dotenv_path =  Path(__file__).parent / ".env"
-
-    ## Read environnment variable
+    
+    # Read environnment variables
     load_dotenv(dotenv_path)
-
+    
     database = os.getenv("POSTGRES_DATABASE")
     host = os.getenv("POSTGRES_HOST")
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
     port = os.getenv("POSTGRES_PORT")
-
+    
+    # Create engine
     engine = sqlalchemy.create_engine(f"postgresql://{user}:{password}@{host}:{port}/{database}")
     return engine
 
 
 def getAllAreas(columnName:str = "name",
                 tableName:str = "bounding_box",
-                schema:str = "public"):
+                schema:str = "public") -> list[str]:
+    """Get all areas stored in the `bounding_box` table.
+
+    Args:
+        columnName (str, optional): Name of the column. Defaults to "name".
+        tableName (str, optional): Name of the table. Defaults to "bounding_box".
+        schema (str, optional): Name of the schema. Defaults to "public".
+
+    Returns:
+        list[str]: Sorted list of the different areas.
+    """    
     # Get all the area through the bounding box table
     sqlQueryTable = f"""SELECT * FROM {schema}.{tableName}"""
 
     bounding_box = gpd.GeoDataFrame.from_postgis(sqlQueryTable, engine)
     
-    # Convert the dataframe to a list
+    # Convert the DataFrame to a list and sort it
     areas = bounding_box[columnName].tolist()
     areas.sort()
     
     return areas
+
+
+def getLengthPerClass(edgeGDF:gpd.GeoDataFrame,
+                      crs:int) -> pd.DataFrame:
+    """Return a DataFrame with length and number of edges per classes.
+
+    Args:
+        edgeGDF (gpd.GeoDataFrame): edge GeoDataFrame
+
+    Returns:
+        pd.DataFrame: Dataframe with values for each classes
+    """
+    # Copy the DataFrame to prevent problems
+    edgeCopy = edgeGDF.copy()
+    # If it is empty, create an empty DataFrame
+    if edgeCopy.empty:
+        gdfSumup = pd.DataFrame()
+    else:
+        # Set geometry column and project to another crs
+        edgeCopy = edgeCopy.set_geometry("geom")
+        gdfProj = edgeCopy.to_crs(crs)
+        
+        # Calculate length based on the projected geometry in km
+        edgeCopy['length'] = gdfProj['geom'].length / 1000
+        
+        # Agregate per class and calculate the sum and count for each class
+        gdfSumup = edgeCopy[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
+        
+        # Reset index to export class
+        gdfSumup.reset_index(inplace=True)
+    
+    return gdfSumup
+
+
+def getGroupByComp(gdf:gpd.GeoDataFrame,
+                   column:str = "component") -> str:
+    """Get indicator value for (strongly) connected components criterion.
+    Aggregate the GeoDataFrame on the given column and count the number
+    of aggregation.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame for the criterion.
+        column (str, optional): Name of the column to aggregate on.
+        Defaults to "component".
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Missing value if the GeoDataFrame is empty
+    if gdf.empty:
+        value = ""
+
+    else:
+        # Aggregate on the column and count the number of aggregation
+        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        
+        # Reset index and take the number
+        gdfSumup.reset_index(inplace=True)
+        value = gdfSumup.shape[0]
+    
+    return str(value)
+    
+
+def getNbElem(gdf:gpd.GeoDataFrame,
+              column:str = "intersects") -> str:
+    """Get indicator value for isolated nodes criterion.
+    Aggregate the GeoDataFrame on the given column and count the number
+    of row that do not intersects.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame for the criterion.
+        column (str, optional): Name of the column to aggregate on.
+        Defaults to "intersects".
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Missing value if the GeoDataFrame is empty
+    if gdf.empty:
+        value = ""
+
+    else:
+        # Aggregate on the column and count the number of aggregation
+        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        
+        # Reset index
+        gdfSumup.reset_index(inplace=True)
+        value = 0
+        
+        for _, row in gdfSumup.iterrows():
+            # Take the number of nodes that do not intersects
+            if row[column] == False:
+                value = row['count']
+    
+    return str(value)
+
+
+def getOverlapIndicator(gdf:gpd.GeoDataFrame,
+                        column:str = "overlap") -> str:
+    """Get indicator value for the overlap indicator criterion.
+    Calculate the total length of overlapping roads and return
+    the proportion of length overlapping over the total length.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame for the criterion.
+        column (str, optional): Name of the column to aggregate on.
+        Defaults to "overlap".
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Copy the GeoDataFrame to prevent error
+    gdfCopy = gdf.copy()
+
+    # Missing value if the GeoDataFrame is empty
+    if gdfCopy.empty:
+        value = ""
+        
+    else:
+        # Set geometry column
+        gdfCopy = gdfCopy.set_geometry("geom")
+        
+        # Get crs for the area and project to this crs
+        crs = areasCRS[currentArea()]
+        gdfProj = gdfCopy.to_crs(crs)
+        
+        # Calculate length based on the projected geometry in km
+        gdfCopy['length'] = gdfProj['geom'].length / 1000
+        
+        # Agregate per class and calculate sum for each class
+        gdfSumup = gdfCopy[[column, 'length']].groupby(column)['length'].agg(['sum'])
+        
+        # Reset index to export class
+        gdfSumup.reset_index(inplace=True)
+        
+        # Get overlapping length and total length
+        overlapLength = 0
+        totalLength = 0
+        
+        for _, row in gdfSumup.iterrows():
+            if row[column] == True:
+                overlapLength = row['sum']
+            totalLength += row['sum']
+        
+        # Calculate the proporion in %
+        value = round((overlapLength / totalLength) * 100, 2)
+        value = f"{value} %"
+    
+    return str(value)
+
+
+def getCorrespondingNodes(gdf:gpd.GeoDataFrame,
+                          column:str = "intersects") -> str:
+    """Get indicator value for the corresponding nodes criterion.
+    Calculate the total number of corresponding nodes and return
+    a string with this number and the proportion of corresponding
+    nodes in the dataset.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame for the criterion.
+        column (str, optional): Name of the column to aggregate on.
+        Defaults to "intersects".
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Copie the GeoDataFrame to prevent error
+    if gdf.empty:
+        value = ""
+
+    else:
+        # Aggregate on the column and count the number of rows
+        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        
+        # Reset index
+        gdfSumup.reset_index(inplace=True)
+        
+        # Get number of corresponding nodes and number of total nodes
+        totalNodes = 0
+        correspondingNodes = 0
+        for _, row in gdfSumup.iterrows():
+            if row[column] == True:
+                correspondingNodes = row['count']
+            totalNodes += row['count']
+        
+        # Calculate proportion and create string value
+        percentage = round((correspondingNodes / totalNodes) * 100, 2)
+        value = f"{correspondingNodes} - {percentage} %"
+    
+    return str(value)
+
+
+def getColorFromColorPicker(
+    widgetName:render_widget[ipywidgets.ColorPicker]) -> list[int, int, int]:
+    """Get color from color picker and convert it to a RGB list.
+
+    Args:
+        widgetName (render_widget[ipywidgets.ColorPicker]):
+        Name of the color picker widget.
+
+    Returns:
+        list[int, int, int]: RGB values stores as a list.
+    """
+    # Read value
+    hex = reactive_read(widgetName.widget, "value")
+    
+    # Transforme value to a RGB list by reading value as int in base 16
+    color = list(int(hex[i:i+2], 16) for i in (1, 3, 5))
+    return color
+
+
+def hexToRgb255(hex:str) -> list[int, int, int]:
+    """Convert a hew value (str) to a list of RGB values.
+    Each value is an integer between 0 and 255.
+
+    Args:
+        hex (str): hex value
+
+    Returns:
+        list[int, int, int]: RGB Values between 0 and 255.
+    """
+    rgb = to_rgb(hex)
+    return [int (255 * x) for x in rgb]
+
+
+def getColorComponents(cardinality:int,
+                       data:list) -> list[int, int, int]:
+    """Get color for components layers.
+
+    Args:
+        cardinality (int): Cardinality of the component.
+        data (list): List representing the component DataFrame.
+
+    Returns:
+        list[int, int, int]: Color as a RGB list values.
+    """
+    # First color
+    if data[0][0] <= cardinality <= data[0][1]:
+        color = data[0][2]
+    # Second color
+    if data[1][0] <= cardinality <= data[1][1]:
+        color = data[1][2]
+    # Third color
+    if data[2][0] <= cardinality <= data[2][1]:
+        color = data[2][2]
+    # Last color
+    else:
+        color = data[3][2]
+    return color
+
+
+
+### Variables used in the application ###
+
+## Constant values ##
 
 # Engine for geodatframe query
 engine = getEngine()
@@ -55,7 +331,8 @@ engine = getEngine()
 radiusMinPixels = 2
 widthMinPixels = 2
 
-quality_criterias = {
+# Dict of the different criterion
+quality_criteria = {
     "base":"Original dataset",
     "conn_comp":"Connected components",
     "strongly_comp":"Strongly connected components",
@@ -64,6 +341,7 @@ quality_criterias = {
     "corresponding_nodes":"Corresponding nodes",
 }
 
+# Template name of layers per criterion
 template_layers_name = {
     "base": {
         "OSM" : [("osm.node_{}", "Point"), ("osm.edge_with_cost_{}", "LineString")],
@@ -91,6 +369,7 @@ template_layers_name = {
     },
 }
 
+# Icons from font-awesome
 ICONS = {
     "nodes": fa.icon_svg("circle-nodes"),
     "edges": fa.icon_svg("road"),
@@ -104,6 +383,23 @@ ICONS = {
     "github":fa.icon_svg("github", height="2em", width="2em"),
 }
 
+# Areas stored in the bounding box table
+areas = getAllAreas()
+
+# Dict with crs for each area
+areasCRS = {}
+for area in areas:
+    if area == "Paris":
+        crs = 2154
+    else:
+        crs = 6691
+    areasCRS[area] = crs
+
+# Get path of help.md and licenses.md files (used after)
+pathHelpMD = Path(__file__).parent / "help.md"
+pathLicensesMD = Path(__file__).parent / "licenses.md"
+
+## Reactive values ##
 # GeoDataFrame with the node and edge of the area
 nodeOSM = reactive.value()
 edgeOSM = reactive.value()
@@ -114,19 +410,25 @@ edgeOMF = reactive.value()
 qualityOSM = reactive.value(gpd.GeoDataFrame())
 qualityOMF = reactive.value(gpd.GeoDataFrame())
 
+# DataFrame for the number of edges / length per class
+classesOSM = reactive.value(pd.DataFrame())
+classesOMF = reactive.value(pd.DataFrame())
+
 # Variable for the last area and criterion chosen
 currentArea = reactive.value("")
 currentCriterion = reactive.value("")
 currentNbClasses = reactive.value(0)
 
-# Get all areas stored in the bounding box table
-areas = getAllAreas()
 
-
-### Reactive functions and calculations ###
+# This function must be before the main script to be launched before the maps
 @reactive.effect
 @reactive.event(input.submit)
 def getData():
+    """Reactive function triggered by the submit button event.
+    
+    Calculate the data used in the rest of the application, depending
+    on the area and criterion values.
+    """
     # Get input
     area = input.select_area()
     criterion = input.select_criterion()
@@ -137,22 +439,36 @@ def getData():
     
     # If the area has changed, the data must change too
     if currentAreaValue != area:
+        
         # Change the last area chosen
         currentArea.set(area)
     
-        # Get data for the Area
+        # Reset reactive values
         nodeOSM.set(gpd.GeoDataFrame())
         edgeOSM.set(gpd.GeoDataFrame())
         nodeOMF.set(gpd.GeoDataFrame())
         edgeOMF.set(gpd.GeoDataFrame())
+        classesOSM.set(pd.DataFrame())
+        classesOMF.set(pd.DataFrame())
         
+        # Set new value for reactive values, depending on the area
         nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
         edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
         nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
         edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
-    
+        
+        # Calculate the length and number of edges per class for each dataset
+        crs = areasCRS[area]
+        dfOSM = getLengthPerClass(edgeOSM(), crs)
+        dfOMF = getLengthPerClass(edgeOMF(), crs)
+        
+        # Set the reactive value with the precalculated values
+        classesOSM.set(dfOSM)
+        classesOMF.set(dfOMF)
+        
     # If the area changed or the criterion changed, we download the data for the criterion
     if (currentCriterionValue != criterion) or (currentAreaValue != area):
+        
         # Change the last criterion chosen
         currentCriterion.set(criterion)
         
@@ -160,7 +476,7 @@ def getData():
         qualityOSM.set(gpd.GeoDataFrame())
         qualityOMF.set(gpd.GeoDataFrame())
         
-        # If the criterion is base, then the data is already download
+        # If the criterion is "base", the data has already been downloaded
         if criterion != "base":
             
             osmTable = template_layers_name[criterion]["OSM"][0][0]
@@ -170,7 +486,8 @@ def getData():
             qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
 
 
-### Add main content ###
+### Website content ###
+## General content ##
 # Add icon
 logo = "LM_icon_32-32.png"
 logo_omf = "logo-omf.png"
@@ -181,11 +498,7 @@ ui.head_content(
     ui.tags.link(rel="icon", type="image/png", sizes="32x32", href=logo),
 )
 
-# Get path of help.md and licenses.md files
-pathHelpMD = Path(__file__).parent / "help.md"
-pathLicensesMD = Path(__file__).parent / "licenses.md"
-
-## Add page title and sidebar
+# Add page title and sidebar
 ui.page_opts(
     title="OpenStreetMap (OSM) and Overture Maps Fundation (OMF) dataset comparison : Japan example",
     full_width=True,
@@ -193,51 +506,86 @@ ui.page_opts(
     fillable=True
 )
 
-### Switch dark / light mode ###
+## Switch dark / light mode ##
 with ui.nav_control():
     ui.input_dark_mode()
 
-### Sidebar ###
+## Sidebar ##
 with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
-
+    
+    ## Input for the layer and criterion to display ##
     ui.input_select("select_area", "Area", choices = areas)
 
-    ui.input_select("select_criterion", "Show", choices = quality_criterias)
+    ui.input_select("select_criterion", "Show", choices = quality_criteria)
     
     ui.input_action_button("submit", "Load layers", class_ = "btn btn-outline-warning")
     
+    ## Accordion for the different styles ##
     with ui.accordion(id="acc", open=True):
-        with ui.accordion_panel("Common styles", class_= "background-grey"):
+        
+        # Common style
+        with ui.accordion_panel("Common styles", class_= "background-sidebar"):
             
             ui.input_numeric("radius_min_pixels", "Radius min pixel", 2, min=1, max=10)
             
             ui.input_numeric("width_min_pixels", "Width min pixel", 2, min=1, max=10)
-            
-        with ui.accordion_panel("Style base", class_= "background-grey"):
+        
+        # Style base layer
+        with ui.accordion_panel("Style base", class_= "background-sidebar"):
             
             @render_widget
-            def colorPickerPoint():
+            def colorPickerPoint() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the point style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for points style.
+                """
                 color_picker_point = ipywidgets.ColorPicker(concise=True, description='Point color', value='#0000FF')
                 return color_picker_point
 
             @render_widget
-            def colorPickerLine():
+            def colorPickerLine() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the line style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for lines style.
+                """
                 color_picker_line = ipywidgets.ColorPicker(concise=True, description='Line color', value='#FF0000')
                 return color_picker_line
-            
-        with ui.accordion_panel("Style components", class_= "background-grey"):
+        
+        # Style (strongly) connected components layers
+        with ui.accordion_panel("Style components", class_= "background-sidebar"):
             
             "Choose a color and copy it to the table"
             
             @render_widget
-            def colorPickerComponents():
+            def colorPickerComponents() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the component part.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for components section.
+                """
                 color_picker_components = ipywidgets.ColorPicker(id = "color-picker-components")
                 return color_picker_components
             
             ui.div(style = "padding: 0.5em;")
             
             @render.data_frame
-            def legendComponents():
+            def legendComponents() -> render.DataGrid:
+                """Render data frame function.
+                
+                Create a DataFrame with initial values and custom style
+                to change component layers style.
+
+                Returns:
+                    render.DataGrid: Data grid to change component layers style.
+                """
                 data = {
                     "Min value":[1, 6, 16, 251],
                     "Max value":[5, 15, 250, "max"],
@@ -246,7 +594,7 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                 
                 dataFrame = pd.DataFrame(data)
                 
-                # Style of the dataframe
+                # Style of the DataFrame
                 stylesDF = [
                     {
                         "class":"text-center",
@@ -285,48 +633,103 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                     styles = stylesDF,
                     editable=True
                 )
-            
-        with ui.accordion_panel("Style isolated nodes", class_= "background-grey"):
+        
+        # Style isolated nodes layers
+        with ui.accordion_panel("Style isolated nodes", class_= "background-sidebar"):
             
             @render_widget
-            def colorPickerIsolated():
+            def colorPickerIsolated() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for isolated nodes style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for isolated nodes style.
+                """
                 color_picker_isolated = ipywidgets.ColorPicker(concise=True, description='Isolated nodes color', value='#FF0000')
                 return color_picker_isolated
 
             @render_widget
-            def colorPickerNotIsolated():
+            def colorPickerNotIsolated() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the non isolated nodes style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker
+                    for non isolated nodes style.
+                """
                 color_picker_not_isolated = ipywidgets.ColorPicker(concise=True, description='Non isolated nodes color', value='#00FF00')
                 return color_picker_not_isolated
-            
-        with ui.accordion_panel("Style overlap indicator", class_= "background-grey"):
+        
+        # Style overlap indicator layers
+        with ui.accordion_panel("Style overlap indicator", class_= "background-sidebar"):
         
             @render_widget
-            def colorPickerOverlap():
+            def colorPickerOverlap() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for overlapped road style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for
+                    overlapped road style.
+                """
                 color_picker_overlap = ipywidgets.ColorPicker(concise=True, description='Overlap color', value='#00FF00')
                 return color_picker_overlap
 
             @render_widget
-            def colorPickerNotOverlap():
+            def colorPickerNotOverlap() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for non overlapped road style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for
+                    non overlapped road style.
+                """
                 color_picker_not_overlap = ipywidgets.ColorPicker(concise=True, description='Non overlap color', value='#FF0000')
                 return color_picker_not_overlap
-            
-        with ui.accordion_panel("Style corresponding nodes", class_= "background-grey"):
+        
+        # Style corresponding nodes layer
+        with ui.accordion_panel("Style corresponding nodes", class_= "background-sidebar"):
             
             @render_widget
-            def colorPickerCorresponding():
+            def colorPickerCorresponding() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for corresponding nodes style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for
+                    corresponding nodes style.
+                """
                 color_picker_corresponding = ipywidgets.ColorPicker(concise=True, description='Corresponding color', value='#00FF00')
                 return color_picker_corresponding
 
             @render_widget
-            def colorPickerNotCorresponding():
+            def colorPickerNotCorresponding() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for non corresponding nodes style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for
+                    non corresponding nodes style.
+                """
                 color_picker_not_corresponding = ipywidgets.ColorPicker(concise=True, description='Non corresponding color', value='#FF0000')
                 return color_picker_not_corresponding
+    
+    # Div used to update the DataFrame style
+    ui.div(id = "style-dataframe")
 
 ### Dasboard ###
 with ui.nav_panel("Dashboard"):
     
     ## Cards ##
     with ui.layout_columns(fill=False):
+        
+        # Number of nodes
         with ui.card():
             
             ui.card_header(ICONS["nodes"], " Number of nodes")
@@ -336,17 +739,32 @@ with ui.nav_panel("Dashboard"):
                     "OSM"
                     
                     @render.text
-                    def getOSMNodes():
-                        return nodeOSM().shape[0]
+                    def getOSMNodes() -> str:
+                        """Render text function.
+                        
+                        Get the number of OSM nodes for the area.
+
+                        Returns:
+                            str: Number of OSM nodes.
+                        """
+                        return str(nodeOSM().shape[0])
                     
                 
                 with ui.value_box(class_ = "value-box"):
                     "OMF"
                     
                     @render.text
-                    def getOMFNodes():
-                        return nodeOMF().shape[0]
+                    def getOMFNodes() -> str:
+                        """Render text function.
+                        
+                        Get the number of OMF nodes for the area.
+
+                        Returns:
+                            str: Number of OMF nodes.
+                        """
+                        return str(nodeOMF().shape[0])
         
+        # Number of edges
         with ui.card():
             
             ui.card_header(ICONS["edges"], " Number of edges")
@@ -356,16 +774,31 @@ with ui.nav_panel("Dashboard"):
                     "OSM"
                     
                     @render.text
-                    def getOSMEdges():
-                        return edgeOSM().shape[0]
+                    def getOSMEdges() -> str:
+                        """Render text function.
+                        
+                        Get the number of OSM edges for the area.
+
+                        Returns:
+                            str: Number of OSM edges.
+                        """
+                        return str(edgeOSM().shape[0])
                 
                 with ui.value_box(class_ = "value-box"):
                     "OMF"
                     
                     @render.text
-                    def getOMFEdges():
-                        return edgeOMF().shape[0]
+                    def getOMFEdges() -> str:
+                        """Render text function.
+                        
+                        Get the number of OMF edges for the area.
+
+                        Returns:
+                            str: Number of OMF edges.
+                        """
+                        return str(edgeOMF().shape[0])
         
+        # Total length in km
         with ui.card():
             
             ui.card_header(ICONS["length"], " Total length (in kilometer)")
@@ -375,34 +808,56 @@ with ui.nav_panel("Dashboard"):
                     "OSM"
                     
                     @render.text
-                    def printTotalLengthOSM():
-                        df = getLengthPerClassOSM()
+                    def totalLengthOSM() -> str:
+                        """Render text function.
+                        
+                        Get the total length of OSM edges for the area.
+
+                        Returns:
+                            str: Total length of OSM edges.
+                        """
+                        df = classesOSM()
                         if df.empty:
-                            value = "No value"
+                            value = ""
                         else:
                             value = round(df["sum"].sum())
-                        return value
+                        return str(value)
                 
                 with ui.value_box(class_ = "value-box"):
                     "OMF"
                     
                     @render.text
-                    def printTotalLengthOMF():
-                        df = getLengthPerClassOMF()
+                    def totalLengthOMF() -> str:
+                        """Render text function.
+                        
+                        Get the total length of OMF edges for the area.
+
+                        Returns:
+                            str: Total length of OMF edges.
+                        """
+                        df = classesOMF()
                         if df.empty:
-                            value = "No value"
+                            value = ""
                         else:
                             value = round(df["sum"].sum())
-                        return value
+                        return str(value)
         
         
+        # Criterion value (hidden if base layer is selected)
         with ui.panel_conditional("input.select_criterion != 'base'"):
             with ui.card(id = "card_quality_criterion", class_ = "card_data"):
                 
                 with ui.card_header():
                     
                     @render.ui
-                    def getCardHeader():
+                    def getCardHeaderCriterion() -> str:
+                        """Render ui function.
+                        
+                        Get the card header for the criterion.
+
+                        Returns:
+                            str: Card header.
+                        """
                         return getCardHeader()
                 
                 with ui.layout_column_wrap(width=1 / 2):
@@ -411,7 +866,14 @@ with ui.nav_panel("Dashboard"):
                         
                         @render.text
                         @reactive.event(input.submit)
-                        def getOSMQualityValue():
+                        def getOSMQualityValue() -> str:
+                            """Render text function triggered by the submit button event.
+                            
+                            Get the criterion value for OSM.
+
+                            Returns:
+                                str: Criterion value.
+                            """
                             OSMValue, _ = getCriterionInformation()
                             return OSMValue
                     
@@ -420,37 +882,62 @@ with ui.nav_panel("Dashboard"):
                         
                         @render.text
                         @reactive.event(input.submit)
-                        def getOMFQualityValue():
+                        def getOMFQualityValue() -> str:
+                            """Render text function triggered by the submit button event.
+                            
+                            Get the criterion value for OMF.
+
+                            Returns:
+                                str: Criterion value.
+                            """
                             _, OMFValue = getCriterionInformation()
                             return OMFValue
 
-    ## Maps and dataframes
+    ## Maps and DataFrames
     with ui.layout_columns(col_widths=[6, 6, 6, 6], row_heights=[2, 1]):
         
         # Map OSM
         with ui.card(full_screen=True):
+            
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
+                
                 @render.text
-                def getMapHeaderOSM():
-                    if currentCriterion() in quality_criterias:
+                def getMapHeaderOSM() -> str:
+                    """Render text function.
+                    
+                    Get the map header for OSM map.
+                    It depends on the area and criterion displayed.
+
+                    Returns:
+                        str: Map header for OSM map.
+                    """
+                    if currentCriterion() in quality_criteria:
                         if currentArea() != "":
-                            header = f"OSM - {currentArea()} : {quality_criterias[currentCriterion()]}"
+                            header = f"OSM - {currentArea()} : {quality_criteria[currentCriterion()]}"
                         else:
-                            header = f"OSM - {currentArea()} : {quality_criterias[currentCriterion()]}"
+                            header = f"OSM - {currentArea()} : {quality_criteria[currentCriterion()]}"
                     else:
                         header = "OSM"
                     return header
 
             @render_widget
             @reactive.event(input.submit)
-            def osm_map():
+            def osm_map() -> lon._map.Map:
+                """Render widget function triggered by the submit button event.
                 
+                Create a lonboard map with OSM layer(s) to add.
+
+                Returns:
+                    lon._map.Map: Map with OSM layers
+                """
+                # Layers to display on the map
                 layers = []
                 
-                # First, the layer are not chosen so we return only the empty map
+                # If the layer are empty,an empty map is returned
                 if nodeOSM().empty or edgeOSM().empty:
                     
                     m = lon.Map([])
+                    # Set zoom over Japan
                     m.set_view_state(
                         latitude=36.390,
                         longitude=138.812,
@@ -458,6 +945,7 @@ with ui.nav_panel("Dashboard"):
                     )
                     return m
                 
+                # If the criterion is base, nodes AND edges are displayed
                 if input.select_criterion() == "base":
                     
                     # Construct point layer
@@ -466,13 +954,13 @@ with ui.nav_panel("Dashboard"):
                         radius_min_pixels = 2)
                     
                     # Construct edge layer
-                    
                     edgeLayer = lon.PathLayer.from_geopandas(
                         edgeOSM(),
                         width_min_pixels = 2)
                     
                     layers = [nodeLayer, edgeLayer]
                 
+                # Otherwise, check the geometry type of the layer to add
                 else:
                     for _, geomType in template_layers_name[input.select_criterion()]["OSM"]:
                         if geomType == "Point":
@@ -486,32 +974,50 @@ with ui.nav_panel("Dashboard"):
                                 width_min_pixels = 2)
                         
                         layers = [layer]
+                
+                # Construct map with the layers
                 return lon.Map(layers = layers)
         
         # Map OMF
         with ui.card(full_screen=True):
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
                 @render.text
-                def getMapHeaderOMF():
-                    if currentCriterion() in quality_criterias:
+                def getMapHeaderOMF() -> str:
+                    """Render text function.
+                    
+                    Get the map header for OMF map.
+                    It depends on the area and criterion displayed.
+
+                    Returns:
+                        str: Map header for OMF map.
+                    """
+                    if currentCriterion() in quality_criteria:
                         if currentArea() != "":
-                            header = f"OMF - {currentArea()} : {quality_criterias[currentCriterion()]}"
+                            header = f"OMF - {currentArea()} : {quality_criteria[currentCriterion()]}"
                         else:
-                            header = f"OMF - {currentArea()} : {quality_criterias[currentCriterion()]}"
+                            header = f"OMF - {currentArea()} : {quality_criteria[currentCriterion()]}"
                     else:
                         header = "OMF"
                     return header
                 
             @render_widget
             @reactive.event(input.submit)
-            def omf_map():
+            def omf_map() -> lon._map.Map:
+                """Render widget function triggered by the submit button event.
                 
+                Create a lonboard map with OMF layer(s) to add.
+
+                Returns:
+                    lon._map.Map: Map with OMF layers
+                """
+                # Layers to display on the map
                 layers = []
                 
-                # First, the layer are not chosen so we return only the empty map
+                # If the layer are empty,an empty map is returned
                 if nodeOMF().empty or edgeOMF().empty:
                     
                     m = lon.Map([])
+                    # Set zoom over Japan
                     m.set_view_state(
                         latitude=36.390,
                         longitude=138.812,
@@ -519,6 +1025,7 @@ with ui.nav_panel("Dashboard"):
                     )
                     return m
                 
+                # If the criterion is base, nodes AND edges are displayed
                 if input.select_criterion() == "base":
                     # Construct point layer
                     nodeLayer = lon.ScatterplotLayer.from_geopandas(
@@ -526,12 +1033,13 @@ with ui.nav_panel("Dashboard"):
                         radius_min_pixels = 2)
                     
                     # Construct edge layer
-                    
                     edgeLayer = lon.PathLayer.from_geopandas(
                         edgeOMF(),
                         width_min_pixels = 2)
                     
                     layers = [nodeLayer, edgeLayer]
+                
+                # Otherwise, check the geometry type of the layer to add
                 else:
                     for _, geomType in template_layers_name[input.select_criterion()]["OSM"]:
                         if geomType == "Point":
@@ -546,14 +1054,23 @@ with ui.nav_panel("Dashboard"):
                         
                         layers = [layer]
                 
+                # Construct map with the layers
                 return lon.Map(layers = layers)
 
         # Dataframe OSM
         with ui.card(full_screen=True):
             
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
+                
                 @render.text
-                def getDFHeaderOSM():
+                def getDFHeaderOSM() -> str:
+                    """Render text function.
+                    
+                    Get the DataFrame card header for OSM.
+
+                    Returns:
+                        str: Dataframe card header for OSM.
+                    """
                     if currentArea() != "":
                         header = f"OSM: Number of edges and total length (in km) per class in {currentArea()}"
                     else:
@@ -561,20 +1078,36 @@ with ui.nav_panel("Dashboard"):
                     return header
                 
             @render.data_frame
-            def printLengthPerClassOSM():
-                df = getLengthPerClassOSM()
+            def lengthPerClassOSM() -> render.DataGrid:
+                """Render data frame function.
+                
+                Render the data frame of total length and number of edges
+                per class for OSM.
+
+                Returns:
+                    render.DataGrid: Data grid with length and number of edges
+                    for each OSM class.
+                """
+                df = classesOSM()
                 df = df.rename(columns = {
                     "class":"Class",
                     "sum": "Total length (km)",
-                    "count":"Number of entity",
+                    "count":"Number of edges",
                 })
-                return render.DataGrid(df.round(2), selection_mode="rows") 
+                return render.DataGrid(df.round(2)) 
 
         # Dataframe OMF
         with ui.card(full_screen=True):
             with ui.card_header(class_="d-flex justify-content-between align-items-center"):
                 @render.text
-                def getDFHeaderOMF():
+                def getDFHeaderOMF() -> str:
+                    """Render text function.
+                    
+                    Get the DataFrame card header for OMF.
+
+                    Returns:
+                        str: Dataframe card header for OMF.
+                    """
                     if currentArea() != "":
                         header = f"OMF: Number of edges and total length (in km) per class in {currentArea()}"
                     else:
@@ -582,28 +1115,43 @@ with ui.nav_panel("Dashboard"):
                     return header
             
             @render.data_frame
-            def printLengthPerClassOMF():
-                df = getLengthPerClassOMF()
+            def lengthPerClassOMF() -> render.DataGrid:
+                """Render data frame function.
+                
+                Render the data frame of total length and number of edges
+                per class for OMF.
+
+                Returns:
+                    render.DataGrid: Data grid with length and number of edges
+                    for each OMF class.
+                """
+                df = classesOMF()
                 df = df.rename(columns = {
                     "class":"Class",
                     "sum": "Total length (km)",
-                    "count":"Number of entity",
+                    "count":"Number of edges",
                 })
-                return render.DataGrid(df.round(2), selection_mode="rows")
+                return render.DataGrid(df.round(2))
+
 
 ### Help ###
 with ui.nav_panel("Help"):
+    # Open help.md file to render the markdown as HTML
     with open(pathHelpMD, 'r', encoding="utf-8") as f:
         helpMD = f.read()
     ui.markdown(helpMD)
 
+
 ### Ressources ###
 with ui.nav_panel("Licenses"):
+    # Open licenses.md file to render the markdown as HTML
     with open(pathLicensesMD, 'r', encoding="utf-8") as f:
         licensesMD = f.read()
     ui.markdown(licensesMD)
 
+
 ### Links ###
+## LocationMind ##
 with ui.nav_control():
     ui.a(
         ui.img(
@@ -615,7 +1163,9 @@ with ui.nav_control():
         target = "_blank",
         rel = "noopener noreferrer"
     )
-    
+
+
+## GitHub project ##
 with ui.nav_control():
     ui.a(
         ICONS["github"],
@@ -624,6 +1174,8 @@ with ui.nav_control():
         rel = "noopener noreferrer"
     )
 
+
+## OpenStreetMap ##
 with ui.nav_control():
     ui.a(
         ui.img(
@@ -637,6 +1189,8 @@ with ui.nav_control():
         title = "Ken Vermette based on https://commons.wikimedia.org/wiki/File:OpenStreetMap-Logo-2006.svg, CC BY-SA 2.0 &lt;https://creativecommons.org/licenses/by-sa/2.0&gt;, via Wikimedia Commons"
     )
 
+
+## Overture Maps Foundation ##
 with ui.nav_control():
     ui.a(
         ui.img(
@@ -649,285 +1203,104 @@ with ui.nav_control():
         rel = "noopener noreferrer",
     )
 
+
+### Reactive calculations and reactive effects functions ###
+## Card header for the criterion
 @reactive.calc
-@reactive.event(input.submit)
-def getLengthPerClassOSM():
-    edgeCopy = edgeOSM().copy()
-    if edgeCopy.empty:
-        gdfSumup = pd.DataFrame()
-        
-    else:
-        edgeCopy = edgeCopy.set_geometry("geom")
-        
-        gdfProj = edgeCopy.to_crs(6691)
-        
-        edgeCopy['length'] = gdfProj['geom'].length / 1000
-
-        gdfSumup = edgeCopy[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
-        
-        gdfSumup.reset_index(inplace=True)
+def getCardHeader() -> str:
+    """Reactive calculation function.
     
-    return gdfSumup
-    
-@reactive.calc
-@reactive.event(input.submit)
-def getLengthPerClassOMF():
-    edgeCopy = edgeOMF().copy()
+    Get card header for the value.
+    This header depends on the value of the current criterion.
 
-    if edgeCopy.empty:
-        gdfSumup = pd.DataFrame()
-        
-    else:
-        edgeCopy = edgeCopy.set_geometry("geom")
-        
-        gdfProj = edgeCopy.to_crs(6691)
-        
-        edgeCopy['length'] = gdfProj['geom'].length / 1000
-
-        gdfSumup = edgeCopy[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
-        
-        gdfSumup.reset_index(inplace=True)
-    
-    return gdfSumup
-
-
-@reactive.calc
-def getCardHeader():
+    Returns:
+        str: Card header with a logo
+    """
     if currentCriterion() != "base" and currentCriterion() != "":
-        return ICONS[currentCriterion()], f" {quality_criterias[currentCriterion()]}"
+        return ICONS[currentCriterion()], f" {quality_criteria[currentCriterion()]}"
     else:
         return ""
 
+
+## Calculation of criterion information
 @reactive.calc
 @reactive.event(input.submit)
-def getCriterionInformation():
-    OSMValue, OMFValue = None, None
+def getCriterionInformation() -> tuple[str, str]:
+    """Reactive calculation function triggered by the submit button.
+    
+    Get the information depending on the current criterion.
+    Each criterion calls a specific function to get that information.
+
+    Returns:
+        tuple[str, str]: Value of the criterion.
+        The first value is for OSM, the other for OMF.
+    """
+    OSMValue, OMFValue = "", ""
+    # (Strongly) connected components
     if input.select_criterion() == "conn_comp" or input.select_criterion() == "strongly_comp":
         OSMValue = getGroupByComp(qualityOSM())
         OMFValue = getGroupByComp(qualityOMF())
-        
+    # Isolated nodes
     if input.select_criterion() == "isolated_nodes":
         OSMValue = getNbElem(qualityOSM())
         OMFValue = getNbElem(qualityOMF())
-        
+    # Overlap indicator
     if input.select_criterion() == "overlap_indicator":
-        OSMValue = f"{getOverlapIndicator(qualityOSM())} %"
-        OMFValue = f"{getOverlapIndicator(qualityOMF())} %"
-        
+        OSMValue = getOverlapIndicator(qualityOSM())
+        OMFValue = getOverlapIndicator(qualityOMF())
+    # Corresponding nodes
     if input.select_criterion() == "corresponding_nodes":
         OSMValue = getCorrespondingNodes(qualityOSM())
         OMFValue = getCorrespondingNodes(qualityOMF())
     
     return OSMValue, OMFValue
 
-def getGroupByComp(gdf:gpd.GeoDataFrame,
-                   column:str = "component"):
-    if gdf.empty:
-        value = None
 
-    else:
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
-        
-        gdfSumup.reset_index(inplace=True)
-        
-        value = gdfSumup.shape[0]
-    return value
-    
-
-def getNbElem(gdf:gpd.GeoDataFrame,
-              column:str = "intersects"):
-    if gdf.empty:
-        value = None
-
-    else:
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
-        
-        gdfSumup.reset_index(inplace=True)
-        
-        value = 0
-        for _, row in gdfSumup.iterrows():
-            if row[column] == False:
-                value = row['count']
-            
-    return value
-
-
-def getOverlapIndicator(gdf:gpd.GeoDataFrame,
-                        column:str = "overlap"):
-    gdfCopy = gdf.copy()
-
-    if gdfCopy.empty:
-        value = None
-        
-    else:
-        gdfCopy = gdfCopy.set_geometry("geom")
-        
-        gdfProj = gdfCopy.to_crs(6691)
-        
-        gdfCopy['length'] = gdfProj['geom'].length / 1000
-
-        gdfSumup = gdfCopy[[column, 'length']].groupby(column)['length'].agg(['sum'])
-        
-        gdfSumup.reset_index(inplace=True)
-        
-        overlapLength = 0
-        totalLength = 0
-        
-        for _, row in gdfSumup.iterrows():
-            if row[column] == True:
-                overlapLength = row['sum']
-            totalLength += row['sum']
-        
-        value = round((overlapLength / totalLength) * 100, 2)
-    
-    return value
-
-
-def getCorrespondingNodes(gdf:gpd.GeoDataFrame,
-                          column:str = "intersects"):
-    if gdf.empty:
-        value = None
-
-    else:
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
-        
-        gdfSumup.reset_index(inplace=True)
-        
-        totalNodes = 0
-        intersectNodes = 0
-        for _, row in gdfSumup.iterrows():
-            if row[column] == True:
-                intersectNodes = row['count']
-            totalNodes += row['count']
-       
-        percentage = round((intersectNodes / totalNodes) * 100, 2)
-        
-        value = f"{intersectNodes} - {percentage} %"
-       
-    return value
-
-## Handle dataframe modification
-@legendComponents.set_patches_fn
-async def patchesFn(*, patches: list[render.CellPatch]):
-    # Get former data
-    currentData = legendComponents.data_view()
-    currentData = currentData.values.tolist()
-    
-    returnPatches = []
-    # Check if the data view is sorted
-    if legendComponents.sort():
-        await legendComponents.update_sort(None)
-        return returnPatches
-    
-    # Else, we check the changes
-    for patch in patches:
-        returnPatch = patch.copy()
-        
-        row = returnPatch["row_index"]
-        col = returnPatch["column_index"]
-        val = returnPatch["value"]
-        
-        # First min value
-        if patch["column_index"] == 0 and patch["row_index"] == 0:
-            returnPatch["value"] = 1
-
-        # Last max value
-        elif patch["column_index"] == 1 and patch["row_index"] == 3:
-            returnPatch["value"] = "max"
-
-        # First column and is a number
-        elif patch["column_index"] in [0, 1] and patch["value"].isnumeric():
-            returnPatch["value"] = int(patch["value"])
-            val = int(val)
-            # If the value is not superior to 0, we do not change it
-            if returnPatch["value"] > 0:  
-                aboveValue = None
-                underValue = None
-                
-                # First row, we assign 0 to the value
-                if row == 0:
-                    aboveValue = 0
-                    underValue = currentData[row+1][col]
-                # Same for the last one
-                elif row == 3:
-                    aboveValue = currentData[row-1][col]
-                    # This way we know that we will not have problem comparing it
-                    underValue = returnPatch["value"] + 2
-                else:
-                    aboveValue = currentData[row-1][col]
-                    underValue = currentData[row+1][col]
-                    
-                # If the value to compare is the max, we change it to ensure that the comparison is okay
-                if underValue == "max":
-                    underValue = returnPatch["value"] + 2
-                
-                if aboveValue < returnPatch["value"]  < underValue:
-                    # Change max value
-                    if col == 1:
-                        row +=1
-                        col = 0
-                        val +=1
-
-                    # Change min value
-                    else:
-                        col += 1
-                        row -= 1
-                        val -= 1
-                    returnPatches.append(
-                        {
-                            "row_index":row,
-                            "column_index":col,
-                            "value":val
-                        }
-                    )
-                # If the value is not between these values, we put the same value as before
-                else:
-                    returnPatch["value"] = currentData[row][col]
-            else:
-                    returnPatch["value"] = currentData[row][col]
-        # Or a string for the color column
-        else:
-            # Check if it is a valid color
-            if is_color_like(returnPatch["value"]):
-                returnPatch["value"] = to_hex(returnPatch["value"])
-            else:
-                returnPatch["value"] = currentData[row][col]
-        returnPatches.append(returnPatch)
-    return returnPatches
-
-# Update the style of the dataFrame when changing rows
+## Style components DataFrame
 @reactive.effect
 def updateStyleDataFrame():
+    """Reactive effect function.
+    
+    Change the style of the DataFrame every time that a cell is changed
+    """
+    # Get the changed colors
     editData = legendComponents.data_view()["Colors"]
     editData = editData.to_list()
+    
+    # Change the style 
     style = f"""
-    .first-color-df {{ background-color: {editData[0]}; }}
-    .second-color-df {{ background-color: {editData[1]}; }}
-    .third-color-df {{ background-color: {editData[2]}; }}
-    .fourth-color-df {{ background-color: {editData[3]}; }}
+    .first-color-df {{ background-color: {editData[0]} !important; }}
+    .second-color-df {{ background-color: {editData[1]} !important; }}
+    .third-color-df {{ background-color: {editData[2]} !important; }}
+    .fourth-color-df {{ background-color: {editData[3]} !important; }}
     """
     
-    ui.tags.style(
-        style
+    # Remove previous style balise
+    ui.remove_ui(
+        selector="#style-dataframe style"
+    )
+    
+    # Import new style balise
+    ui.insert_ui(
+        ui.tags.style(
+            style
+        ),
+        "#style-dataframe",
+        where="beforeend"
     )
 
-# Update maps when moving the canvas
-@reactive.effect
-def updateOSMMapViewState():
-    view_state = reactive_read(omf_map.widget, 'view_state')
-    
-    osm_map.widget.set_view_state(
-        longitude = view_state.longitude,
-        latitude = view_state.latitude,
-        zoom = view_state.zoom,
-        pitch = view_state.pitch,
-        bearing = view_state.bearing)
-    
-    
+
+## Update maps
 @reactive.effect
 def updateOMFMapViewState():
+    """Reactive effect function.
+    
+    Change the view of OMF map whenever OSM map view is changed.
+    """
+    # Get current view state of OSM map
     view_state = reactive_read(osm_map.widget, 'view_state')
     
+    # Set view state of OMF map
     omf_map.widget.set_view_state(
         longitude = view_state.longitude,
         latitude = view_state.latitude,
@@ -936,14 +1309,30 @@ def updateOMFMapViewState():
         bearing = view_state.bearing)
 
 
-def getColorFromColorPicker(widgetName:render_widget[ipywidgets.ColorPicker]):
-    hex = reactive_read(widgetName.widget, "value")
-    color = list(int(hex[i:i+2], 16) for i in (1, 3, 5))
-    return color
+@reactive.effect
+def updateOSMMapViewState():
+    """Reactive effect function.
+    
+    Change the view of OSM map whenever OMF map view is changed.
+    """
+    # Get current view state of OMF map
+    view_state = reactive_read(omf_map.widget, 'view_state')
+    
+    # Set view state of OSM map
+    osm_map.widget.set_view_state(
+        longitude = view_state.longitude,
+        latitude = view_state.latitude,
+        zoom = view_state.zoom,
+        pitch = view_state.pitch,
+        bearing = view_state.bearing)
 
-# Update layers from the value of the sidebar
+
 @reactive.effect
 def updateLayers():
+    """Reactive effect function.
+    
+    Update layers with common styles and colors for the base layers.
+    """
     # Point color and radius
     colorPoint = getColorFromColorPicker(colorPickerPoint)
 
@@ -972,7 +1361,7 @@ def updateLayers():
                 elif type(layer) == lon._layer.PathLayer:
                     layer.width_min_pixels = width
     
-    # Check which layer is uploaded
+    # If it is base layer, the color is changed too.
     if currentCriterion() == "base":
         # Check all layers
         for layer in osmLayers + omfLayers:
@@ -983,9 +1372,14 @@ def updateLayers():
                     layer.get_color = colorLine
 
 
-# Update layers from the value of the sidebar
 @reactive.effect
 def colorBoolean():
+    """Reactive effect function.
+    
+    Change the style of layers having a "false / true"
+    values.
+    """
+    # Verify criterion
     if currentCriterion() in ["isolated_nodes", "corresponding_nodes", "overlap_indicator"]:
         
         # Get map layers
@@ -1009,7 +1403,7 @@ def colorBoolean():
         # Check all layers
         for layer in omfLayers + osmLayers:
             
-            # If the layer is of point type, we change with the appropriate 
+            # If the layer is of point type, we change with the appropriate propriety
             if type(layer) == lon._layer.ScatterplotLayer:
                 
                 if layer in omfLayers:
@@ -1017,14 +1411,17 @@ def colorBoolean():
                 else:
                     gdfcopy = qualityOSM().copy()
                 
+                # Keep only intersecting columns
                 gdfcopy = gdfcopy[["id", "intersects"]]
                 
-                # Create the 'color' column
+                # Create the 'color' column with a custom function depending
+                # on the value of the true / false value
                 gdfcopy['color'] = gdfcopy['intersects'].apply(lambda x: colorTrue if x else colorFalse)
 
                 # Convert to dictionary
                 colorMap = gdfcopy.set_index('id')['color'].to_dict()
                 
+                # Apply new style to the layer
                 layer.get_fill_color = apply_categorical_cmap(
                     values = gdfcopy["id"],
                     cmap = colorMap
@@ -1040,26 +1437,33 @@ def colorBoolean():
                 
                 gdfcopy = gdfcopy[["id", "overlap"]]
                 
-                # Create the 'color' column
+                # Create the 'color' column with a custom function depending
+                # on the value of the true / false value 
                 gdfcopy['color'] = gdfcopy['overlap'].apply(lambda x: colorTrue if x else colorFalse)
 
                 # Convert to dictionary
                 colorMap = gdfcopy.set_index('id')['color'].to_dict()
                 
+                # Apply new style to the layer
                 layer.get_color = apply_categorical_cmap(
                     values = gdfcopy["id"],
                     cmap = colorMap
                 )
 
-# Update layers from the value of the sidebar
+
 @reactive.effect
 def colorRange():
+    """Reactive effect function.
+    
+    Change the style of components layers depending on
+    the value of the DataFrame.
+    """
     if currentCriterion() in ["conn_comp", "strongly_comp"]:
         # Get map layers
         osmLayers = reactive_read(osm_map.widget, "layers")
         omfLayers = reactive_read(omf_map.widget, "layers")
         
-        # Take a copy to prevent changes to the original dataframe
+        # Take a copy to prevent changes to the original DataFrame
         editData = legendComponents.data_view().copy()
         
         # Change color to rgb
@@ -1078,36 +1482,132 @@ def colorRange():
                 else:
                     gdfcopy = qualityOSM().copy()
                 
+                # Keep only interseting column
                 gdfcopy = gdfcopy[["id", "cardinality"]]
                 
-                # Create the 'color' column with the good function
+                # Create the 'color' column by applying a custom function
                 gdfcopy['color'] = gdfcopy['cardinality'].apply(getColorComponents, args=(editData, ))
 
                 # Convert to dictionary
                 colorMap = gdfcopy.set_index('id')['color'].to_dict()
                 
+                # Apply new style to the layer
                 layer.get_fill_color = apply_categorical_cmap(
                     values = gdfcopy["id"],
                     cmap = colorMap
                 )
 
-def hexToRgb255(hex):
-    rgb = to_rgb(hex)
-    return [int (255 * x) for x in rgb]
+
+### Components Dataframe modification handler ###
+@legendComponents.set_patches_fn
+async def patchesFn(*, patches: list[render.CellPatch]) -> list[render.CellPatch]:
+    """Async function trigger by an edit of the components DataFrame.
     
-def getColorComponents(cardinality:int,
-                       data:list):
-    color = []
-    # First color
-    if data[0][0] <= cardinality <= data[0][1]:
-        color = data[0][2]
-    # Second color
-    if data[1][0] <= cardinality <= data[1][1]:
-        color = data[1][2]
-    # Third color
-    if data[2][0] <= cardinality <= data[2][1]:
-        color = data[2][2]
-    # Last color
-    else:
-        color = data[3][2]
-    return color
+    Check if the changment is possible and if it is, change the
+    edit cell and other if needed.
+
+    Args:
+        patches (list[render.CellPatch]): List of edit cell to check.
+
+    Returns:
+        list[render.CellPatch]: List of possibly multiple edit cells. 
+    """
+    # Get former data
+    currentData = legendComponents.data_view()
+    currentData = currentData.values.tolist()
+    
+    # List to return
+    returnPatches = []
+    
+    # Check if the data view is sorted
+    if legendComponents.sort():
+        await legendComponents.update_sort(None)
+        return returnPatches
+    
+    # Check the changes
+    for patch in patches:
+        # Copy the value and get the other
+        returnPatch = patch.copy()
+        
+        row = returnPatch["row_index"]
+        col = returnPatch["column_index"]
+        val = returnPatch["value"]
+        
+        # First min value
+        if patch["column_index"] == 0 and patch["row_index"] == 0:
+            returnPatch["value"] = 1
+
+        # Last max value
+        elif patch["column_index"] == 1 and patch["row_index"] == 3:
+            returnPatch["value"] = "max"
+
+        # First column and is a number
+        elif patch["column_index"] in [0, 1] and patch["value"].isnumeric():
+            returnPatch["value"] = int(patch["value"])
+            val = int(val)
+            
+            # If the value is not superior to 0, we do not change it
+            if returnPatch["value"] > 0:  
+                aboveValue = None
+                underValue = None
+                
+                # First row, we assign 0 to the above value
+                if row == 0:
+                    aboveValue = 0
+                    underValue = currentData[row+1][col]
+                # Last row, we assign value + 2 to the under value
+                elif row == 3:
+                    aboveValue = currentData[row-1][col]
+                    underValue = returnPatch["value"] + 2
+                # Else, take the current values
+                else:
+                    aboveValue = currentData[row-1][col]
+                    underValue = currentData[row+1][col]
+                
+                # If the value to compare is the max, we change it to ensure that the comparison is okay
+                if underValue == "max":
+                    underValue = returnPatch["value"] + 2
+                
+                # Check if the changed value is between the other limits
+                if aboveValue < returnPatch["value"]  < underValue:
+                    # Change max value
+                    if col == 1:
+                        row +=1
+                        col = 0
+                        val +=1
+
+                    # Change min value
+                    else:
+                        col += 1
+                        row -= 1
+                        val -= 1
+                    
+                    # Change the other value according to this one
+                    returnPatches.append(
+                        {
+                            "row_index":row,
+                            "column_index":col,
+                            "value":val
+                        }
+                    )
+                
+                # If the value is not between these values, we put the same value as before
+                else:
+                    returnPatch["value"] = currentData[row][col]
+            # Correct the edit if the value is not superior to 0
+            else:
+                    returnPatch["value"] = currentData[row][col]
+
+        # Or a string for the color column
+        else:
+            # Check if it is a valid color
+            if is_color_like(returnPatch["value"]):
+                # If so, convert it to an hex value
+                returnPatch["value"] = to_hex(returnPatch["value"])
+            else:
+                # Otherwise, correct the edit
+                returnPatch["value"] = currentData[row][col]
+        
+        # Add the edit cell to the return list
+        returnPatches.append(returnPatch)
+    return returnPatches
