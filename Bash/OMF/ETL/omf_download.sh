@@ -27,12 +27,13 @@ DATA_DIR="$SCRIPT_DIR/data/$RELEASE_VERSION/overturemaps/"
 mkdir -p $DATA_DIR
 
 # change resource in "git@github.com:OvertureMaps/overturemaps-py.git" to change 
-cd "${SCRIPT_DIR}/overturemaps-py"
+cd "../overturemaps-py"
 git checkout .
 git pull origin main
 before="overturemaps-us-west-2/release/.*/theme"
 after="overturemaps-us-west-2/release/$RELEASE_VERSION/theme"
-sed -i '' "s|$before|$after|g" "${SCRIPT_DIR}/overturemaps-py/overturemaps/core.py"
+sed -i '' "s|$before|$after|g" "../overturemaps-py/overturemaps/core.py"
+cd - 
 
 function omf_download(){
   if [ "$RELEASE_VERSION" = "latest" ]; then

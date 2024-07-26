@@ -1,5 +1,5 @@
 {
-  "editor.formatOnSave": false,
+  "editor.formatOnSave": true,
   "editor.tabSize": 2,
   "editor.defaultFormatter": "esbenp.prettier-vscode",
   "python.testing.unittestArgs": ["-v", "-s", ".", "-p", "test_*.py"],
