@@ -17,3 +17,5 @@ if [ -d "$OMF_DIR" ]; then
 else
   git clone git@github.com:OvertureMaps/overturemaps-py.git
 fi
+
+exit 0

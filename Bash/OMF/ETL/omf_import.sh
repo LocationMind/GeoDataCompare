@@ -1,5 +1,7 @@
 #!/bin/bash
 
+### Preprocessing ###
+
 # Initialize the command in seconds.
 SECONDS=0
 
@@ -22,6 +24,10 @@ RELEASE_VERSION=$2 # e.g. [2024-07-22.0, 2024-06-13-beta.1]
 
 # define data dir
 DATA_DIR="$SCRIPT_DIR/data/$RELEASE_VERSION/overturemaps/"
+
+### Main ###
+
+echo "Change psql user(-U) or database(-d) if threre is error about postgres"
 
 # create schema
 psql -U postgres -d postgres -c "create schema omf;"
@@ -48,8 +54,12 @@ ogr2ogr -f "PostgreSQL" PG:"host=localhost user=postgres dbname=postgres" -nln o
 ogr2ogr -f "PostgreSQL" PG:"host=localhost user=postgres dbname=postgres" -nln omf.morioka_$TYPE -nlt multipolygon $DATA_DIR/morioka_$TYPE.geojson
 
 
+### Postprocessing ###
+
 # Display the measurement time.
 time=$SECONDS
 ((sec=time%60, min=(time%3600)/60, hrs=time/3600))
 timestamp=$(printf "%d:%02d:%02d" "$hrs" "$min" "$sec")
 echo "Processing time is $timestamp"
+
+exit 0

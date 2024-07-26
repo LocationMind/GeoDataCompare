@@ -77,3 +77,5 @@ time=$SECONDS
 ((sec=time%60, min=(time%3600)/60, hrs=time/3600))
 timestamp=$(printf "%d:%02d:%02d" "$hrs" "$min" "$sec")
 echo "Processing time is $timestamp"
+
+exit 0

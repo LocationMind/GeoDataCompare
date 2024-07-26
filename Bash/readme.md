@@ -2,23 +2,33 @@
 
 ## Overture Maps
 
-Install a CLI tool to download Overture Maps data.
+Install a CLI tool or overturemaps-py repo to download Overture Maps data.
 
-```
-pip install overturemaps
+```sh
+bash OMF/setup.sh
 ```
 
-Run the following code and it will download buildings in target areas from Overture Maps and import them into PostgreSQL
+Run the following code and it will download building in target areas from Overture Maps and import them into PostgreSQL
 
+```sh
+## address
+bash OMF/ETL/omf_download.sh address latest
+bash OMF/ETL/omf_import.sh address
+## building
+bash OMF/ETL/omf_download.sh building 
+bash OMF/ETL/omf_import.sh building
+## place
+bash OMF/ETL/omf_download.sh place
+bash OMF/ETL/omf_import.sh place
 ```
-bash buildings/download_import_ovt.sql
-```
+
+Check all version available 
 
 ## OpenStreetMap
 
 This script just import tsv files into PostgreSQL.
 You need to extract data before running this script.
 
-```
-bash building/import_osm_tsv.shcd .
+```sh
+bash building/import_osm_tsv.sh
 ```

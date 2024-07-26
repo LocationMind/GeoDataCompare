@@ -1,5 +1,7 @@
 #!/bin/bash
 
+### Preprocessing ###
+
 # Initialize the command in seconds.
 SECONDS=0
 
@@ -18,7 +20,7 @@ if [ -z "$2" ]; then
   exit 1
 fi
 TYPE=$1 # e.g. [building, place]
-RELEASE_VERSION=$2 # e.g. [2024-07-22.0, 2024-06-13-beta.1]
+RELEASE_VERSION=$2 # e.g. [latest, 2024-07-22.0, 2024-06-13-beta.1]
 
 # create data directory
 DATA_DIR="$SCRIPT_DIR/data/$RELEASE_VERSION/overturemaps/"
@@ -26,27 +28,41 @@ mkdir -p $DATA_DIR
 
 # change resource in "git@github.com:OvertureMaps/overturemaps-py.git" to change 
 cd "${SCRIPT_DIR}/overturemaps-py"
+git checkout .
+git pull origin main
 before="overturemaps-us-west-2/release/.*/theme"
 after="overturemaps-us-west-2/release/$RELEASE_VERSION/theme"
 sed -i '' "s|$before|$after|g" "${SCRIPT_DIR}/overturemaps-py/overturemaps/core.py"
 
+function omf_download(){
+  if [ "$RELEASE_VERSION" = "latest" ]; then
+    overturemaps download $@
+  else
+    poetry run overturemaps download $@
+  fi
+}
+
+### Main ###
+
 # Tokyo
-poetry run overturemaps download --bbox=139.74609375,35.67514744,139.83398438,35.74651226 -f geojson --type=$TYPE -o "$DATA_DIR/tokyo_$TYPE.geojson"
+omf_download --bbox=139.74609375,35.67514744,139.83398438,35.74651226 -f geojson --type=$TYPE -o "$DATA_DIR/tokyo_$TYPE.geojson"
 
 # Hamamatsu
-poetry run overturemaps download --bbox=137.63671875,34.66935855,137.72460938,34.7416125 -f geojson --type=$TYPE -o "$DATA_DIR/hamamatsu_$TYPE.geojson"
+omf_download --bbox=137.63671875,34.66935855,137.72460938,34.7416125 -f geojson --type=$TYPE -o "$DATA_DIR/hamamatsu_$TYPE.geojson"
 
 # Tateyama
-poetry run overturemaps download --bbox=139.83398438,34.95799531,139.921875,35.02999637 -f geojson --type=$TYPE -o "$DATA_DIR/tateyama_$TYPE.geojson"
+omf_download --bbox=139.83398438,34.95799531,139.921875,35.02999637 -f geojson --type=$TYPE -o "$DATA_DIR/tateyama_$TYPE.geojson"
 
 # Kumamoto
-poetry run overturemaps download --bbox=130.68726409,32.72948989,130.77515472,32.80174385 -f geojson --type=$TYPE -o "$DATA_DIR/kumamoto_$TYPE.geojson"
+omf_download --bbox=130.68726409,32.72948989,130.77515472,32.80174385 -f geojson --type=$TYPE -o "$DATA_DIR/kumamoto_$TYPE.geojson"
 
 # Higashi_hiroshima
-poetry run overturemaps download --bbox=132.69418348,34.38622724,132.7820741,34.45848119 -f geojson --type=$TYPE -o "$DATA_DIR/higashi_hiroshima_$TYPE.geojson"
+omf_download --bbox=132.69418348,34.38622724,132.7820741,34.45848119 -f geojson --type=$TYPE -o "$DATA_DIR/higashi_hiroshima_$TYPE.geojson"
 
 # Morioka
-poetry run overturemaps download --bbox=141.07765453,39.6823863,141.16554516,39.75375112 -f geojson --type=$TYPE -o "$DATA_DIR/morioka_$TYPE.geojson"
+omf_download --bbox=141.07765453,39.6823863,141.16554516,39.75375112 -f geojson --type=$TYPE -o "$DATA_DIR/morioka_$TYPE.geojson"
+
+### Postprocessing ###
 
 # Display the measurement time.
 time=$SECONDS
