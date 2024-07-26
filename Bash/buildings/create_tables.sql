@@ -1,5 +1,5 @@
-drop table ovt.tokyo_bld;
-create table ovt.tokyo_bld (
+drop table omf.tokyo_bld;
+create table omf.tokyo_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
@@ -26,8 +26,8 @@ create table ovt.tokyo_bld (
 )
 ;
 
-drop table ovt.hamamatsu_bld;
-create table ovt.hamamatsu_bld (
+drop table omf.hamamatsu_bld;
+create table omf.hamamatsu_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
@@ -53,8 +53,8 @@ create table ovt.hamamatsu_bld (
     area_name           char(50))
 ;
 
-drop table ovt.tateyama_bld;
-create table ovt.tateyama_bld (
+drop table omf.tateyama_bld;
+create table omf.tateyama_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
@@ -81,8 +81,8 @@ create table ovt.tateyama_bld (
 )
 ;
 
-drop table ovt.kumamoto_bld;
-create table ovt.kumamoto_bld (
+drop table omf.kumamoto_bld;
+create table omf.kumamoto_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
@@ -109,8 +109,8 @@ create table ovt.kumamoto_bld (
 )
 ;
 
-drop table ovt.higashi_hiroshima_bld;
-create table ovt.higashi_hiroshima_bld (
+drop table omf.higashi_hiroshima_bld;
+create table omf.higashi_hiroshima_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
@@ -137,8 +137,8 @@ create table ovt.higashi_hiroshima_bld (
 )
 ;
 
-drop table ovt.morioka_bld;
-create table ovt.morioka_bld (
+drop table omf.morioka_bld;
+create table omf.morioka_bld (
     ogc_fid             integer,
     wkb_geometry        geometry(MULTIPOLYGON, 4326),
     id                  varchar,
