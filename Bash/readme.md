@@ -1,6 +1,6 @@
 # Buildings
 
-## Overture Maps
+## Overture Maps Foundation (OMF)
 
 - Install a CLI tool or overturemaps-py repo to download Overture Maps data.
 
@@ -60,11 +60,28 @@ $ aws s3 ls s3://overturemaps-us-west-2/release/2024-07-22.0/ --region us-west-2
   PRE theme=transportation/
 ```
 
-## OpenStreetMap
+## OpenStreetMap (OSM)
 
-This script just import tsv files into PostgreSQL.
-You need to extract data before running this script.
+- Install a CLI tool
 
 ```sh
-bash building/import_osm_tsv.sh
+# osm2pgsql: tool for importing OSM pbf data into postgres
+## [Other OS](https://osm2pgsql.org/doc/install.html)
+## Mac
+$ brew install osm2pgsql
+```
+
+- Download data from osm as a pbf format.
+
+```sh
+bash OSM/ETL/osm_download.sh
+```
+
+- Then, import that data to postgres
+
+```sh
+# building
+bash OSM/ETL/osm_import.sh building YYYYMMDD
+# poi
+bash OSM/ETL/osm_import.sh poi YYYYMMDD
 ```

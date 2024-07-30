@@ -1,6 +1,6 @@
 
-local pois = osm2pgsql.define_table({
-    name = 'pois',
+local poi = osm2pgsql.define_table({
+    name = 'poi',
     ids = { type = 'any', type_column = 'osm_type', id_column = 'osm_id' },
     columns = {
         { column = 'name' },
@@ -25,7 +25,7 @@ function process_poi(object, geom)
         return
     end
 
-    pois:insert(a)
+    poi:insert(a)
 end
 
 function osm2pgsql.process_node(object)

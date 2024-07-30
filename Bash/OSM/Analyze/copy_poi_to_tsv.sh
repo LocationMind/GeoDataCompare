@@ -1,6 +1,11 @@
 #!/bin/bash
 
-cities=("tokyo" "tateyama" "hamamatsu" "higashi_hiroshima" "kumamoto" "morioka")
+# move to working directory
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+cd "${SCRIPT_DIR}"
+
+# set config
+source config.sh
 
 for city in "${cities[@]}"; do
 	echo $city
@@ -12,7 +17,7 @@ for city in "${cities[@]}"; do
 			class    ,
 			subclass ,
 			ST_AsText(geom)
-		from poi_$city
-	) to '~/tsv/osm_poi_$city.tsv' with csv delimiter E'\t';"
-	psql -d shimazaki -U postgres -c "$sql"
+		from osm.poi_$city
+	) to '$SCRIPT_DIR/tsv/osm_poi_$city.tsv' with csv delimiter E'\t';"
+	psql -d $POSTGRES_DATABASE -U $POSTGRES_USER -c "$sql"
 done

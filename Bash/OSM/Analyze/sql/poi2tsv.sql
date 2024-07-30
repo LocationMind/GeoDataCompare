@@ -7,9 +7,9 @@ copy (
         subclass,
         ST_asText(geom)
     from
-        public.pois
+        osm.poi
     where
         osm_id is not null and geom is not null
     order by
         osm_id
-) to STDOUT with csv header delimiter E'\t' \g 'pois.tsv'
+) to STDOUT with csv header delimiter E'\t' \g '../tsv/poi.tsv'

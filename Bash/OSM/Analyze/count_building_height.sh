@@ -7,16 +7,15 @@ cd "${SCRIPT_DIR}"
 # set config
 source config.sh
 
+cnt=0
 for city in "${cities[@]}"; do
 	echo $city
-	sql="\copy (
-		select 
-			class, subclass, count(*) as subclass_cnt 
-		from osm.poi_$city 
-		group by class, subclass 
-		order by class, subclass_cnt desc
-		)	to '$SCRIPT_DIR/tsv/osm_poi_cnt_$city.tsv' 
-		with csv delimiter E'\t';
+	sql="
+	select
+		count(height) as cnt_height
+	from osm.building_$city
 	"
 	psql -d $POSTGRES_DATABASE -U $POSTGRES_USER -c "$sql"
+	
+	((cnt++))
 done

@@ -1,7 +1,10 @@
-local buildings = osm2pgsql.define_area_table('buildings', {
+local building = osm2pgsql.define_area_table('building', {
     -- Define an autoincrementing id column, QGIS likes a unique id on the table
     { column = 'id', sql_type = 'serial', create_only = true },
-    { column = 'geom', type = 'polygon', not_null = true, projection = 4326},
+    { column = 'geom', type = 'multipolygon', not_null = true, projection = 4326},
+    -- Add columns for tags
+    { column = 'building', type = 'text' },
+    { column = 'height', type = 'text' }
 }, { indexes = {
     -- So we get an index on the id column
     { column = 'id', method = 'btree', unique = true },
@@ -12,8 +15,10 @@ local buildings = osm2pgsql.define_area_table('buildings', {
 
 function osm2pgsql.process_way(object)
     if object.is_closed and object.tags.building then
-        buildings:insert({
-            geom = object:as_polygon():transform(4326)
+        building:insert({
+            geom = object:as_polygon():transform(4326),
+            building = object.tags.building,  -- Example: Assuming 'building' tag
+            height = object.tags.height  -- Example: Assuming 'height' tag
         })
     end
 end
@@ -24,8 +29,10 @@ function osm2pgsql.process_relation(object)
         local mp = object:as_multipolygon():transform(4326)
         -- ...and split them into polygons which we insert into the table
         for geom in mp:geometries() do
-            buildings:insert({
-                geom = geom
+            building:insert({
+                geom = geom,
+                building = object.tags.building,  -- Example: Assuming 'building' tag
+                height = object.tags.height  -- Example: Assuming 'height' tag
             })
         end
     end

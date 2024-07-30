@@ -1,13 +1,15 @@
 #!/bin/bash
 
-cities=("tokyo" "tateyama" "hamamatsu" "higashi_hiroshima" "kumamoto" "morioka")
-city_labels=("Tokyo" "Tateyama" "Hamamatsu" "Higashi-hiroshima" "Kumamoto" "Morioka")
+# move to working directory
+SCRIPT_DIR=$(cd $(dirname $0); pwd)
+cd "${SCRIPT_DIR}"
+
+# set config
+source config.sh
 
 cnt=0
 for city in "${cities[@]}"; do
-	echo $city
-	city_lable="$city_labels[$cnt]"
-	
+	echo $city	
 	sql="
 	select 
 		name,
@@ -16,27 +18,27 @@ for city in "${cities[@]}"; do
 	select
 		'poi_cnt' as name,
 		count(*) as cnt
-	from poi_$city
+	from osm.poi_$city
 
 	union
 
-        select
+	select
 		'poi_amenity_cnt' as name,
-                count(*) as cnt
-        from poi_$city
+    count(*) as cnt
+	from osm.poi_$city
 	where class='amenity'
         
 	union
 
 	select
 		'poi_shop_cnt' as name,
-                count(*) as cnt
-        from poi_$city
-        where class='shop'
+    count(*) as cnt
+	from osm.poi_$city
+  where class='shop'
 	) a
 	order by name
 	"
-        psql -d shimazaki -U postgres -c "$sql"
+	psql -d $POSTGRES_DATABASE -U $POSTGRES_USER -c "$sql"
 
 	((cnt++))
 done

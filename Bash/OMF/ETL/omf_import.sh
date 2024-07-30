@@ -33,7 +33,7 @@ echo "Change psql user(-U) or database(-d) if threre is error about postgres"
 psql -U postgres -d postgres -c "create schema omf;"
 
 # create table
-psql -U postgres -d postgres -f ./create_tables_$TYPE.sql
+psql -U postgres -d postgres -f "$SCRIPT_DIR/sql/create_tables_$TYPE.sql"
 
 # Tokyo
 ogr2ogr -f "PostgreSQL" PG:"host=localhost user=postgres dbname=postgres" -nln omf.tokyo_$TYPE -nlt multipolygon $DATA_DIR/tokyo_$TYPE.geojson
