@@ -4,8 +4,9 @@ cache/
 .streamlit/
 tiles
 other.py
+.temp
 
 # ignore data dir
 Bash/**/data/**
 Bash/**/tsv/**
-Bash/**/overturemaps-py/**
+Bash/**/overturemaps-py/**=

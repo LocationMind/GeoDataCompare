@@ -3,7 +3,215 @@ import psycopg2
 import sqlalchemy
 import os
 import utils
+import data_integration as di
 
+
+def downloadSegmentBbox(bbox: str,
+                        savePathFolder: str,
+                        fileName:str = "segment") -> str:
+    """Download OvertureMap data of a certain type for the designated bbox.
+    Overturemaps must be already install using pip command tool :
+    "pip install overturemaps"
+
+    Args:
+        bbox (str): Bbox in the format 'east, south, west, north'.
+        savePathFolder (str): Path of the destination folder.
+        fileName(str, optional): Name of the file without the extension. Defaults to 'segment'.
+    
+    Returns:
+        str: Path of the saved file.
+    """
+    # Create the command line
+    cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
+
+    # Download OvertureMap segment data
+    pathSegment = os.path.join(savePathFolder, f"{fileName}.parquet")
+    try:
+        print("Run command : ", cmd.format(bbox, "segment", pathSegment))
+        os.system(cmd.format(bbox, "segment", pathSegment))
+        print("Segment data has been downloaded")
+    except Exception as e:
+        print(e)
+    
+    return pathSegment
+
+
+def downloadConnectorBbox(bbox: str,
+                          savePathFolder: str,
+                          fileName:str = "connector") -> str:
+    """Download OvertureMap data of a certain type for the designated bbox.
+    Overturemaps must be already install using pip command tool :
+    "pip install overturemaps"
+
+    Args:
+        bbox (str): Bbox in the format 'east, south, west, north'.
+        savePathFolder (str): Path of the destination folder.
+        fileName(str, optional): Name of the file without the extension. Defaults to 'segment'.
+    
+    Returns:
+        str: Path of the saved file.
+    """
+    # Create the command line
+    cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
+
+    # Download OvertureMap connector data
+    pathConnector = os.path.join(savePathFolder, f"{fileName}.parquet")
+    try:
+        print("Run command : ", cmd.format(bbox, "connector", pathConnector))
+        os.system(cmd.format(bbox, "connector", pathConnector))
+        print("Connector data has been downloaded")
+    except Exception as e:
+        print(e)
+    
+    return pathConnector
+
+
+def getExtentTable(connection:psycopg2.extensions.connection,
+                   tableName:str,
+                   schema:str = 'public') -> dict[str, float]:
+    """Get extent of a geometrical table with a geom column for
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableName (str): Name of the table.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+
+    Returns:
+        dict[str, float]: Bbox in a CSV format: "xmin,ymin,xmax,ymax".
+    """
+    # Create the query
+    query = f"""
+    WITH extent AS (
+        SELECT public.ST_Extent(geom) AS bbox FROM {schema}.{tableName}
+    )
+    SELECT
+        public.ST_XMin(e.bbox) AS x_min,
+        public.ST_YMin(e.bbox) AS y_min,
+        public.ST_XMax(e.bbox) AS x_max,
+        public.ST_YMax(e.bbox) AS y_max
+    FROM extent AS e;
+    """
+    
+    # Get the cursor and the first line
+    cursor = utils.executeSelectQuery(connection, query)
+    row = cursor.fetchone()
+    
+    # Create the dictionnary
+    bbox = f"{row[0]},{row[1]},{row[2]},{row[3]}"
+    
+    # Close the cursor
+    cursor.close()
+    
+    return bbox
+
+
+def deleteConnectors(connection:psycopg2.extensions.connection,
+                     tableNameConnector:str,
+                     tableNameRoad,
+                     schemaConnector:str = 'public',
+                     schemaRoad:str = 'public') -> int:
+    """Delete from the connector table all entity that does not intersects
+    the road table.
+    Return the number of entity deleted.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableNameConnector (str): Name of the connector table.
+        tableNameRoad (_type_): Name of the road table.
+        schemaConnector (str, optional): Name of the schema for the connector table.
+        Defaults to 'public'.
+        schemaRoad (str, optional): Name of the schema for the road table.
+        Defaults to 'public'.
+
+    Returns:
+        int: Number of entity deleted
+    """
+    # Create query
+    sqlDelete = f"""
+    DELETE FROM {schemaConnector}.{tableNameConnector}
+    WHERE id not in (
+        SELECT DISTINCT ON (c.id)
+        c.id
+        FROM {schemaConnector}.{tableNameConnector} AS c
+        JOIN {schemaRoad}.{tableNameRoad} AS r ON (public.ST_Intersects(c.geom, r.geom))
+    );
+    """
+    
+    # Execute the query and commit it
+    cursor = utils.executeSelectQuery(connection, sqlDelete)
+    connection.commit()
+    
+    # Get number of deleted connector
+    nbDeleted = cursor.rowcount
+    
+    # Close cursor
+    cursor.close()
+    
+    return nbDeleted
+
+
+def createTablesFromBbox(bbox: str,
+                         savePathFolder: str,
+                         area:str,
+                         roadTable:str,
+                         connectorTable:str,
+                         schema:str = "public",
+                         deleteDataWhenFinish:bool = True):
+    """Create road and connector tables from a bbox.
+
+    Args:
+        bbox (str): Bbox in the format 'east, south, west, north'.
+        savePathFolder (str): Path of the destination folder.
+        aeraName (str): Name of the area.
+        roadTable (str): Name of the road table to create.
+        connectorTable (str): Name of the road table to create
+        schema (str, optional): Name of the schema for saving the tables.
+        Defaults to "public".
+        deleteDataWhenFinish (bool, optional): Delete downloaded at the end of the
+        process if True. Defaults to True.
+    """
+    # Create files names
+    segmentFile = f"segment_{area}"
+    connectorFile = f"connector_{area}"
+    
+    # Download segment data
+    pathSegmentFile = downloadSegmentBbox(bbox, savePathFolder, segmentFile)
+    
+    # Create the road table and get its extent
+    di.createRoadTableV2(pathSegmentFile, roadTable, schema = schema)
+    newBbox = getExtentTable(connection, roadTable, schema = schema)
+    
+    # Download connector data from this bbox 
+    pathConnectorFile = downloadConnectorBbox(newBbox, savePathFolder, connectorFile)
+    
+    # Create the connector table
+    di.createConnectorTable(pathConnectorFile, connectorTable, schema = schema)
+    
+    # Delete connectors that do not intersects with the 
+    nb = deleteConnectors(connection,
+                          tableNameConnector = connectorTable,
+                          tableNameRoad = roadTable,
+                          schemaConnector = schema,
+                          schemaRoad = schema)
+    
+    print(f"Number of entity deleted: {nb} ")
+    
+    # Delete the downloaded data if user wants
+    if deleteDataWhenFinish:
+        # Segment file
+        if os.path.isfile(pathSegmentFile):
+            os.remove(pathSegmentFile)
+            print(f"{pathSegmentFile} has been deleted")
+        else:
+            print(f"{pathSegmentFile} is not a file")
+        
+        # Connector file
+        if os.path.isfile(pathConnectorFile):
+            os.remove(pathConnectorFile)
+            print(f"{pathConnectorFile} has been deleted")
+        else:
+            print(f"{pathConnectorFile} is not a file")
+    
 
 def createIndex(connection:psycopg2.extensions.connection,
                 tableName:str,
@@ -67,13 +275,13 @@ def createBoundingboxTable(connection:psycopg2.extensions.connection,
         utils.executeQueryWithTransaction(connection, dropSQL)
     
     # Create bounding_box structure
-    sqlBbox = """
-    CREATE TABLE IF NOT EXISTS public.bounding_box (
+    sqlBbox = f"""
+    CREATE TABLE IF NOT EXISTS public.{tableName} (
         id serial NOT NULL,
         geom geometry,
         wkt_geom character varying COLLATE pg_catalog."default",
         name character varying COLLATE pg_catalog."default",
-        CONSTRAINT bounding_box_pkey PRIMARY KEY (id))"""
+        CONSTRAINT {tableName}_pkey PRIMARY KEY (id))"""
     
     utils.executeQueryWithTransaction(connection, sqlBbox)
     
@@ -866,8 +1074,6 @@ def createPgRoutingTables(bboxCSV:str,
                           schema:str = 'public',
                           dropTablesIfExist:bool = True,
                           boundingBoxTable:str = 'bounding_box',
-                          roadTable:str = 'road',
-                          connectorTable:str = 'connector',
                           roadsConnectorsTable:str = 'roads_connectors',
                           connectorsRoadCountTable:str = 'connectors_road_count',
                           edgeTable:str = 'edge',
@@ -892,8 +1098,6 @@ def createPgRoutingTables(bboxCSV:str,
         schema (str, optional): Name of the schema. Defaults to 'public'.
         dropTablesIfExist (bool, optional): Drop all tables if True. Defaults to True.
         boundingBoxTable (str, optional): Name of the bounding box table. Defaults to 'bounding_box'.
-        roadTable (str, optional): Name of the initial road table. Defaults to 'road'.
-        connectorTable (str, optional): Name of the initial connector table. Defaults to 'connector'.
         roadsConnectorsTable (str, optional): Name of the roads connectors table. Defaults to 'roads_connectors'.
         connectorsRoadCountTable (str, optional): Name of the connectors road count table. Defaults to 'connectors_road_count'.
         edgeTable (str, optional): Name of the edge table. Defaults to 'edge'.
@@ -915,26 +1119,6 @@ def createPgRoutingTables(bboxCSV:str,
                            tableName = boundingBoxTable)
     end = time.time()
     print(f"insertBoundingBox : {end - start} seconds")
-
-    # Extract roads and connectors
-    extractRoads(extractedRoadTable = extractedRoadTable,
-                 boundingBoxId = id,
-                 connection = connection,
-                 schema = schema,
-                 roadTable = roadTable,
-                 boundingBoxTable = boundingBoxTable,
-                 dropTableIfExists = dropTablesIfExist)
-    end = time.time()
-    print(f"extractRoads : {end - start} seconds")
-    
-    extractConnectors(extractedConnectorTable = extractedConnectorTable,
-                      extractedRoadTable = extractedRoadTable,
-                      connection = connection,
-                      schema = schema,
-                      connectorTable=connectorTable,
-                      dropTableIfExists = dropTablesIfExist)
-    end = time.time()
-    print(f"extractConnectors : {end - start} seconds")
 
     # Create roads connector table
     createRoadsConnectorsTable(extractedRoadTable = extractedRoadTable,
@@ -1014,18 +1198,20 @@ if __name__ == "__main__":
     # Database and schema names
     database = "pgrouting"
     schema = "omf"
+    createBboxTable = True
     
     # Get connection initialise DuckDB and postgreSQL
     connection = utils.getConnection(database)    
     utils.initialisePostgreSQL(connection)
     utils.initialiseDuckDB(database)
     
-    # Create bbox table
-    createBoundingboxTable(connection)
-    end = time.time()
-    print(f"createBoundingboxTable : {end - start} seconds")
-    
-    # Add functions to postres
+    if createBboxTable:
+        # Create bbox table
+        createBoundingboxTable(connection)
+        end = time.time()
+        print(f"createBoundingboxTable : {end - start} seconds")
+        
+    # # Add functions to postres
     addSplitLineFromPointsFunction(connection)
     end = time.time()
     print(f"addSplitLineFromPointsFunction : {end - start} seconds")
@@ -1036,8 +1222,10 @@ if __name__ == "__main__":
     
     
     # Load the 3 bbox that we will use from the json file
-    path_json = os.path.join(".", "Data", "Bbox", "bboxs.json")
-    with open(path_json, "r") as f:
+    pathJson = os.path.join(".", "Data", "Bbox", "bboxs.json")
+    folderSave = os.path.join(".", "Data", ".temp")
+    
+    with open(pathJson, "r") as f:
         bboxJson = json.load(f)
     
     # Create tables for each bbox
@@ -1047,39 +1235,64 @@ if __name__ == "__main__":
         areaBbox = elem["area"]
         area = elem["area"].lower()
         
-        # Create names of the other tables
-        extractRoad = f"road_{area}"
-        extractConnector = f"connector_{area}"
+        print(f"Start process {areaBbox}")
+        # Check if the process has already been done
+        if utils.isProcessAlreadyDone(connection, area, 'omf'):
+            
+            print(f"{areaBbox} has already been calculated yet")
+            
+            # If the bounding box table has been recreated, we insert a row in it
+            if createBboxTable:
+                # Tranform bbox to OGC WKT format and create bounding box table 
+                wktGeom = utils.bboxCSVToBboxWKT(bbox)
+
+                # Insert bbox in it and get bbox id
+                id = insertBoundingBox(connection = connection,
+                                    wktGeom = wktGeom,
+                                    aeraName = areaBbox)
+                end = time.time()
+                print(f"insertBoundingBox : {end - start} seconds")
+        else:
+            
+            print(f"{areaBbox} has not been calculated yet")
         
-        roadsConnectorsTable = f'roads_connectors_{area}'
-        connectorsRoadCountTable = f'connectors_road_count_{area}'
-        edgeTable = f'edge_{area}'
-        joinEdgeTable = f'join_edge_str_to_int_{area}'
-        joinConnectorTable = f'join_connector_str_to_int_{area}'
-        edgeWithCostTable = f'edge_with_cost_{area}'
-        nodeTable = f'node_{area}'
-        
-        print(f"Start process {area}")
-        
-        # Create all tables for each
-        createPgRoutingTables(bboxCSV = bbox,
-                              areaNameBoundingBox = areaBbox,
-                              extractedRoadTable = extractRoad,
-                              extractedConnectorTable = extractConnector,
-                              connection = connection,
-                              schema = schema,
-                              roadsConnectorsTable = roadsConnectorsTable,
-                              connectorsRoadCountTable = connectorsRoadCountTable,
-                              edgeTable = edgeTable,
-                              joinEdgeTable = joinEdgeTable,
-                              joinConnectorTable = joinConnectorTable,
-                              edgeWithCostTable = edgeWithCostTable,
-                              nodeTable = nodeTable,
-                              start = start)
-        
-        # # Djikstra algorithm
-        # savePath = os.path.join(".", "Data", "Test", "result.geojson")
-        # djikstra(35.699579, 139.696734, 35.701291, 139.700234, savePath)
-        
-        # end = time.time()
-        # print(f"Djikstra : {end - start} seconds")
+            # Create names of the other tables
+            extractRoad = f"road_{area}"
+            extractConnector = f"connector_{area}"
+            
+            roadsConnectorsTable = f'roads_connectors_{area}'
+            connectorsRoadCountTable = f'connectors_road_count_{area}'
+            edgeTable = f'edge_{area}'
+            joinEdgeTable = f'join_edge_str_to_int_{area}'
+            joinConnectorTable = f'join_connector_str_to_int_{area}'
+            edgeWithCostTable = f'edge_with_cost_{area}'
+            nodeTable = f'node_{area}'
+            
+            # Download and create connector and road tables from bbox
+            createTablesFromBbox(bbox = bbox,
+                                    savePathFolder = folderSave,
+                                    area = area,
+                                    roadTable = extractRoad,
+                                    connectorTable = extractConnector,
+                                    schema = schema,
+                                    deleteDataWhenFinish = True)
+            
+            end = time.time()
+            print(f"createTablesFromBbox : {end - start} seconds")
+            
+            # Create all tables for each
+            createPgRoutingTables(bboxCSV = bbox,
+                                    areaNameBoundingBox = areaBbox,
+                                    extractedRoadTable = extractRoad,
+                                    extractedConnectorTable = extractConnector,
+                                    connection = connection,
+                                    schema = schema,
+                                    roadsConnectorsTable = roadsConnectorsTable,
+                                    connectorsRoadCountTable = connectorsRoadCountTable,
+                                    edgeTable = edgeTable,
+                                    joinEdgeTable = joinEdgeTable,
+                                    joinConnectorTable = joinConnectorTable,
+                                    edgeWithCostTable = edgeWithCostTable,
+                                    nodeTable = nodeTable,
+                                    start = start)
+            

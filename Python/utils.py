@@ -179,3 +179,44 @@ def executeSelectQuery(connection:psycopg2.extensions.connection,
     cursor.execute(query)
 
     return cursor
+
+def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
+                         area:str,
+                         schema:str) -> bool:
+    """Return a boolean that indicates if the table is store in the database.
+    To do so, check if edge_with_cost and node tables are created for the
+    given schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        area (str): Name of the area.
+        schema (str): Name of the schema.
+
+    Returns:
+        bool: True if the table is stored in the database.
+    """
+    # Create edge with cost and node table name
+    edgeTable = f"edge_with_cost_{area}"
+    nodeTable = f"node_{area}"
+    
+    # Create query
+    query = f"""
+    SELECT t.table_schema, t.table_name FROM information_schema.tables AS t
+    WHERE ((t.table_name = '{edgeTable}') OR (t.table_name = '{nodeTable}'))
+    AND (t.table_schema = '{schema}')
+    ORDER BY t.table_schema, t.table_name ASC
+    """
+    
+    # Execute query
+    cursor = executeSelectQuery(connection, query)
+    
+    done = False
+    # Exactly two rows are selected is the process has been done
+    if cursor.rowcount == 2:
+        # Result is already sorted, so the first row should be the edge one, the second the node
+        edgeRow = cursor.fetchone()
+        nodeRow = cursor.fetchone()
+        if edgeRow == (schema, edgeTable) and nodeRow == (schema, nodeTable):
+            done = True
+    
+    return done
