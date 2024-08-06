@@ -1,14 +1,9 @@
 import geopandas as gpd
 import pandas as pd
-import time
-from functools import partial
 import faicons as fa
-import numpy as np
 from shiny import reactive
-from shiny.ui import page_navbar
-import shiny.experimental as exp
 from shiny.express import input, ui, render
-from shinywidgets import render_widget, reactive_read, output_widget
+from shinywidgets import render_widget, reactive_read
 import sqlalchemy
 import ipywidgets
 import lonboard as lon
@@ -17,6 +12,8 @@ from lonboard.colormap import apply_categorical_cmap
 from matplotlib.colors import is_color_like, to_hex, to_rgb
 from dotenv import load_dotenv
 import os
+import utm
+import shapely
 
 
 ### Functions used in the rest of the script ###
@@ -45,29 +42,26 @@ def getEngine() -> sqlalchemy.engine.base.Engine:
     return engine
 
 
-def getAllAreas(columnName:str = "name",
+def getAllAreas(engine:sqlalchemy.engine.base.Engine,
                 tableName:str = "bounding_box",
-                schema:str = "public") -> list[str]:
+                schema:str = "public") -> gpd.GeoDataFrame:
     """Get all areas stored in the `bounding_box` table.
 
     Args:
-        columnName (str, optional): Name of the column. Defaults to "name".
+        engine (sqlalchemy.engine.base.Engine):
+        Engine used for (geo)pandas sql queries.
         tableName (str, optional): Name of the table. Defaults to "bounding_box".
         schema (str, optional): Name of the schema. Defaults to "public".
 
     Returns:
-        list[str]: Sorted list of the different areas.
-    """    
-    # Get all the area through the bounding box table
-    sqlQueryTable = f"""SELECT * FROM {schema}.{tableName}"""
-
+        gpd.GeoDataFrame: GeoDataFrame with all entries in the table.
+    """
+    # Get all the entity from bounding box table
+    sqlQueryTable = f"""SELECT * FROM {schema}.{tableName};"""
+    
     bounding_box = gpd.GeoDataFrame.from_postgis(sqlQueryTable, engine)
     
-    # Convert the DataFrame to a list and sort it
-    areas = bounding_box[columnName].tolist()
-    areas.sort()
-    
-    return areas
+    return bounding_box
 
 
 def getLengthPerClass(edgeGDF:gpd.GeoDataFrame,
@@ -319,6 +313,47 @@ def getColorComponents(cardinality:int,
     return color
 
 
+def getAreasCRS(gdf:gpd.GeoDataFrame,
+                columnName:str = "name") -> dict[str, int]:
+    """Get UTM projection from a gdf
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame from bounding box table.
+
+    Returns:
+        dict[str, int]: UTM projection for each areas, in a dict form.
+    """
+    # Get copy of the geodataframe 
+    gdfCopy = gdf.copy()
+    
+    # Get centroid of all geometries
+    gdfCopy["centroid"] = gdfCopy["geom"].centroid
+    
+    # Calculate crs from all centroid
+    gdfCopy["crs"] = gdfCopy['centroid'].apply(getUTMProj, lambda point: utm.from_latlon(point.y, point.x))
+    
+    dictCRS = gdfCopy.set_index(columnName)["crs"].to_dict()
+    
+    return dictCRS
+    
+
+def getUTMProj(point: shapely.Point) -> int:
+    """Get UTM projection for a specific point
+
+    Args:
+        point (shapely.Point): Point representing the centroid of the geometry.
+
+    Returns:
+        int: UTM projection crs id
+    """
+    # Get zone number
+    zone = utm.from_latlon(point.y, point.x)[2]
+    
+    # Return formatted string
+    epsgCode = f"326{zone:02d}" if point.y >= 0 else f"327{zone:02d}"
+    
+    return int(epsgCode)
+
 
 ### Variables used in the application ###
 
@@ -383,17 +418,17 @@ ICONS = {
     "github":fa.icon_svg("github", height="2em", width="2em"),
 }
 
-# Areas stored in the bounding box table
-areas = getAllAreas()
+# Bounding box table
+bounding_box_gdf = getAllAreas(engine)
 
-# Dict with crs for each area
-areasCRS = {}
-for area in areas:
-    if area == "Paris":
-        crs = 2154
-    else:
-        crs = 6691
-    areasCRS[area] = crs
+nameColumn = "name"
+
+# Get areas from it
+areas = bounding_box_gdf[nameColumn].tolist()
+areas.sort()
+
+# Get bounding boxs for each areas
+areasCRS = getAreasCRS(bounding_box_gdf, nameColumn)
 
 # Get path of help.md and licenses.md files (used after)
 pathHelpMD = Path(__file__).parent / "help.md"
