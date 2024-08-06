@@ -5,6 +5,7 @@ cache/
 tiles
 other.py
 .temp
+.vscode
 
 # ignore data dir
 Bash/**/data/**

@@ -1,7 +1,10 @@
-import utils
 import os
 import pandas as pd
 import psycopg2
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Python import utils
 
 def getNumberElements(connection:psycopg2.extensions.connection,
                       schema:str,

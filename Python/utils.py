@@ -1,6 +1,6 @@
-import duckdb
 import psycopg2
 import sqlalchemy
+import os
 
 def bboxCSVToBboxWKT(bboxCSV:str) -> str:
     """Transform a bounding box in CSV format to its equivalent in OGC WKT format.
@@ -47,6 +47,8 @@ def initialiseDuckDB(dbname: str,
         user (str, optional): Username for the database. Defaults to 'postgres'.
         password (str, optional): User password for the database. Defaults to 'postgres'.
     """
+    # Import DuckDb here to prevent problems if not install
+    import duckdb
     # Create and load the spatial extension
     duckdb.install_extension("spatial")
     duckdb.load_extension("spatial")
@@ -122,20 +124,6 @@ def getEngine(database:str,
     engine = sqlalchemy.create_engine(f"postgresql://{user}:{password}@{host}:{port}/{database}")
     return engine
 
-def initialisePostgreSQL(connection:psycopg2.extensions.connection):
-    """Initialise postgreSQL by installing postgis and pgrouting extensions.
-    If the extensions already exist, it skip the query.
-
-    Args:
-        connection (psycopg2.extensions.connection): Database connection token.
-    """
-    # Create PgRouting extension if not exists
-    sqlInitPostgreSQL  = """
-    CREATE EXTENSION IF NOT EXISTS postgis;
-    CREATE EXTENSION IF NOT EXISTS pgrouting;"""
-    
-    executeQueryWithTransaction(connection, sqlInitPostgreSQL)
-
 
 def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
                                 query:str):
@@ -146,6 +134,9 @@ def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         query (str): Insert query already formatted.
+    
+    Raises:
+        Exeption: If an exception occur.
     """
     try:
         cursor = connection.cursor()
@@ -179,6 +170,249 @@ def executeSelectQuery(connection:psycopg2.extensions.connection,
     cursor.execute(query)
 
     return cursor
+
+
+def addSplitLineFromPointsFunction(connection):
+    """Add a custom function named "ST_SplitLineFromPoints" to the public schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+    """
+    # Create and add the function
+    sqlAddFunction = """
+    CREATE OR REPLACE FUNCTION public.ST_SplitLineFromPoints(
+        line geometry,
+        point_a geometry,
+        point_b geometry
+        )
+        RETURNS geometry AS
+        $BODY$
+        WITH
+            split AS (SELECT (public.ST_Split(
+                line,
+                public.ST_Multi( public.ST_Union( point_a, point_b)))
+                            ) geom)
+            SELECT (g.gdump).geom as geom FROM (
+            SELECT public.ST_Dump(
+                geom
+            ) AS gdump from split) as g
+            WHERE public.ST_Intersects((g.gdump).geom, point_a) AND public.ST_Intersects((g.gdump).geom, point_b)
+        $BODY$
+        LANGUAGE SQL;
+
+    ALTER FUNCTION public.ST_SplitLineFromPoints(geometry, geometry, geometry)
+        OWNER TO postgres;
+    
+    COMMENT ON FUNCTION public.ST_SplitLineFromPoints(geometry, geometry, geometry)
+        IS 'args: line, point_a, point_b - Returns a collection of geometries created by splitting a line by two points. It only returns the line that intersects the two points.';"""
+    
+    executeQueryWithTransaction(connection, sqlAddFunction)
+
+
+def addGetEdgeCostFunction(connection):
+    """Add a custom function named "get_edge_cost" to the public schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+    """
+    
+    # Create and add the function
+    sqlAddFunction = """
+    CREATE OR REPLACE FUNCTION public.get_edge_cost(
+        len double precision,
+        access_restrictions json,
+        direction character varying,
+        start_fraction double precision,
+        end_fraction double precision
+    )
+    RETURNS double precision AS
+    $BODY$
+    DECLARE
+        access json;
+    BEGIN
+        FOR access IN SELECT json_array_elements(access_restrictions) AS restrictions
+        LOOP
+
+            IF access->>'access_type' = 'denied'
+            AND access->'when'->>'heading' = direction
+            AND(
+                (start_fraction >= (access->'between'->>0)::double precision
+                AND end_fraction <= (access->'between'->>1)::double precision)
+                OR access->>'between' is null) THEN
+                -- Access denied, no cost
+                RETURN -1;
+            END IF;
+        END LOOP;
+        
+        -- Access granted, return length of the edge
+        RETURN len;
+    END
+    $BODY$
+    LANGUAGE plpgsql;
+
+    ALTER FUNCTION public.get_edge_cost(double precision, json, character varying, double precision, double precision)
+        OWNER TO postgres;
+
+    COMMENT ON FUNCTION public.get_edge_cost(double precision, json, character varying, double precision, double precision)
+        IS 'args: len, access_restrictions, direction, start_fraction, end_fraction -
+        Return cost of the edge with the right direction and start and end of line fraction.';"""
+    
+    executeQueryWithTransaction(connection, sqlAddFunction)
+
+
+def initialisePostgreSQL(connection:psycopg2.extensions.connection):
+    """Initialise postgreSQL by installing postgis and pgrouting extensions.
+    If the extensions already exist, it skip the query.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+    """
+    # Create PgRouting extension if not exists
+    sqlInitPostgreSQL  = """
+    CREATE EXTENSION IF NOT EXISTS postgis;
+    CREATE EXTENSION IF NOT EXISTS pgrouting;"""
+    
+    executeQueryWithTransaction(connection, sqlInitPostgreSQL)
+    
+    # Add functions to postgresql
+    addSplitLineFromPointsFunction(connection)
+    addGetEdgeCostFunction(connection)
+
+
+def createIndex(connection:psycopg2.extensions.connection,
+                tableName:str,
+                columnName:str,
+                schema:str = 'public'):
+    """Create a non geometrical index on the column table.
+    Drop the index if already exists.
+    The name of the index will be `<table_name>_<column>_idx`.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableName (str, optional): Name of the table.
+        columnName (str): Name of the column.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Create the query
+    sqlQuery = f"""DROP INDEX IF EXISTS {schema}.{tableName}_{columnName}_idx CASCADE;
+    
+    CREATE INDEX IF NOT EXISTS {tableName}_{columnName}_idx ON {schema}.{tableName} USING btree ({columnName} ASC NULLS LAST);"""
+    
+    # And execute it
+    executeQueryWithTransaction(connection, sqlQuery)
+
+
+def createGeomIndex(connection:psycopg2.extensions.connection,
+                    tableName:str,
+                    geomColumnName:str = 'geom',
+                    schema:str = 'public'):
+    """Create a geometrical index on the geom column for the speciefied table.
+    Drop the index if already exists.
+    The name of the index will be `<table_name>_geom_idx`.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableName (str, optional): Name of the table.
+        columnName (str): Name of the geometry column. Defaults to 'geom'.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Create the query
+    sqlQuery = f"""DROP INDEX IF EXISTS {schema}.{tableName}_geom_idx CASCADE;
+        
+    CREATE INDEX IF NOT EXISTS {tableName}_geom_idx
+    ON {schema}.{tableName} USING GIST ({geomColumnName});"""
+    
+    # And execute it
+    executeQueryWithTransaction(connection, sqlQuery)
+
+
+def dropTableCascade(connection:psycopg2.extensions.connection,
+                     tableName:str,
+                     schema:str):
+    """Drop (cascade) a table for the given schema
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableName (str): Name of the table to drop.
+        schema (str): Name of the schema the table belong to.
+    """
+    dropSQL = f"DROP TABLE IF EXISTS {schema}.{tableName} CASCADE;"
+    executeQueryWithTransaction(connection, dropSQL)
+    
+
+def createBoundingboxTable(connection:psycopg2.extensions.connection,
+                           tableName:str = 'bounding_box',
+                           dropTableIfExists:bool = True):
+    """Create the bounding box table in the public schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        tableName (str, optional): Name of the table to create. Defaults to 'bounding_box'.
+        dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+    """
+    # Drop table if the user wants to
+    if dropTableIfExists:
+        dropTableCascade(connection, tableName, schema = "public")
+    
+    # Create bounding_box structure
+    sqlBbox = f"""
+    CREATE TABLE IF NOT EXISTS public.{tableName} (
+        id serial NOT NULL,
+        geom geometry,
+        wkt_geom character varying COLLATE pg_catalog."default",
+        name character varying COLLATE pg_catalog."default",
+        CONSTRAINT {tableName}_pkey PRIMARY KEY (id))"""
+    
+    executeQueryWithTransaction(connection, sqlBbox)
+    
+    # Index creation
+    createIndex(connection, tableName, 'id', schema='public')
+
+    # Geometry index creation
+    createGeomIndex(connection, tableName, geomColumnName='geom', schema='public')
+
+
+def insertBoundingBox(connection:psycopg2.extensions.connection,
+                      wktGeom:str,
+                      aeraName:str,
+                      tableName:str = 'bounding_box') -> int:
+    """Insert a bounding box inside the table.
+    The geometry is provided in the WKT format.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        wktGeom (str): Geometry in OGC WKT format.
+        aeraName (str): Name of the area.
+        tableName (str, optional): Name of the table to create. Defaults to 'bounding_box'.
+    
+    Return:
+        int: Id of the inserted row
+    """
+    # Insert value and return id
+    sqlInsert = f"""
+    INSERT INTO public.{tableName} (geom, wkt_geom, name)
+    VALUES (public.ST_GeomFromText('{wktGeom}', 4326), '{wktGeom}', '{aeraName}');"""
+    
+    executeQueryWithTransaction(connection, sqlInsert)
+    # Select the entity with the greatest id among those that corresponds exactly to the one added before
+    sqlId = f"""
+    SELECT id
+    FROM public.{tableName}
+    WHERE wkt_geom = '{wktGeom}'
+    AND name = '{aeraName}'
+    ORDER BY id DESC
+    LIMIT 1"""
+    
+    cursor = executeSelectQuery(connection, sqlId)
+    
+    # Get id of the inserted row
+    id = cursor.fetchone()[0]
+    
+    # Close the cursor
+    cursor.close()
+    
+    return id
+
 
 def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
                          area:str,
@@ -220,3 +454,48 @@ def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
             done = True
     
     return done
+
+
+def downloadOMFTypeBbox(bbox: str,
+                        savePathFolder: str,
+                        dataType:str,
+                        fileName:str = "") -> str:
+    """Download OvertureMap data of a certain type for the designated bbox.
+    Return the path of the saved file.
+    Overturemaps must be already install using pip command tool :
+    "pip install overturemaps"
+
+    Args:
+        bbox (str): Bbox in the format 'east, south, west, north'.
+        savePathFolder (str): Path of the destination folder.
+        dataType (str): Subtype of OMF data.
+        fileName(str, optional): Name of the file without the extension.
+        If empty, the filename will be the provided type.
+        Defaults to ''.
+    
+    Raises:
+        ValueError: If an error occured while downloading the data.
+    
+    Returns:
+        str: Path of the saved file.
+    """
+    # Create the command line
+    cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
+    
+    if fileName == "":
+        fileName = dataType
+        
+    # Download OvertureMap connector data
+    path = os.path.join(savePathFolder, f"{fileName}.parquet")
+    
+    # Run command
+    print("Run command: ", cmd.format(bbox, dataType, path))
+    result = os.system(cmd.format(bbox, dataType, path))
+    
+    # Check if result is okay
+    if result != 0:
+        raise(ValueError("An error as ocured"))
+    
+    print(f"{dataType} data has been downloaded")
+    
+    return path
