@@ -3,6 +3,7 @@ from osmnx import convert as con
 import geopandas as gpd
 import pandas as pd
 import sqlalchemy
+from shapely.geometry import Polygon
 import psycopg2
 import time
 import os
@@ -615,6 +616,8 @@ def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
     
     # Rename column
     gdf = gdf.rename(columns=columnsRenamed)
+    
+    gdf = gdf[gdf["geom"] == Polygon]
     
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
