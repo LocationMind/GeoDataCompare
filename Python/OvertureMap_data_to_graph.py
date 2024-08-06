@@ -6,66 +6,6 @@ import utils
 import data_integration as di
 
 
-def downloadSegmentBbox(bbox: str,
-                        savePathFolder: str,
-                        fileName:str = "segment") -> str:
-    """Download OvertureMap data of a certain type for the designated bbox.
-    Overturemaps must be already install using pip command tool :
-    "pip install overturemaps"
-
-    Args:
-        bbox (str): Bbox in the format 'east, south, west, north'.
-        savePathFolder (str): Path of the destination folder.
-        fileName(str, optional): Name of the file without the extension. Defaults to 'segment'.
-    
-    Returns:
-        str: Path of the saved file.
-    """
-    # Create the command line
-    cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
-
-    # Download OvertureMap segment data
-    pathSegment = os.path.join(savePathFolder, f"{fileName}.parquet")
-    try:
-        print("Run command : ", cmd.format(bbox, "segment", pathSegment))
-        os.system(cmd.format(bbox, "segment", pathSegment))
-        print("Segment data has been downloaded")
-    except Exception as e:
-        print(e)
-    
-    return pathSegment
-
-
-def downloadConnectorBbox(bbox: str,
-                          savePathFolder: str,
-                          fileName:str = "connector") -> str:
-    """Download OvertureMap data of a certain type for the designated bbox.
-    Overturemaps must be already install using pip command tool :
-    "pip install overturemaps"
-
-    Args:
-        bbox (str): Bbox in the format 'east, south, west, north'.
-        savePathFolder (str): Path of the destination folder.
-        fileName(str, optional): Name of the file without the extension. Defaults to 'segment'.
-    
-    Returns:
-        str: Path of the saved file.
-    """
-    # Create the command line
-    cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
-
-    # Download OvertureMap connector data
-    pathConnector = os.path.join(savePathFolder, f"{fileName}.parquet")
-    try:
-        print("Run command : ", cmd.format(bbox, "connector", pathConnector))
-        os.system(cmd.format(bbox, "connector", pathConnector))
-        print("Connector data has been downloaded")
-    except Exception as e:
-        print(e)
-    
-    return pathConnector
-
-
 def getExtentTable(connection:psycopg2.extensions.connection,
                    tableName:str,
                    schema:str = 'public') -> dict[str, float]:
@@ -170,19 +110,15 @@ def createTablesFromBbox(bbox: str,
         deleteDataWhenFinish (bool, optional): Delete downloaded at the end of the
         process if True. Defaults to True.
     """
-    # Create files names
-    segmentFile = f"segment_{area}"
-    connectorFile = f"connector_{area}"
-    
     # Download segment data
-    pathSegmentFile = downloadSegmentBbox(bbox, savePathFolder, segmentFile)
+    pathSegmentFile = utils.downloadOMFTypeBbox(bbox, savePathFolder, "segment")
     
     # Create the road table and get its extent
     di.createRoadTableV2(pathSegmentFile, roadTable, schema = schema)
     newBbox = getExtentTable(connection, roadTable, schema = schema)
     
     # Download connector data from this bbox 
-    pathConnectorFile = downloadConnectorBbox(newBbox, savePathFolder, connectorFile)
+    pathConnectorFile = utils.downloadOMFTypeBbox(newBbox, savePathFolder, "connector")
     
     # Create the connector table
     di.createConnectorTable(pathConnectorFile, connectorTable, schema = schema)

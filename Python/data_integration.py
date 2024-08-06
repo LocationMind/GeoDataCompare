@@ -405,6 +405,48 @@ def createLocalityTable(pathLocality:str,
     createGeometry(tableName, schema = schema)
 
 
+def createPlaceTable(pathPlaceData: str,
+                     tableName: str = 'place',
+                     dropTableIfExists:bool = True,
+                     schema:str = 'public'):
+    """Create the place table in postgis.
+
+    Args:
+        pathPlaceData (str): Path of the place data.
+        tableName (str, optional): Name of the table to create. Defaults to 'place'.
+        dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Drop table if the user wants to
+    if dropTableIfExists:
+        duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.{schema}.{tableName} CASCADE;")
+    
+    # Create the place table with all the good attributes
+    duckdb.execute(f"""CREATE TABLE dbpostgresql.{schema}.{tableName} AS (SELECT
+               id,
+               version,
+               update_time,
+               JSON(sources) AS sources,
+               names.primary AS primary_name,
+               JSON(categories) as categories,
+               confidence,
+               websites,
+               emails,
+               socials,
+               phones,
+               JSON(addresses) as addresses,
+               JSON(brand) as brand,
+               -- 'places' AS theme,
+               -- 'place' AS type,
+               ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
+               FROM '{pathPlaceData}');
+               """)
+    
+    # Create index id and geometry
+    createIndexId(tableName, schema = schema)
+    createGeometry(tableName, schema = schema)
+
+
 def createIndexId(tableName: str,
                   idTableName:str = "id",
                   schema:str = 'public'):
