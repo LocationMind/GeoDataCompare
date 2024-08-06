@@ -16,7 +16,7 @@ import utm
 import shapely
 
 
-### Functions used in the rest of the script ###
+### Static functions used in the rest of the script ###
 def getEngine() -> sqlalchemy.engine.base.Engine:
     """Get engine from .env file.
     This file must be in the same folder than the app.py script.
@@ -368,7 +368,9 @@ widthMinPixels = 2
 
 # Dict of the different criterion
 quality_criteria = {
-    "base":"Original dataset",
+    "base":"Road network",
+    "building":"Buildings",
+    "place":"Places / Points of interest",
     "conn_comp":"Connected components",
     "strongly_comp":"Strongly connected components",
     "isolated_nodes":"Isolated nodes",
@@ -381,6 +383,14 @@ template_layers_name = {
     "base": {
         "OSM" : [("osm.node_{}", "Point"), ("osm.edge_with_cost_{}", "LineString")],
         "OMF" : [("omf.node_{}", "Point"), ("omf.edge_with_cost_{}", "LineString")],
+    },
+    "building": {
+        "OSM" : [("osm.building_{}", "Polygon")],
+        "OMF" : [("omf.building_{}", "Polygon")],
+    },
+    "place": {
+        "OSM" : [("osm.place_{}", "Point")],
+        "OMF" : [("omf.place_{}", "Point")],
     },
     "conn_comp": {
         "OSM" : [("results.connected_components_{}_osm", "Point")],
@@ -410,6 +420,8 @@ ICONS = {
     "edges": fa.icon_svg("road"),
     "length": fa.icon_svg("ruler"),
     "criteria": fa.icon_svg("calculator"),
+    "building": fa.icon_svg("building"),
+    "place": fa.icon_svg("location-dot"),
     "conn_comp":fa.icon_svg("arrows-left-right"),
     "strongly_comp":fa.icon_svg("arrow-right"),
     "isolated_nodes":fa.icon_svg("circle-dot"),
@@ -561,12 +573,14 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
         # Common style
         with ui.accordion_panel("Common styles", class_= "background-sidebar"):
             
-            ui.input_numeric("radius_min_pixels", "Radius min pixel", 2, min=1, max=10)
+            ui.input_numeric("radius_min_pixels", "Radius min pixel (point)", 2, min=1, max=10)
             
-            ui.input_numeric("width_min_pixels", "Width min pixel", 2, min=1, max=10)
+            ui.input_numeric("width_min_pixels", "Width min pixel (line)", 2, min=1, max=10)
+            
+            ui.input_numeric("line_min_pixel", "Line min pixel (polygon)", 0, min=0, max=10)
         
-        # Style base layer
-        with ui.accordion_panel("Style base", class_= "background-sidebar"):
+        # # Style base layer
+        # with ui.accordion_panel("Style base", class_= "background-sidebar"):
             
             @render_widget
             def colorPickerPoint() -> ipywidgets.ColorPicker:
@@ -591,6 +605,30 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                 """
                 color_picker_line = ipywidgets.ColorPicker(concise=True, description='Line color', value='#FF0000')
                 return color_picker_line
+            
+            @render_widget
+            def colorPickerPolygonFill() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the polygon fill style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for lines style.
+                """
+                color_picker_polygon_fill = ipywidgets.ColorPicker(concise=True, description='Polygon color (fill)', value='#00FF00')
+                return color_picker_polygon_fill
+            
+            @render_widget
+            def colorPickerPolygonLine() -> ipywidgets.ColorPicker:
+                """Render widget function.
+                
+                Create a color picker for the polygon line style.
+
+                Returns:
+                    ipywidgets.ColorPicker: color picker for lines style.
+                """
+                color_picker_polygon_line = ipywidgets.ColorPicker(concise=True, description='Polygon color (line)', value='#000000')
+                return color_picker_polygon_line
         
         # Style (strongly) connected components layers
         with ui.accordion_panel("Style components", class_= "background-sidebar"):
@@ -1002,11 +1040,16 @@ with ui.nav_panel("Dashboard"):
                             layer = lon.ScatterplotLayer.from_geopandas(
                                 qualityOSM(),
                                 radius_min_pixels = 2)
-                            
+                        
                         elif geomType == "LineString":
                             layer = lon.PathLayer.from_geopandas(
                                 qualityOSM(),
                                 width_min_pixels = 2)
+                        
+                        elif geomType == "Polygon":
+                            layer = lon.PolygonLayer.from_geopandas(
+                                qualityOSM(),
+                                line_width_min_pixels = 0)
                         
                         layers = [layer]
                 
@@ -1081,11 +1124,16 @@ with ui.nav_panel("Dashboard"):
                             layer = lon.ScatterplotLayer.from_geopandas(
                                 qualityOMF(),
                                 radius_min_pixels = 2)
-                            
+                        
                         elif geomType == "LineString":
                             layer = lon.PathLayer.from_geopandas(
                                 qualityOMF(),
                                 width_min_pixels = 2)
+                        
+                        elif geomType == "Polygon":
+                            layer = lon.PolygonLayer.from_geopandas(
+                                qualityOMF(),
+                                line_width_min_pixels = 0)
                         
                         layers = [layer]
                 
@@ -1271,6 +1319,10 @@ def getCriterionInformation() -> tuple[str, str]:
         The first value is for OSM, the other for OMF.
     """
     OSMValue, OMFValue = "", ""
+    # Buildings or POIs
+    if input.select_criterion() == "building" or input.select_criterion() == "place":
+        OSMValue = qualityOSM().shape[0]
+        OMFValue = qualityOMF().shape[0]
     # (Strongly) connected components
     if input.select_criterion() == "conn_comp" or input.select_criterion() == "strongly_comp":
         OSMValue = getGroupByComp(qualityOSM())
@@ -1378,33 +1430,48 @@ def updateLayers():
     
     width = input.width_min_pixels()
     
+    
+    # Polygon colors and line width
+    colorFillPolygon = getColorFromColorPicker(colorPickerPolygonFill)
+    colorLinePolygon = getColorFromColorPicker(colorPickerPolygonLine)
+    
+    polygonWidth = input.line_min_pixel()
+    
     # Get map layers
     osmLayers = reactive_read(osm_map.widget, "layers")
     omfLayers = reactive_read(omf_map.widget, "layers")
     
     # Check if the inputs are correct
-    if type(radius) == int and type(width) == int:
-        if radius >= 1 and width >= 1:
+    if type(radius) == int and type(width) == int and type(polygonWidth) == int:
+        if radius >= 1 and width >= 1 and polygonWidth >= 0:
             
             # Check all layers
             for layer in osmLayers + omfLayers:
                 
-                # If the layer is of point type, we change with the appropriate
+                # Change the width according to the type
                 if type(layer) == lon._layer.ScatterplotLayer:
                     layer.radius_min_pixels = radius
                 
                 elif type(layer) == lon._layer.PathLayer:
                     layer.width_min_pixels = width
+                
+                elif type(layer) == lon._layer.PolygonLayer:
+                    layer.line_width_min_pixels = polygonWidth
     
     # If it is base layer, the color is changed too.
-    if currentCriterion() == "base":
+    if currentCriterion() == "base" or currentCriterion() == "building" or currentCriterion() == "place":
         # Check all layers
         for layer in osmLayers + omfLayers:
             
                 if type(layer) == lon._layer.ScatterplotLayer:
                     layer.get_fill_color = colorPoint
+                
                 elif type(layer) == lon._layer.PathLayer:
                     layer.get_color = colorLine
+                
+                elif type(layer) == lon._layer.PolygonLayer:
+                    layer.get_fill_color = colorFillPolygon
+                    layer.get_line_color = colorLinePolygon
 
 
 @reactive.effect

@@ -27,19 +27,23 @@ If the database does not respect this architecture, then the application might n
 
 To load layer, you simply have to choose an area and the criterion that you want to display.
 
-If you choose the *Original dataset*, then both nodes and edges of the area will be loaded, respectively in tables `.
+Each choice correspond to one or several tables stored in the database:
 
-For the other criterion, the following tables will be loaded:
+- *Road network* : `<schema>.edge_with_cost_<area>` for nodes and `<schema>.edge_with_cost_<area>` for edges.
 
-- *Connected components* : `results.connected_components_<area>_<schema>`
+- *Buildings* : `<schema>.building_<area>`.
 
-- *Strongly connected components* : `results.strong_components_<area>_<schema>`
+- *Places / Points of interest* : `<schema>.place_<area>`.
 
-- *Isolated nodes* : `results.isolated_nodes_<area>_<schema>`
+- *Connected components* : `results.connected_components_<area>_<schema>`.
 
-- *Overlap indicator* : `results.overlap_indicator_<area>_<schema>`
+- *Strongly connected components* : `results.strong_components_<area>_<schema>`.
 
-- *Corresponding nodes* : `results.corresponding_nodes_<area>_<schema>`
+- *Isolated nodes* : `results.isolated_nodes_<area>_<schema>`.
+
+- *Overlap indicator* : `results.overlap_indicator_<area>_<schema>`.
+
+- *Corresponding nodes* : `results.corresponding_nodes_<area>_<schema>`.
 
 Where `<area>` is the name of the area (in lowercase), e.g. `tokyo` and `<schema>` the name of the schema corresponding to the map (either `osm` or `omf`).
 
@@ -47,7 +51,7 @@ Where `<area>` is the name of the area (in lowercase), e.g. `tokyo` and `<schema
 
 In the sidebar, you have options to change the style of the layer.
 Depending on the current criterion displayed, the modification made might not be working.
-The value of `Radius min pixel` and `Width min pixel` are common to all layer, the first one being for point layers and the other one for line layers.
+The value of `Radius min pixel`, `Width min pixel`, and `Line min pixel` are common to all layer and are respectively forpoint layers, line layers, and polygon layers.
 Otherwise, each criterion has its own style, the `Connected components` and `Strongly connected components` sharing the same one.
 
 For the `Style components` part, it is not possible to add more classes to the dataframe, nor to remove some.
