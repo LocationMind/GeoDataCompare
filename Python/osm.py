@@ -617,7 +617,8 @@ def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
     # Rename column
     gdf = gdf.rename(columns=columnsRenamed)
     
-    gdf = gdf[gdf["geom"] == Polygon]
+    # Keep only polygon geometries
+    gdf = gdf[gdf.geom_type == "Polygon"]
     
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")

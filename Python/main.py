@@ -68,108 +68,94 @@ for elem in bboxJson["bboxs"]:
     end = time.time()
     print(f"Insert bounding box of {area}: {end - start} seconds")
     
-    if area == "paris" or area == "higashihiroshima":
-        
-        print(f"Download OSM buildings for {area}")
-        
-        osm.createBuildingFromBbox(
-            engine = engine,
-            bbox = bbox,
-            area = area,
-            schema = schema_osm
-        )
-        
-        end = time.time()
-        print(f"OSM buildings of {area}: {end - start} seconds")
+    print()
     
-#     print()
+    ### Places ###
+    ## OMF
     
-#     ### Places ###
-#     ## OMF
+    omf.createPlaceFromBbox(
+        bbox = bbox,
+        savePathFolder = folderSave,
+        area = area,
+        schema = schema_omf
+    )
     
-#     omf.createPlaceFromBbox(
-#         bbox = bbox,
-#         savePathFolder = folderSave,
-#         area = area,
-#         schema = schema_omf
-#     )
+    end = time.time()
+    print(f"OMF places of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OMF places of {area}: {end - start} seconds")
+    ## OSM
     
-#     ## OSM
+    osm.createPlaceFromBbox(
+        engine = engine,
+        bbox = bbox,
+        area = area,
+        schema = schema_osm
+    )
     
-#     osm.createPlaceFromBbox(
-#         engine = engine,
-#         bbox = bbox,
-#         area = area,
-#         schema = schema_osm
-#     )
+    end = time.time()
+    print(f"OSM places of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OSM places of {area}: {end - start} seconds")
+    print()
     
-#     print()
+    ### Buildings ###
+    ## OMF
     
-#     ### Buildings ###
-#     ## OMF
+    omf.createBuildingFromBbox(
+        bbox = bbox,
+        savePathFolder = folderSave,
+        area = area,
+        schema = schema_omf
+    )
     
-#     omf.createBuildingFromBbox(
-#         bbox = bbox,
-#         savePathFolder = folderSave,
-#         area = area,
-#         schema = schema_omf
-#     )
+    end = time.time()
+    print(f"OMF buildings of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OMF buildings of {area}: {end - start} seconds")
+    ## OSM
     
-#     ## OSM
+    osm.createBuildingFromBbox(
+        engine = engine,
+        bbox = bbox,
+        area = area,
+        schema = schema_osm
+    )
     
-#     osm.createBuildingFromBbox(
-#         engine = engine,
-#         bbox = bbox,
-#         area = area,
-#         schema = schema_osm
-#     )
+    end = time.time()
+    print(f"OSM buildings of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OSM buildings of {area}: {end - start} seconds")
+    print()
     
-#     print()
+    ### Graph ###
+    ## OMF
     
-#     ### Graph ###
-#     ## OMF
+    omf.createGraph(
+        bbox = bbox,
+        savePathFolder = folderSave,
+        area = area,
+        connection = connection,
+        schema = schema_omf
+    )
     
-#     omf.createGraph(
-#         bbox = bbox,
-#         savePathFolder = folderSave,
-#         area = area,
-#         connection = connection,
-#         schema = schema_omf
-#     )
+    end = time.time()
+    print(f"OMF graph of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OMF graph of {area}: {end - start} seconds")
+    ## OSM
     
-#     ## OSM
+    osm.createGraph(
+        connection = connection,
+        engine = engine,
+        bbox = bbox,
+        area = area,
+        schema = schema_osm
+    )
     
-#     osm.createGraph(
-#         connection = connection,
-#         engine = engine,
-#         bbox = bbox,
-#         area = area,
-#         schema = schema_osm
-#     )
+    end = time.time()
+    print(f"OSM graph of {area}: {end - start} seconds")
     
-#     end = time.time()
-#     print(f"OSM graph of {area}: {end - start} seconds")
+    end = time.time()
+    print(f"Download everything for {area}: {end - start} seconds")
+    print()
     
-#     end = time.time()
-#     print(f"Download everything for {area}: {end - start} seconds")
-#     print()
-    
-#     total += end
+    total += end
     
 
-# print(f"It took {total} seconds in total")
+print(f"It took {total} seconds in total")
