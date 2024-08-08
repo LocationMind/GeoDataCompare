@@ -415,29 +415,29 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
 
 
 def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
-                         area:str,
-                         schema:str) -> bool:
-    """Return a boolean that indicates if the table is store in the database.
-    To do so, check if edge_with_cost and node tables are created for the
-    given schema.
+                         tableName:str,
+                         schema:str,
+                         skipCheck:bool = False) -> bool:
+    """Return a boolean that indicates if the table is stored in the database.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         area (str): Name of the area.
         schema (str): Name of the schema.
+        skipCheck (boo, optional): If True, do not check if it exists and return False.
 
     Returns:
         bool: True if the table is stored in the database.
     """
-    # Create edge with cost and node table name
-    edgeTable = f"edge_with_cost_{area}"
-    nodeTable = f"node_{area}"
+    # If the user do not want to check if it exists, return False
+    if skipCheck:
+        return False
     
+    # Otherwise, check if the table exists    
     # Create query
     query = f"""
     SELECT t.table_schema, t.table_name FROM information_schema.tables AS t
-    WHERE ((t.table_name = '{edgeTable}') OR (t.table_name = '{nodeTable}'))
-    AND (t.table_schema = '{schema}')
+    WHERE t.table_name = '{tableName}' and t.table_schema = '{schema}'
     ORDER BY t.table_schema, t.table_name ASC
     """
     
@@ -445,13 +445,10 @@ def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
     cursor = executeSelectQuery(connection, query)
     
     done = False
-    # Exactly two rows are selected is the process has been done
-    if cursor.rowcount == 2:
-        # Result is already sorted, so the first row should be the edge one, the second the node
-        edgeRow = cursor.fetchone()
-        nodeRow = cursor.fetchone()
-        if edgeRow == (schema, edgeTable) and nodeRow == (schema, nodeTable):
-            done = True
+    # There should be only one row in the cursor
+    if cursor.rowcount == 1:
+        # If it is the case, because of the query, we do not need to check more information
+       done = True
     
     return done
 

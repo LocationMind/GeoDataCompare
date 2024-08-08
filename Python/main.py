@@ -13,9 +13,11 @@ import json
 total = 0
 
 # Database and schema names
-database = "locationmind"
+database = "pgrouting"
 schema_omf = "omf"
 schema_osm = "osm"
+
+createBoundingBoxTable = True
 
 # Get connection initialise DuckDB and postgreSQL
 connection = utils.getConnection(database)
@@ -25,21 +27,35 @@ utils.initialiseDuckDB(database)
 # Get engine for geopandas
 engine = utils.getEngine(database)
 
-# Create bounding box table
-utils.createBoundingboxTable(connection)
+# Create bounding box table if needed
+if createBoundingBoxTable:
+    utils.createBoundingboxTable(connection)
+    print("Bounding box table is created")
 
-print("Bounding box table is created")
+else:
+    print("The bounding box table was not created")
 
 # Limit date of data
 ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-06-07T23:59:59Z"]'
 
 curdir = os.getcwd()
 
-print(curdir)
-
 # Load the 3 bbox that we will use from the json file
 pathJson = os.path.join(curdir, "Data", "Bbox", "bboxs.json")
 folderSave = os.path.join(curdir, "Data", ".temp")
+
+# Create folder if it does not exists
+if not os.path.isdir(folderSave):
+    os.makedirs(folderSave)
+
+# Template names for layers
+placeTable = "place_{}"
+buildingTable = "building_{}"
+edgeTable = "edge_with_cost_{}"
+nodeTable = "node_{}"
+
+# If true, will recreate all tables even if they already exists
+skipCheck = False
 
 with open(pathJson, "r") as f:
     bboxJson = json.load(f)
@@ -72,90 +88,122 @@ for elem in bboxJson["bboxs"]:
     
     ### Places ###
     ## OMF
+    # Check if the process has already been done
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_omf, skipCheck):
     
-    omf.createPlaceFromBbox(
-        bbox = bbox,
-        savePathFolder = folderSave,
-        area = area,
-        schema = schema_omf
-    )
+        omf.createPlaceFromBbox(
+            bbox = bbox,
+            savePathFolder = folderSave,
+            area = area,
+            schema = schema_omf
+        )
+        
+        end = time.time()
+        print(f"OMF places of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OMF places of {area}: {end - start} seconds")
+    else:
+        print("OMF places already downloaded")
     
     ## OSM
+    # Check if the process has already been done
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_osm, skipCheck):
     
-    osm.createPlaceFromBbox(
-        engine = engine,
-        bbox = bbox,
-        area = area,
-        schema = schema_osm
-    )
+        osm.createPlaceFromBbox(
+            engine = engine,
+            bbox = bbox,
+            area = area,
+            schema = schema_osm
+        )
+        
+        end = time.time()
+        print(f"OSM places of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OSM places of {area}: {end - start} seconds")
+    else:
+        print("OSM places already downloaded")
     
     print()
     
     ### Buildings ###
     ## OMF
+    # Check if the process has already been done
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_omf, skipCheck):
     
-    omf.createBuildingFromBbox(
-        bbox = bbox,
-        savePathFolder = folderSave,
-        area = area,
-        schema = schema_omf
-    )
+        omf.createBuildingFromBbox(
+            bbox = bbox,
+            savePathFolder = folderSave,
+            area = area,
+            schema = schema_omf
+        )
+        
+        end = time.time()
+        print(f"OMF buildings of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OMF buildings of {area}: {end - start} seconds")
+    else:
+        print("OMF buildings already downloaded")
     
     ## OSM
+    # Check if the process has already been done
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_osm, skipCheck):
     
-    osm.createBuildingFromBbox(
-        engine = engine,
-        bbox = bbox,
-        area = area,
-        schema = schema_osm
-    )
+        osm.createBuildingFromBbox(
+            engine = engine,
+            bbox = bbox,
+            area = area,
+            schema = schema_osm
+        )
+        
+        end = time.time()
+        print(f"OSM buildings of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OSM buildings of {area}: {end - start} seconds")
+    else:
+        print("OSM buildings already downloaded")
     
     print()
     
     ### Graph ###
     ## OMF
+    # Check if the process has already been done
+    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_omf, skipCheck) and
+            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_omf, skipCheck)):
     
-    omf.createGraph(
-        bbox = bbox,
-        savePathFolder = folderSave,
-        area = area,
-        connection = connection,
-        schema = schema_omf
-    )
+        omf.createGraph(
+            bbox = bbox,
+            savePathFolder = folderSave,
+            area = area,
+            connection = connection,
+            schema = schema_omf
+        )
+        
+        end = time.time()
+        print(f"OMF graph of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OMF graph of {area}: {end - start} seconds")
+    else:
+        print("OMF graph already downloaded")
     
     ## OSM
+    # Check if the process has already been done
+    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_osm, skipCheck) and
+            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_osm, skipCheck)):
     
-    osm.createGraph(
-        connection = connection,
-        engine = engine,
-        bbox = bbox,
-        area = area,
-        schema = schema_osm
-    )
+        osm.createGraph(
+            connection = connection,
+            engine = engine,
+            bbox = bbox,
+            area = area,
+            schema = schema_osm
+        )
+        
+        end = time.time()
+        print(f"OSM graph of {area}: {end - start} seconds")
     
-    end = time.time()
-    print(f"OSM graph of {area}: {end - start} seconds")
+    else:
+        print("OSM graph already downloaded")
     
     end = time.time()
     print(f"Download everything for {area}: {end - start} seconds")
     print()
     
-    total += end
+    total += end - start
     
 
 print(f"It took {total} seconds in total")
