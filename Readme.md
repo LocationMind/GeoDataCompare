@@ -80,6 +80,10 @@ Only 3 areas have been made with that and it was with the May release of Overtur
 
 - [Research_paper](./Documentation/Research_paper.md): Notes taken for different research papers about quality assessment for example.
 
+- [Tests-visualisation](./Documentation/tests-visualisation.md): Notes taken for the tests to create the visualisation system.
+
+- [User_doc](./Documentation/user_doc.md): Documentation on how to use the application: from the requirements installation to the dashboard.
+
 ## Python
 
 All python files are in this folder.
