@@ -17,7 +17,7 @@
   - [Schemas](#schemas)
   - [Table names](#table-names)
 - [Bounding box used to test algorithms:](#bounding-box-used-to-test-algorithms)
-- [License](#license)
+- [Licenses](#licenses)
 - [Credits](#credits)
 
 This project has been created for an internship at the [ENSG-Géomatique](https://ensg.eu/fr) school, for [LocationMind Inc.](https://locationmind.com/).
@@ -79,6 +79,10 @@ The first part of this document focuses on the process and the other part is abo
 Only 3 areas have been made with that and it was with the May release of OvertureMap, so results might be slightly different from other documents and results in this repository.
 
 - [Research_paper](./Documentation/Research_paper.md): Notes taken for different research papers about quality assessment for example.
+
+- [Tests-visualisation](./Documentation/tests-visualisation.md): Notes taken for the tests to create the visualisation system.
+
+- [User_doc](./Documentation/user_doc.md): Documentation on how to use the application: from the requirements installation to the dashboard.
 
 ## Python
 
@@ -153,11 +157,11 @@ The database used in this repository is:
 It also means that to use these function, the `public.` prefix has to be used to avoid conflict and problems.
 Also, the bounding box table is located in the public schema, to be used by the other one easily.
 
-- `osm`: As the name indicates it, this schema contains all tables for OpenStreetMap data. This include data directly integrated with OSMnx or data compatible with PgRouting.
+- `osm`: As the name indicates it, this schema contains all tables for OpenStreetMap data.
 
-- `omf`: Same than the `osm` schema, but for OvertureMap Fundation data. More tables are created due to the OMF data integration process, and road and connectors for all Japan are also integrated in this schema.
+- `omf`: Same than the `osm` schema, but for Overture Maps Fundation data.
 
-- `results`: The name also speaks for itself, this schema contains the different results of quality assessment for instance.
+- `results`: The name also speaks for itself, this schema contains the different results of quality assessment.
 
 Using only one database with multiple schemas is better than using multiple ones as it is way easier to use tables from different schemas than table from different database (at least it is the case with PostgreSQL).
 
@@ -169,9 +173,13 @@ For either OSM or OMF data, the tables have templates names for their final usag
 
 - Table of nodes : `node_<area>`;
 
+- Table of places : `places_<area>`;
+
+- Table of buildings : `buildings_<area>`;
+
 where `<area>` correspond to the area name, like `tokyo` or `higashihiroshima`.
 
-To access OSM data, only the `osm` prefix needs to be used, same for OMF data with `omf` prefix.
+To access OSM data, the `osm` prefix needs to be used, same for OMF data with the `omf` prefix.
 
 # Bounding box used to test algorithms:
 
@@ -205,7 +213,7 @@ All these information can also be found directly on the [bboxs.json](./Data/Bbox
 
 ![Tokyo bounding box area](./Documentation/Images/bounding_box_tokyo.png)
 
-# License
+# Licenses
 
 Because of OpenStreetMap license ([Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/)), all the work done with OSM data must be release with the same license.
 OvertureMap Fundation might have different licenses (see [here](https://docs.overturemaps.org/attribution/)), but it uses OpenStreetMap data too, especially for building and road network data.
