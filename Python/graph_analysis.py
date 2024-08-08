@@ -1,7 +1,41 @@
-import utils
 import os
 import pandas as pd
 import psycopg2
+import sys
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+from Python import utils
+
+
+def getListAreas(connection:psycopg2.extensions.connection,
+                 tableName:str = "bounding_box",
+                 schema:str = "public",
+                 columnName:str = 'name') -> list[str]:
+    """Get all areas names in the bounding box table
+
+    Args:
+        connection (psycopg2.extensions.connection): Connection token for the database
+        tableName (str): Name of the bounding box table. Defaults to 'bounding_box'.
+        schema (str): Schema where the bounding box table is stored. Defaults to 'public'.
+        columnName (str, optional): Name of the column to select. Defaults to 'name'.
+
+    Returns:
+        list[str]: List of all areas, sorted by names
+    """
+    # Get all the entity from bounding box table, order by name
+    query = f"""SELECT {columnName} FROM {schema}.{tableName}
+    ORDER BY {columnName} ASC;"""
+    
+    # Execute query
+    cursor = utils.executeSelectQuery(connection, query)
+    
+    listArea = []
+    # Put result to a list
+    for row in cursor:
+        listArea.append(row[0])
+    
+    return listArea
+
 
 def getNumberElements(connection:psycopg2.extensions.connection,
                       schema:str,
@@ -906,9 +940,9 @@ if __name__ == "__main__":
     dateTimeMarkdown = now.strftime("%d/%m/%Y %H:%M")
     
     # Path to save the results
-    # fileName = f"Automatic_result_{dateTime}.md"
     fileName = "Automatic_result.md"
-    pathSave = os.path.join(".", "Data", "Results", fileName)
+    curdir = os.getcwd()
+    pathSave = os.path.join(curdir, "Data", "Results", fileName)
     
     # Connect to the database and give table template for OSM and OMF dataset
     database = "pgrouting"
@@ -922,8 +956,6 @@ if __name__ == "__main__":
     omfEdgeTableTemplate = "edge_with_cost_{}"
     omfNodeTableTemplate = "node_{}"
     
-    # List of area names to assess quality
-    listArea = ['hamamatsu', 'higashihiroshima', 'kumamoto', 'morioka', 'tateyama', 'tokyo']
     
     # Variable for markdown results
     mappingResult = "### Total kilometer of roads by class"
@@ -940,15 +972,19 @@ if __name__ == "__main__":
     overlapIndicatorTemplate = "overlap_indicator_{}_{}"
     correspondingNodesTemplate = "corresponding_nodes_{}_{}"
     
-    for area in listArea:
+    # Get list of areas from the bounding box table
+    bounding_box_table = "bounding_box"
+    listAreas = getListAreas(connection)
+    
+    for area in listAreas:
         print(f"Start quality analysis for {area}")
         
         # Get edge and node tables
-        osmEdgeTable = osmEdgeTableTemplate.format(area)
-        osmNodeTable = osmNodeTableTemplate.format(area)
+        osmEdgeTable = osmEdgeTableTemplate.format(area.lower())
+        osmNodeTable = osmNodeTableTemplate.format(area.lower())
         
-        omfEdgeTable = omfEdgeTableTemplate.format(area)
-        omfNodeTable = omfNodeTableTemplate.format(area)
+        omfEdgeTable = omfEdgeTableTemplate.format(area.lower())
+        omfNodeTable = omfNodeTableTemplate.format(area.lower())
         
         # Capitalize the area name to be able to filter with the bounding box
         area = area.capitalize()
@@ -1047,7 +1083,7 @@ if __name__ == "__main__":
         
         
         end = time.time()
-        print(f"Criteria until now took {end - start} seconds")
+        print(f"Criteria until now: {end - start} seconds")
         
         
         # Overlap indicator
@@ -1059,13 +1095,13 @@ if __name__ == "__main__":
         print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSMValue}")
         
         end = time.time()
-        print(f"Overlap indicator 1 took {end - start} seconds")
+        print(f"Overlap indicator 1: {end - start} seconds")
         
         OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMFValue}")
         
         end = time.time()
-        print(f"Overlap indicator 2 took {end - start} seconds")
+        print(f"Overlap indicator 2: {end - start} seconds")
         
         # Add data to the data list
         data.append([f"**7. Overlap indicator (%)**", f"*{area}*", OSMValue, OMFValue])
@@ -1080,20 +1116,20 @@ if __name__ == "__main__":
         print(f"Number of corresponding nodes in OSM for {area} is: {OSMValue[0]} ({OSMValue[0]} %)")
         
         end = time.time()
-        print(f"Corresponding nodes for OSM took {end - start} seconds")
+        print(f"Corresponding nodes for OSM: {end - start} seconds")
         
         OMFValue = getCorrespondingNodes(connection, omfSchema, omfNodeTable, osmSchema, osmNodeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
         print(f"Number of corresponding nodes in OMF for {area} is: {OMFValue[0]} ({OMFValue[1]} %)")
         
         end = time.time()
-        print(f"Corresponding nodes for OMF took {end - start} seconds")
+        print(f"Corresponding nodes for OMF: {end - start} seconds")
         
         # Add two rows in the dataframe (one for the number and the other for percentage)
         data.append(["**8. Number of corresponding nodes**", f"*{area}*", OSMValue[0], OMFValue[0]])
         data.append(["**9. Percentage of corresponding nodes (%)**", f"*{area}*", OSMValue[1], OMFValue[1]])
     
         end = time.time()
-        print(f"{area} took {end - start} seconds")
+        print(f"{area}: {end - start} seconds")
     
     
     # Sort data per Criterion / Area
@@ -1128,4 +1164,4 @@ The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of 
         f.writelines(exportMarkdown)
     
     end = time.time()
-    print(f"It took {end - start} seconds")
+    print(f"Process ended in {end - start} seconds")

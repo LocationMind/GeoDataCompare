@@ -9,3 +9,4 @@ shiny==1.0.0
 shinywidgets==0.3.2
 sqlalchemy==2.0.30
 python-dotenv==1.0.1
+utm==0.7.0
