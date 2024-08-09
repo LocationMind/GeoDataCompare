@@ -114,8 +114,6 @@ def createConnectorTable(pathConnectorData: str,
                version,
                update_time,
                JSON(sources) AS sources,
-               -- 'transportation' AS theme,
-               -- 'connector' AS type,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                FROM '{pathConnectorData}');
                """)
@@ -152,8 +150,6 @@ def createBuildingTable(pathBuildingData: str,
                level,
                height,
                has_parts,
-               -- 'buildings' AS theme,
-               -- 'building' AS type,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
                FROM '{pathBuildingData}');
                """)
@@ -680,7 +676,7 @@ def createEdgeTable(extractedRoadTable:str,
     sqlCreateTable = f"""
     CREATE TABLE {schema}.{edgeTable} AS
     SELECT
-        road_id AS original_id,
+        road_id AS omfid,
         CASE
             WHEN n = 1 AND "end" = max_i THEN road_id
             ELSE road_id || '-' || CAST(n AS character varying)
@@ -749,11 +745,11 @@ def createEdgeTable(extractedRoadTable:str,
 
     # Create original id index
     sqlIndex = f"""
-    DROP INDEX IF EXISTS {schema}.{edgeTable}_original_id_idx CASCADE;
+    DROP INDEX IF EXISTS {schema}.{edgeTable}_omfid_idx CASCADE;
 
-    CREATE INDEX IF NOT EXISTS {edgeTable}_original_id_idx
+    CREATE INDEX IF NOT EXISTS {edgeTable}_omfid_idx
     ON {schema}.{edgeTable} USING btree
-    (original_id ASC NULLS LAST)
+    (omfid ASC NULLS LAST)
     TABLESPACE pg_default;"""
     
     utils.executeQueryWithTransaction(connection, sqlIndex)
@@ -897,6 +893,7 @@ def createEdgeWithCostTable(connection:psycopg2.extensions.connection,
         e.speed_limits,
         e.width_rules,
         e.update_time,
+        e.omfid,
         e.sources,
         e.primary_name,
         e.geom
@@ -941,7 +938,15 @@ def createNodeTable(connection:psycopg2.extensions.connection,
     # Create nodes table
     sqlCreateTable = f"""
     CREATE TABLE {schema}.{nodeTable} AS
-    SELECT j.id AS id, in_edges, out_edges, c.geom
+    SELECT 
+        j.id AS id,
+        in_edges,
+        out_edges,
+        c.id AS omfid,
+        c.geom,
+        c.version,
+        c.update_time,
+        c.sources
     FROM {schema}.{connectorsRoadCountTable} AS cnt
     LEFT JOIN {schema}.{extractedConnectorTable} c ON cnt.connector_id = c.id
     LEFT JOIN {schema}.{joinConnectorTable} AS j ON j.connector_id = cnt.connector_id
@@ -963,6 +968,168 @@ def createNodeTable(connection:psycopg2.extensions.connection,
     
     # Create geom index
     utils.createGeomIndex(connection, nodeTable, schema = schema)
+
+
+def keepDataOnlyInBbox(area:str,
+                       connection:psycopg2.extensions.connection,
+                       schema:str = 'public',
+                       edgeWithCostTable:str = 'edge_with_cost',
+                       nodeTable:str = 'node'):
+    """Update nodes and edges with cost table to keep only those inside the bbox.
+    It creates new nodes and new edges if needed, and change the graph topology too.
+
+    Args:
+        area (str): Name of the area.
+        connection (psycopg2.extensions.connection): Database connection token.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+        edgeWithCostTable (str, optional): Name of the edge table. Defaults to 'edge'.
+        nodeTable (str, optional): Name of the node table. Defaults to 'node'.
+    """
+    # Delete features outside the bounding box
+    deleteOutsideBbox = f"""
+    -- Delete not contains
+    DELETE FROM {schema}.{edgeWithCostTable}
+    WHERE id NOT IN (
+        SELECT e.id FROM {schema}.{edgeWithCostTable} AS e
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(b.geom, e.geom)
+        WHERE b.name = '{area.capitalize()}');
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, deleteOutsideBbox)
+    
+    # Update geometry of features intersecting the border of the bounding box
+    updateGeomBbox = f"""
+    -- Update geom by clipping with the bounding box
+    WITH edge_border AS (
+        SELECT e.id AS edge_id,
+        public.ST_Intersection(b.geom, e.geom) AS new_geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    )
+    UPDATE {schema}.{edgeWithCostTable} AS e
+    SET geom = eb.new_geom
+    FROM edge_border AS eb
+    WHERE e.id = eb.edge_id;
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, updateGeomBbox)
+    
+    # For multigeom edges, dump them in single geometry and save them in the database
+    multiGeomQuery = f"""
+    -- multigeom case
+    WITH multigeom AS (
+        SELECT * FROM {schema}.{edgeWithCostTable} AS e
+        WHERE public.ST_NumGeometries(e.geom) != 1
+    ),
+    dumpgeom AS (
+        SELECT (public.ST_Dump(m.geom)).geom AS line, * FROM multigeom AS m
+    ),
+    insert_edges AS (
+        INSERT INTO {schema}.{edgeWithCostTable} (
+            id, source, target, start_value, end_value, cost, reverse_cost, class,
+            access_restrictions, level_rules, prohibited_transitions, road_surface,
+            road_flags, speed_limits, width_rules, update_time, omfid, sources, primary_name, geom
+        )
+        -- Increment id to ensure the unicity of this column
+        SELECT ((SELECT MAX(id) FROM {schema}.{edgeWithCostTable}) + row_number() OVER (order by d.id)),
+        source, target, start_value, end_value, cost, reverse_cost, class,
+        access_restrictions, level_rules, prohibited_transitions, road_surface,
+        road_flags, speed_limits, width_rules, update_time, omfid, sources, primary_name, d.line
+        FROM dumpgeom AS d
+    )
+    DELETE FROM {schema}.{edgeWithCostTable}
+    WHERE id IN (SELECT id FROM multigeom);
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, multiGeomQuery)
+    
+    # Create new nodes at the border of the bounding box
+    nodesClipQuery = f"""
+    -- nodes
+    WITH edge_border AS (
+        SELECT e.id, e.source, e.target, e.geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    clip_point AS (
+        SELECT (public.ST_Dump(public.ST_Intersection(public.ST_Boundary(b.geom), e.geom))).geom AS point
+        FROM edge_border AS e
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    insert_nodes AS (
+        INSERT INTO {schema}.{nodeTable} AS n (id, geom)
+        -- Increment id to ensure the unicity of this column
+        SELECT ((SELECT MAX(id) FROM {schema}.{nodeTable}) + row_number() OVER (order by cp.point)),
+        cp.point
+        FROM clip_point AS cp
+    )
+    DELETE FROM {schema}.{nodeTable} AS n
+    WHERE id NOT IN (
+        SELECT n.id FROM {schema}.{nodeTable} AS n
+        JOIN {schema}.{edgeWithCostTable} AS e
+        ON public.ST_Intersects(n.geom, e.geom)
+    );
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, nodesClipQuery)
+    
+    # Correct the topology by modifying the source, target and cost
+    correctTopology = f"""
+    -- Correct topology
+    WITH edge_border AS (
+        SELECT e.id, e.source, e.target, e.geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    edge_nodes AS (
+        SELECT e.id, e.source, e.target, array_agg(n.id) AS nodes
+        FROM edge_border AS e
+        JOIN {schema}.{nodeTable} AS n
+        ON public.ST_Intersects(n.geom, e.geom)
+        GROUP BY e.id, e.source, e.target
+        ORDER BY e.id
+    ),
+    new_source_target AS (
+        SELECT e.id,
+        CASE 
+            WHEN e.source IN (e.nodes[1], e.nodes[2]) THEN e.source
+            WHEN e.target = e.nodes[1] THEN e.nodes[2]
+            WHEN e.target = e.nodes[2] THEN e.nodes[1]
+            ELSE e.nodes[1]
+        END AS new_source,
+        CASE 
+            WHEN e.target IN (e.nodes[1], e.nodes[2]) THEN e.target
+            WHEN e.source = e.nodes[1] THEN e.nodes[2]
+            WHEN e.source = e.nodes[2] THEN e.nodes[1]
+            ELSE e.nodes[2]
+        END AS new_target
+        FROM edge_nodes AS e
+    )
+    UPDATE {schema}.{edgeWithCostTable} AS e
+    SET
+        source = nst.new_source,
+        target = nst.new_target,
+        cost = CASE WHEN cost = -1 THEN -1 ELSE public.ST_Length(e.geom::geography) END,
+        reverse_cost = CASE WHEN reverse_cost = -1 THEN -1 ELSE public.ST_Length(e.geom::geography) END
+    FROM new_source_target AS nst
+    WHERE e.id = nst.id;
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, correctTopology)
 
 
 def createGraph(bbox:str,
@@ -1080,7 +1247,7 @@ def createGraph(bbox:str,
     end = time.time()
     log(f"createJoinConnectorTable: {end - start} seconds")
     
-    # Finally, create edges with cost and nodes tables
+    # Create edges with cost and nodes tables
     createEdgeWithCostTable(connection = connection,
                             schema = schema,
                             edgeTable = edgeTable,
@@ -1099,6 +1266,15 @@ def createGraph(bbox:str,
                     joinConnectorTable = joinConnectorTable,
                     edgeWithCostTable = edgeWithCostTable,
                     dropTableIfExists = dropTablesIfExist)
+    end = time.time()
+    log(f"createNodeTable: {end - start} seconds")
+    
+    # Update topology and graph to keep data only in the bbox
+    keepDataOnlyInBbox(area = area,
+                       connection = connection,
+                       schema = schema,
+                       edgeWithCostTable = edgeWithCostTable,
+                       nodeTable = nodeTable)
     end = time.time()
     log(f"createNodeTable: {end - start} seconds")
     
