@@ -55,7 +55,9 @@ edgeTable = "edge_with_cost_{}"
 nodeTable = "node_{}"
 
 # If true, will recreate all tables even if they already exists
-skipCheck = False
+skipBuildingCheck = False
+skipPlaceCheck = False
+skipGraphCheck = False
 
 with open(pathJson, "r") as f:
     bboxJson = json.load(f)
@@ -89,7 +91,7 @@ for elem in bboxJson["bboxs"]:
     ### Places ###
     ## OMF
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_omf, skipCheck):
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_omf, skipBuildingCheck):
     
         omf.createPlaceFromBbox(
             bbox = bbox,
@@ -106,7 +108,7 @@ for elem in bboxJson["bboxs"]:
     
     ## OSM
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_osm, skipCheck):
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_osm, skipBuildingCheck):
     
         osm.createPlaceFromBbox(
             engine = engine,
@@ -126,7 +128,7 @@ for elem in bboxJson["bboxs"]:
     ### Buildings ###
     ## OMF
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_omf, skipCheck):
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_omf, skipPlaceCheck):
     
         omf.createBuildingFromBbox(
             bbox = bbox,
@@ -143,7 +145,7 @@ for elem in bboxJson["bboxs"]:
     
     ## OSM
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_osm, skipCheck):
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_osm, skipPlaceCheck):
     
         osm.createBuildingFromBbox(
             engine = engine,
@@ -163,8 +165,8 @@ for elem in bboxJson["bboxs"]:
     ### Graph ###
     ## OMF
     # Check if the process has already been done
-    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_omf, skipCheck) and
-            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_omf, skipCheck)):
+    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_omf, skipGraphCheck) and
+            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_omf, skipGraphCheck)):
     
         omf.createGraph(
             bbox = bbox,
@@ -182,9 +184,9 @@ for elem in bboxJson["bboxs"]:
     
     ## OSM
     # Check if the process has already been done
-    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_osm, skipCheck) and
-            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_osm, skipCheck)):
-    
+    if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_osm, skipGraphCheck) and
+            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_osm, skipGraphCheck)):
+        
         osm.createGraph(
             connection = connection,
             engine = engine,
