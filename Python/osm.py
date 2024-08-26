@@ -101,6 +101,7 @@ def addMissingColumns(connection:psycopg2.extensions.connection,
 def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
                                 edgeTable:str,
                                 area:str,
+                                utmProj:int,
                                 schema:str = 'public'):
     """Create a table to join parallel edges.
 
@@ -108,6 +109,7 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
         connection (psycopg2.extensions.connection): Database connection token.
         edgeTable (str): Name of the edge table.
         area (str): Name of the area.
+        utmProj (int): UTM projection for the area.
         schema (str, optional): Name of the schema. Defaults to 'public'.
     """
     sql = f"""
@@ -167,8 +169,8 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
     FROM {schema}.{edgeTable} AS e1
     LEFT JOIN {schema}.{edgeTable} AS e2 ON e1.u = e2.v AND e1.v = e2.u
     AND e1.id != e2.id AND e1.highway = e2.highway
-    AND ST_Contains(ST_Buffer(ST_Transform(e1.geom, 6691), 0.5), ST_Transform(e2.geom, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(e2.geom, 6691), 0.5), ST_Transform(e1.geom, 6691))
+    AND ST_Contains(ST_Buffer(ST_Transform(e1.geom, {utmProj}), 0.5), ST_Transform(e2.geom, {utmProj}))
+    AND ST_Contains(ST_Buffer(ST_Transform(e2.geom, {utmProj}), 0.5), ST_Transform(e1.geom, {utmProj}))
     ORDER BY e1.id;
     
     -- Add cost and reverse cost columns
@@ -186,8 +188,8 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
     UPDATE {schema}.{area}
     SET reverse_cost = ST_Length(geom1::geography)
     WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2 AND id1 != id2
-    AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));
+    AND ST_Contains(ST_Buffer(ST_Transform(geom1, {utmProj}), 0.5), ST_Transform(geom2, {utmProj}))
+    AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj}));
     
     CREATE INDEX {area}_geom1_idx
     ON {schema}.{area} USING gist (geom1);
@@ -203,14 +205,16 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
 
 
 def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
-                           area:str,
-                           schema:str = 'public',
-                           geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
+                          area:str,
+                          utmProj:int,
+                          schema:str = 'public',
+                          geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
     """Get only bidirectional roads from the parallel edge table.
 
     Args:
         engine (sqlalchemy.engine.base.Engine): Engine with the database connection.
         area (str): Name of the area.
+        utmProj (int): UTM projection for the area.
         schema (str, optional): Name of the schema. Defaults to 'public'.
         geomColumn (str, optional): Name of the geomColumn to use. Defaults to 'geom1'.
     
@@ -221,8 +225,8 @@ def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
     sql_bi_roads = f"""
     SELECT * FROM {schema}.{area}
     WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2
-    AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-    AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691));"""
+    AND ST_Contains(ST_Buffer(ST_Transform(geom1, {utmProj}), 0.5), ST_Transform(geom2, {utmProj}))
+    AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj}));"""
 
     bi = gpd.read_postgis(sql_bi_roads, engine, geom_col=geomColumn)
     
@@ -230,14 +234,16 @@ def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
 
 
 def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
-                            area:str,
-                            schema:str = 'public',
-                            geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
+                           area:str,
+                           utmProj:int,
+                           schema:str = 'public',
+                           geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
     """Get only unidirectional roads from the parallel edge table.
 
     Args:
         engine (sqlalchemy.engine.base.Engine): Engine with the database connection.
         area (str): Name of the area.
+        utmProj (int): UTM projection for the area.
         schema (str, optional): Name of the schema. Defaults to 'public'.
         geomColumn (str, optional): Name of the geomColumn to use. Defaults to 'geom1'.
     
@@ -250,8 +256,8 @@ def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
     WHERE id1 not in (
         SELECT id1 FROM {schema}.{area}
         WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2
-        AND ST_Contains(ST_Buffer(ST_Transform(geom1, 6691), 0.5), ST_Transform(geom2, 6691))
-        AND ST_Contains(ST_Buffer(ST_Transform(geom2, 6691), 0.5), ST_Transform(geom1, 6691)));"""
+        AND ST_Contains(ST_Buffer(ST_Transform(geom1, {utmProj}), 0.5), ST_Transform(geom2, {utmProj}))
+        AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj})));"""
     
     uni = gpd.read_postgis(sql_uni_road, engine, geom_col=geomColumn)
     
@@ -428,6 +434,13 @@ def createGraph(connection:psycopg2.extensions.connection,
 
     end = time.time()
     log(f"Save edge to postgis: {end - start} seconds")
+    
+    # Get utm proj for the area
+    utmProj = utils.getUTMProjFromArea(connection, area)
+    
+    end = time.time()
+    log(f"UTM Proj is {utmProj}")
+    log(f"Utm proj: {end - start} seconds")
     
     # Add missing columns if needed to the edge table
     addMissingColumns(connection, edgeTable, schema=schema)
