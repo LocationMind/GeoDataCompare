@@ -674,12 +674,12 @@ template_layers_name = {
         "OMF" : [("omf.place_{}", lon.ScatterplotLayer)],
     },
     "conn_comp": {
-        "OSM" : [("results.connected_components_{}_osm", lon.ScatterplotLayer)],
-        "OMF" : [("results.connected_components_{}_omf", lon.ScatterplotLayer)],
+        "OSM" : [("results.connected_components_{}_osm", lon.ScatterplotLayer), ("osm.edge_with_cost_{}", lon.PathLayer)],
+        "OMF" : [("results.connected_components_{}_omf", lon.ScatterplotLayer), ("omf.edge_with_cost_{}", lon.PathLayer)],
     },
     "strongly_comp": {
-        "OSM" : [("results.strong_components_{}_osm", lon.ScatterplotLayer)],
-        "OMF" : [("results.strong_components_{}_omf", lon.ScatterplotLayer)],
+        "OSM" : [("results.strong_components_{}_osm", lon.ScatterplotLayer), ("osm.edge_with_cost_{}", lon.PathLayer)],
+        "OMF" : [("results.strong_components_{}_omf", lon.ScatterplotLayer), ("omf.edge_with_cost_{}", lon.PathLayer)],
     },
     "isolated_nodes": {
         "OSM" : [("results.isolated_nodes_{}_osm", lon.ScatterplotLayer)],
@@ -1915,7 +1915,7 @@ def colorRange():
         # Check all layers
         for layer in omfLayers + osmLayers:
             
-            # If the layer is of point type, we change with the appropriate 
+            # If the layer is of type point, we change with the appropriate 
             if type(layer) == lon._layer.ScatterplotLayer:
 
                 if layer in omfLayers:
@@ -1937,6 +1937,17 @@ def colorRange():
                     values = gdfcopy["id"],
                     cmap = colorMap
                 )
+            
+            # Edges with cost for connected components
+            if type(layer) == lon._layer.PathLayer:
+                # Line color and width
+                colorLine = getColorFromColorPicker(colorPickerLine)
+                
+                width = input.width_min_pixels()
+                
+                layer.width_min_pixels = width
+
+                layer.get_color = colorLine
 
 
 ### Components Dataframe modification handler ###
