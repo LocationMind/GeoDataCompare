@@ -11,6 +11,7 @@ from pathlib import Path
 from lonboard.colormap import apply_categorical_cmap
 from matplotlib.colors import is_color_like, to_hex, to_rgb
 from dotenv import load_dotenv
+import numpy as np
 import os
 import utm
 import shapely
@@ -46,6 +47,7 @@ def getAllAreas(engine:sqlalchemy.engine.base.Engine,
                 tableName:str = "bounding_box",
                 schema:str = "public") -> gpd.GeoDataFrame:
     """Get all areas stored in the `bounding_box` table.
+    Calculate the area in km2 of each in the same time.
 
     Args:
         engine (sqlalchemy.engine.base.Engine):
@@ -57,14 +59,108 @@ def getAllAreas(engine:sqlalchemy.engine.base.Engine,
         gpd.GeoDataFrame: GeoDataFrame with all entries in the table.
     """
     # Get all the entity from bounding box table
-    sqlQueryTable = f"""SELECT * FROM {schema}.{tableName};"""
+    sqlQueryTable = f"""SELECT *, ST_Area(geom::geography) / 1000000 AS area FROM {schema}.{tableName};"""
     
     bounding_box = gpd.GeoDataFrame.from_postgis(sqlQueryTable, engine)
     
     return bounding_box
 
 
-def getLengthPerClass(edgeGDF:gpd.GeoDataFrame,
+def getNbRowTable(engine:sqlalchemy.engine.base.Engine,
+                  tableName:str) -> str:
+    """Get the number of elements in a table directly store in PostgreSQL.
+
+    Args:
+        engine (sqlalchemy.engine.base.Engine):
+        Engine used for (geo)pandas sql queries.
+        tableName (str, optional): Name of the table
+        (with the schema already on it).
+
+    Returns:
+        str: Number of entity in the table.
+    """
+    # Get all the entity from bounding box table
+    sqlQueryTable = f"""SELECT count(*) as nb FROM {tableName};"""
+    
+    result = pd.read_sql(sqlQueryTable, engine)
+    
+    # Take the first element of the result
+    number = result.iloc[0,0]
+    
+    return str(number)
+
+
+def getDataFrameGraph(gdf:gpd.GeoDataFrame,
+                      crs:int,
+                      columnType:str = None) -> pd.DataFrame:
+    """Return the dataframe to display for the graph theme.
+    It corresponds to the length and number of edges per classes
+
+    Args:
+        gdf (gpd.GeoDataFrame): edges GeoDataFrame.
+        crs (int): crs to use for the calculation.
+        columnType (str, optional): Type of the column to aggregate on.
+        Only used in getDataFramePlaces function.
+        Default value is None.
+
+    Returns:
+        pd.DataFrame: Dataframe with values for each classes
+    """
+    # Copy the DataFrame to prevent problems
+    gdfCopy = gdf.copy()
+    # If it is empty, create an empty DataFrame
+    if gdfCopy.empty:
+        gdfSumup = pd.DataFrame()
+    else:
+        # Set geometry column and project to another crs
+        gdfCopy = gdfCopy.set_geometry("geom")
+        gdfProj = gdfCopy.to_crs(crs)
+        
+        # Calculate length based on the projected geometry in km
+        gdfCopy['length'] = gdfProj['geom'].length / 1000
+        
+        # Agregate per class and calculate the sum and count for each class
+        gdfSumup = gdfCopy[['class', 'length']].groupby('class', dropna = False)['length'].agg(['sum', 'count'])
+        
+        # Reset index to export class
+        gdfSumup.reset_index(inplace=True)
+    
+    return gdfSumup
+
+
+def getDataFrameBuilding(gdf:gpd.GeoDataFrame,
+                         crs:int) -> pd.DataFrame:
+    """Return a DataFrame with length and number of edges per classes.
+
+    Args:
+        gdf (gpd.GeoDataFrame): edge GeoDataFrame
+
+    Returns:
+        pd.DataFrame: Dataframe with values for each classes
+    """
+    # Copy the DataFrame to prevent problems
+    gdfCopy = gdf.copy()
+    # If it is empty, create an empty DataFrame
+    if gdfCopy.empty:
+        gdfSumup = pd.DataFrame()
+    else:
+        # Set geometry column and project to another crs
+        gdfCopy = gdfCopy.set_geometry("geom")
+        gdfProj = gdfCopy.to_crs(crs)
+        
+        # Calculate area based on the projected geometry in km
+        gdfCopy['area'] = gdfProj['geom'].area / 1000000
+        
+        # Agregate per class and calculate the sum and count for each class
+        gdfSumup = gdfCopy[['class', 'area']].groupby('class', dropna = False)['area'].agg(['sum', 'count'])
+        
+        # Reset index to export class
+        gdfSumup.reset_index(inplace=True)
+    
+    return gdfSumup
+
+
+def getDataFramePlace(gdf:gpd.GeoDataFrame,
                       crs:int) -> pd.DataFrame:
     """Return a DataFrame with length and number of edges per classes.
 
@@ -75,25 +171,123 @@ def getLengthPerClass(edgeGDF:gpd.GeoDataFrame,
         pd.DataFrame: Dataframe with values for each classes
     """
     # Copy the DataFrame to prevent problems
-    edgeCopy = edgeGDF.copy()
+    gdfCopy = gdf.copy()
     # If it is empty, create an empty DataFrame
-    if edgeCopy.empty:
+    if gdfCopy.empty:
         gdfSumup = pd.DataFrame()
+    
     else:
         # Set geometry column and project to another crs
-        edgeCopy = edgeCopy.set_geometry("geom")
-        gdfProj = edgeCopy.to_crs(crs)
+        gdfCopy = gdfCopy.set_geometry("geom")
         
-        # Calculate length based on the projected geometry in km
-        edgeCopy['length'] = gdfProj['geom'].length / 1000
+        # Check first value not null of categories
+        value = gdfCopy[gdfCopy['categories'].notnull()]["categories"].iloc[0]
         
-        # Agregate per class and calculate the sum and count for each class
-        gdfSumup = edgeCopy[['class', 'length']].groupby('class')['length'].agg(['sum', 'count'])
+        # If it is a dictionnary, it is OMF dataset. We take the main category
+        if type(value) == dict:
+            gdfCopy['category'] = gdfCopy['categories'].apply(lambda categories: categories['main'] if (categories is not None) else None)
+        # Otherwise, we rename the column to 'category'
+        else:
+            gdfCopy = gdfCopy.rename(columns = {'categories':'category'})
+        
+        # Agregate per categories and calculate the sum and count for each category
+        gdfSumup = gdfCopy[['category']].groupby('category', dropna = False)['category'].agg(['size'])
         
         # Reset index to export class
         gdfSumup.reset_index(inplace=True)
+        
+        # Replace NaN value by 'Null'
+        gdfSumup = gdfSumup.fillna('Null')
     
     return gdfSumup
+
+
+def getTotalLength(gdf:gpd.GeoDataFrame) -> str:
+    """Get indicator value for base layer.
+    Sum up the distance from the dataframe of length per class.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame of length per class.
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Check if the dataframe is empty
+    if gdf.empty:
+        value = ""
+    else:
+        value = round(gdf["sum"].sum())
+    return str(value)
+
+
+def getCoverage(gdf:gpd.GeoDataFrame,
+                area:str) -> str:
+    """Get buildings coverage of the area.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame of length per class.
+        area (str): Name of the area.
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Copy the GeoDataFrame to prevent error
+    gdfCopy = gdf.copy()
+    
+    # Missing value if the GeoDataFrame is empty
+    if gdfCopy.empty:
+        value = ""
+    
+    else:
+        # Set geometry column
+        gdfCopy = gdfCopy.set_geometry("geom")
+        
+        # Get crs for the area and project to this crs
+        crs = areasCRS[area]
+        gdfProj = gdfCopy.to_crs(crs)
+        
+        # Calculate area based on the projected geometry in km
+        gdfCopy['area'] = gdfProj['geom'].area
+        
+        # Get area in km2 of the area
+        areaKm2 = bounding_box_gdf[bounding_box_gdf["name"] == area]["area"].iloc[0]
+        
+        # Calculate the sum of the buildings area in km2
+        buildingsArea = gdfCopy["area"].sum() / 1000000
+        
+        # Calculate the coverage
+        value = f"{round((buildingsArea / areaKm2), 2)} %"
+    
+    return str(value)
+
+
+def getDensity(gdf:gpd.GeoDataFrame,
+               area:str) -> str:
+    """Get indicator value for base layer.
+    Sum up the distance from the dataframe of length per class.
+
+    Args:
+        gdf (gpd.GeoDataFrame): GeoDataFrame of length per class.
+        area (str): Name of the area.
+
+    Returns:
+        str: Value of the indicator.
+    """
+    # Missing value if the GeoDataFrame is empty
+    if gdf.empty:
+        value = ""
+    
+    else:
+        # Get number of POI
+        number = gdf.shape[0]
+        
+        # Get area in km2 of the area
+        areaKm2 = bounding_box_gdf[bounding_box_gdf["name"] == area]["area"].iloc[0]
+        
+        # Calculate the density
+        value = f"{round((number / areaKm2), 2)} / km2"
+    
+    return str(value)
 
 
 def getGroupByComp(gdf:gpd.GeoDataFrame,
@@ -116,7 +310,7 @@ def getGroupByComp(gdf:gpd.GeoDataFrame,
 
     else:
         # Aggregate on the column and count the number of aggregation
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        gdfSumup = gdf[[column]].groupby(column, dropna = False)[column].agg(['count'])
         
         # Reset index and take the number
         gdfSumup.reset_index(inplace=True)
@@ -145,7 +339,7 @@ def getNbElem(gdf:gpd.GeoDataFrame,
 
     else:
         # Aggregate on the column and count the number of aggregation
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        gdfSumup = gdf[[column]].groupby(column, dropna = False)[column].agg(['count'])
         
         # Reset index
         gdfSumup.reset_index(inplace=True)
@@ -160,6 +354,7 @@ def getNbElem(gdf:gpd.GeoDataFrame,
 
 
 def getOverlapIndicator(gdf:gpd.GeoDataFrame,
+                        area:str,
                         column:str = "overlap") -> str:
     """Get indicator value for the overlap indicator criterion.
     Calculate the total length of overlapping roads and return
@@ -167,6 +362,7 @@ def getOverlapIndicator(gdf:gpd.GeoDataFrame,
 
     Args:
         gdf (gpd.GeoDataFrame): GeoDataFrame for the criterion.
+        area (str): Name of the area.
         column (str, optional): Name of the column to aggregate on.
         Defaults to "overlap".
 
@@ -185,14 +381,14 @@ def getOverlapIndicator(gdf:gpd.GeoDataFrame,
         gdfCopy = gdfCopy.set_geometry("geom")
         
         # Get crs for the area and project to this crs
-        crs = areasCRS[currentArea()]
+        crs = areasCRS[area]
         gdfProj = gdfCopy.to_crs(crs)
         
         # Calculate length based on the projected geometry in km
         gdfCopy['length'] = gdfProj['geom'].length / 1000
         
         # Agregate per class and calculate sum for each class
-        gdfSumup = gdfCopy[[column, 'length']].groupby(column)['length'].agg(['sum'])
+        gdfSumup = gdfCopy[[column, 'length']].groupby(column, dropna = False)['length'].agg(['sum'])
         
         # Reset index to export class
         gdfSumup.reset_index(inplace=True)
@@ -234,7 +430,7 @@ def getCorrespondingNodes(gdf:gpd.GeoDataFrame,
 
     else:
         # Aggregate on the column and count the number of rows
-        gdfSumup = gdf[[column]].groupby(column)[column].agg(['count'])
+        gdfSumup = gdf[[column]].groupby(column, dropna = False)[column].agg(['count'])
         
         # Reset index
         gdfSumup.reset_index(inplace=True)
@@ -366,62 +562,149 @@ engine = getEngine()
 radiusMinPixels = 2
 widthMinPixels = 2
 
-# Dict of the different criterion
-quality_criteria = {
-    "base":"Road network",
-    "building":"Buildings",
-    "place":"Places / Points of interest",
-    "conn_comp":"Connected components",
-    "strongly_comp":"Strongly connected components",
-    "isolated_nodes":"Isolated nodes",
-    "overlap_indicator":"Overlap indicator",
-    "corresponding_nodes":"Corresponding nodes",
+# Dict of the different criterion (group by theme) 
+quality_criteria_choices = {
+    "Graph" : {
+        "base":"Original dataset",
+        "conn_comp":"Connected components",
+        "strongly_comp":"Strongly connected components",
+        "isolated_nodes":"Isolated nodes",
+        "overlap_indicator":"Overlap indicator",
+        "corresponding_nodes":"Corresponding nodes",
+    },
+    "Building" : {
+        "buildings":"Buildings (coverage)",
+        "buildings_density":"Buildings (density)",
+    },
+    "Place" : {
+        "places":"Places / Points of interest (density)",
+    }
+}
+
+# Construct the quality_criteria variable from the choices
+quality_criteria = {}
+
+# Dict that link each criterion with a theme (Graph, Building or Place)
+criteria_theme = {}
+
+for theme in quality_criteria_choices:
+    for elem in quality_criteria_choices[theme]:
+        quality_criteria[elem] = quality_criteria_choices[theme][elem]
+        criteria_theme[elem] = theme
+
+
+# Put a function for each theme
+theme_function = {
+    "Graph":getDataFrameGraph,
+    "Building":getDataFrameBuilding,
+    "Place":getDataFramePlace,
+}
+
+# Dataframe header per theme
+theme_dataframe_header = {
+    "Graph":"Number of edges and total length (in km) per class in {}",
+    "Building":"Number of buildings and total area (in km2) per class in {}",
+    "Place":"Number of places per category in {}",
+}
+
+# Name of the columns to rename per theme
+theme_column_names = {
+    "Graph":{
+        "class":"Class",
+        "sum": "Total length (km)",
+        "count":"Number of edges",
+    },
+    "Building":{
+        "class":"Class",
+        "sum": "Total area (km2)",
+        "count":"Number of buildings",
+    },
+    "Place":{
+        "category":"Category",
+        "size":"Number of places",
+    },
+}
+
+# Base layers per theme
+theme_template_layer = {
+    "Graph": {
+        "OSM" : "osm.edge_with_cost_{}",
+        "OMF" : "omf.edge_with_cost_{}",
+    },
+    "Building": {
+        "OSM" : "osm.building_{}",
+        "OMF" : "omf.building_{}",
+    },
+    "Place": {
+        "OSM" : "osm.place_{}",
+        "OMF" : "omf.place_{}",
+    },
+}
+
+# Dict of the criterion to display (for the card)
+quality_criteria_display = {
+    "":"Criteria display",
+    "base":"Total length (km)",
+    "buildings":"Buildings coverage (%)",
+    "buildings_density":"Density of buildings (nb / km2)",
+    "places":"Density of POI (nb / km2)",
+    "conn_comp":"Number of connected components",
+    "strongly_comp":"Number of strongly connected components",
+    "isolated_nodes":"Number of isolated nodes",
+    "overlap_indicator":"Overlap indicator (%)",
+    "corresponding_nodes":"Corresponding nodes (Total number - %)",
 }
 
 # Template name of layers per criterion
 template_layers_name = {
     "base": {
-        "OSM" : [("osm.node_{}", "Point"), ("osm.edge_with_cost_{}", "LineString")],
-        "OMF" : [("omf.node_{}", "Point"), ("omf.edge_with_cost_{}", "LineString")],
+        "OSM" : [("osm.edge_with_cost_{}", lon.PathLayer), ("osm.node_{}", lon.ScatterplotLayer)],
+        "OMF" : [("omf.edge_with_cost_{}", lon.PathLayer), ("omf.node_{}", lon.ScatterplotLayer)],
     },
-    "building": {
-        "OSM" : [("osm.building_{}", "Polygon")],
-        "OMF" : [("omf.building_{}", "Polygon")],
+    "buildings": {
+        "OSM" : [("osm.building_{}", lon.PolygonLayer)],
+        "OMF" : [("omf.building_{}", lon.PolygonLayer)],
     },
-    "place": {
-        "OSM" : [("osm.place_{}", "Point")],
-        "OMF" : [("omf.place_{}", "Point")],
+    "buildings_density": {
+        "OSM" : [("osm.building_{}", lon.PolygonLayer)],
+        "OMF" : [("omf.building_{}", lon.PolygonLayer)],
+    },
+    "places": {
+        "OSM" : [("osm.place_{}", lon.ScatterplotLayer)],
+        "OMF" : [("omf.place_{}", lon.ScatterplotLayer)],
     },
     "conn_comp": {
-        "OSM" : [("results.connected_components_{}_osm", "Point")],
-        "OMF" : [("results.connected_components_{}_omf", "Point")],
+        "OSM" : [("results.connected_components_{}_osm", lon.ScatterplotLayer)],
+        "OMF" : [("results.connected_components_{}_omf", lon.ScatterplotLayer)],
     },
     "strongly_comp": {
-        "OSM" : [("results.strong_components_{}_osm", "Point")],
-        "OMF" : [("results.strong_components_{}_omf", "Point")],
+        "OSM" : [("results.strong_components_{}_osm", lon.ScatterplotLayer)],
+        "OMF" : [("results.strong_components_{}_omf", lon.ScatterplotLayer)],
     },
     "isolated_nodes": {
-        "OSM" : [("results.isolated_nodes_{}_osm", "Point")],
-        "OMF" : [("results.isolated_nodes_{}_omf", "Point")],
+        "OSM" : [("results.isolated_nodes_{}_osm", lon.ScatterplotLayer)],
+        "OMF" : [("results.isolated_nodes_{}_omf", lon.ScatterplotLayer)],
     },
     "overlap_indicator": {
-        "OSM" : [("results.overlap_indicator_{}_osm", "LineString")],
-        "OMF" : [("results.overlap_indicator_{}_omf", "LineString")],
+        "OSM" : [("results.overlap_indicator_{}_osm", lon.PathLayer)],
+        "OMF" : [("results.overlap_indicator_{}_omf", lon.PathLayer)],
     },
     "corresponding_nodes": {
-        "OSM" : [("results.corresponding_nodes_{}_osm", "Point")],
-        "OMF" : [("results.corresponding_nodes_{}_omf", "Point")],
+        "OSM" : [("results.corresponding_nodes_{}_osm", lon.ScatterplotLayer)],
+        "OMF" : [("results.corresponding_nodes_{}_omf", lon.ScatterplotLayer)],
     },
 }
 
 # Icons from font-awesome
 ICONS = {
-    "nodes": fa.icon_svg("circle-nodes"),
-    "edges": fa.icon_svg("road"),
-    "length": fa.icon_svg("ruler"),
-    "criteria": fa.icon_svg("calculator"),
-    "building": fa.icon_svg("building"),
-    "place": fa.icon_svg("location-dot"),
+    "":fa.icon_svg("star"),
+    "nodes":fa.icon_svg("circle-nodes"),
+    "edges":fa.icon_svg("road"),
+    "base":fa.icon_svg("ruler"),
+    "criteria":fa.icon_svg("calculator"),
+    "buildings":fa.icon_svg("building"),
+    "buildings_density":fa.icon_svg("city"),
+    "places":fa.icon_svg("location-dot"),
     "conn_comp":fa.icon_svg("arrows-left-right"),
     "strongly_comp":fa.icon_svg("arrow-right"),
     "isolated_nodes":fa.icon_svg("circle-dot"),
@@ -447,24 +730,32 @@ pathHelpMD = Path(__file__).parent / "help.md"
 pathLicensesMD = Path(__file__).parent / "licenses.md"
 
 ## Reactive values ##
-# GeoDataFrame with the node and edge of the area
-nodeOSM = reactive.value()
-edgeOSM = reactive.value()
-nodeOMF = reactive.value()
-edgeOMF = reactive.value()
+# Mandatory layer to add to the map (calculation are made on it)
+layerOSM = reactive.value(gpd.GeoDataFrame())
+layerOMF = reactive.value(gpd.GeoDataFrame())
 
-# GeoDataframe for the quality results
-qualityOSM = reactive.value(gpd.GeoDataFrame())
-qualityOMF = reactive.value(gpd.GeoDataFrame())
+# Other layers to add to the map (no calculation on them)
+otherLayersOSM = reactive.value([])
+otherLayersOMF = reactive.value([])
 
 # DataFrame for the number of edges / length per class
 classesOSM = reactive.value(pd.DataFrame())
 classesOMF = reactive.value(pd.DataFrame())
 
-# Variable for the last area and criterion chosen
+# Variable for the last area, criterion and theme chosen
 currentArea = reactive.value("")
 currentCriterion = reactive.value("")
-currentNbClasses = reactive.value(0)
+currentTheme = reactive.value("")
+
+# Variable for the cards
+nbNodesOSM = reactive.value("")
+nbNodesOMF = reactive.value("")
+nbEdgesOSM = reactive.value("")
+nbEdgesOMF = reactive.value("")
+nbBuildingsOSM = reactive.value("")
+nbBuildingsOMF = reactive.value("")
+nbPlacesOSM = reactive.value("")
+nbPlacesOMF = reactive.value("")
 
 
 # This function must be before the main script to be launched before the maps
@@ -480,39 +771,43 @@ def getData():
     area = input.select_area()
     criterion = input.select_criterion()
     
+    # Get theme of the criterion
+    theme = criteria_theme[criterion]
+    
     # Read and get the value
     currentAreaValue = currentArea()
     currentCriterionValue = currentCriterion()
+    currentThemeValue = currentTheme()
+    
     
     # If the area has changed, the data must change too
     if currentAreaValue != area:
         
         # Change the last area chosen
         currentArea.set(area)
+        currentTheme.set(theme)
     
         # Reset reactive values
-        nodeOSM.set(gpd.GeoDataFrame())
-        edgeOSM.set(gpd.GeoDataFrame())
-        nodeOMF.set(gpd.GeoDataFrame())
-        edgeOMF.set(gpd.GeoDataFrame())
-        classesOSM.set(pd.DataFrame())
-        classesOMF.set(pd.DataFrame())
+        nbNodesOSM.set("")
+        nbNodesOMF.set("")
+        nbEdgesOSM.set("")
+        nbEdgesOMF.set("")
+        nbBuildingsOSM.set("")
+        nbBuildingsOMF.set("")
+        nbPlacesOSM.set("")
+        nbPlacesOMF.set("")
         
-        # Set new value for reactive values, depending on the area
-        nodeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.node_{area.lower()}", engine))
-        edgeOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM osm.edge_with_cost_{area.lower()}", engine))
-        nodeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.node_{area.lower()}", engine))
-        edgeOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM omf.edge_with_cost_{area.lower()}", engine))
-        
-        # Calculate the length and number of edges per class for each dataset
-        crs = areasCRS[area]
-        dfOSM = getLengthPerClass(edgeOSM(), crs)
-        dfOMF = getLengthPerClass(edgeOMF(), crs)
-        
-        # Set the reactive value with the precalculated values
-        classesOSM.set(dfOSM)
-        classesOMF.set(dfOMF)
-        
+        # Populate the cards number
+        nbNodesOSM.set(getNbRowTable(engine, template_layers_name["base"]["OSM"][0][0].format(area.lower())))
+        nbNodesOMF.set(getNbRowTable(engine, template_layers_name["base"]["OMF"][0][0].format(area.lower())))
+        nbEdgesOSM.set(getNbRowTable(engine, template_layers_name["base"]["OSM"][1][0].format(area.lower())))
+        nbEdgesOMF.set(getNbRowTable(engine, template_layers_name["base"]["OMF"][1][0].format(area.lower())))
+        nbBuildingsOSM.set(getNbRowTable(engine, template_layers_name["buildings"]["OSM"][0][0].format(area.lower())))
+        nbBuildingsOMF.set(getNbRowTable(engine, template_layers_name["buildings"]["OMF"][0][0].format(area.lower())))
+        nbPlacesOSM.set(getNbRowTable(engine, template_layers_name["places"]["OSM"][0][0].format(area.lower())))
+        nbPlacesOMF.set(getNbRowTable(engine, template_layers_name["places"]["OMF"][0][0].format(area.lower())))
+    
+    
     # If the area changed or the criterion changed, we download the data for the criterion
     if (currentCriterionValue != criterion) or (currentAreaValue != area):
         
@@ -520,17 +815,73 @@ def getData():
         currentCriterion.set(criterion)
         
         # Empty the variable
-        qualityOSM.set(gpd.GeoDataFrame())
-        qualityOMF.set(gpd.GeoDataFrame())
+        layerOSM.set(gpd.GeoDataFrame())
+        layerOMF.set(gpd.GeoDataFrame())
         
-        # If the criterion is "base", the data has already been downloaded
-        if criterion != "base":
+        otherLayersOSM.set([])
+        otherLayersOMF.set([])
+        
+        # Get table for the mandatory layer (first element)
+        osmTable = template_layers_name[criterion]["OSM"][0][0]
+        omfTable = template_layers_name[criterion]["OMF"][0][0]
+        
+        # Set reactive values
+        layerOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
+        layerOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+        
+        # Get other layers if they exists
+        # OSM
+        if len(template_layers_name[criterion]["OSM"]) > 1:
+            layersOSM = []
+            # Iterate over the layers
+            for index in range(1, len(template_layers_name[criterion]["OSM"])):
+                osmTable = template_layers_name[criterion]["OSM"][index][0]
+                layersOSM.append(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
+            otherLayersOSM.set(otherLayersOSM() + layersOSM)
+        
+        # OMF
+        if len(template_layers_name[criterion]["OMF"]) > 1:
+            layersOMF = []
+            # Iterate over the layers
+            for index in range(1, len(template_layers_name[criterion]["OMF"])):
+                omfTable = template_layers_name[criterion]["OMF"][index][0]
+                layersOMF.append(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+            otherLayersOMF.set(otherLayersOMF() + layersOMF)
+    
+    # If the theme or area has changed, change the classes dataframe
+    if (currentThemeValue != theme) or (currentAreaValue != area):
+        
+        # Change the current theme
+        currentTheme.set(theme)
+        # Reset reactive values
+        classesOSM.set(pd.DataFrame())
+        classesOMF.set(pd.DataFrame())
+        
+        # Calculate the length and number of edges per class for each dataset
+        crs = areasCRS[area]
+        functionDataFrame = theme_function[theme]
+        
+        # Because the graph dataframe needs edge layer, we check if the layer imported is the good one
+        templateLayerClassesOSM = theme_template_layer[theme]["OSM"]
+        osmTable = template_layers_name[criterion]["OSM"][0][0]
+        # If it is the same layer, we can just take it
+        if templateLayerClassesOSM == osmTable:
+            classesOSM.set(functionDataFrame(layerOSM(), crs))
+        else:
+            # Otherwise, we get the data for the theme
+            layerclassesOSM = gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {templateLayerClassesOSM.format(area.lower())}", engine)
+            classesOSM.set(functionDataFrame(layerclassesOSM, crs))
             
-            osmTable = template_layers_name[criterion]["OSM"][0][0]
-            omfTable = template_layers_name[criterion]["OMF"][0][0]
-            
-            qualityOSM.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {osmTable.format(area.lower())}", engine))
-            qualityOMF.set(gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {omfTable.format(area.lower())}", engine))
+        # Same for OMF data
+        templateLayerClassesOMF = theme_template_layer[theme]["OMF"]
+        omfTable = template_layers_name[criterion]["OMF"][0][0]
+        # If it is the same layer, we can just take it
+        if templateLayerClassesOMF == omfTable:
+            classesOMF.set(functionDataFrame(layerOMF(), crs))
+        else:
+            # Otherwise, we get the data for the theme
+            layerclassesOMF = gpd.GeoDataFrame.from_postgis(f"SELECT * FROM {templateLayerClassesOMF.format(area.lower())}", engine)
+            classesOMF.set(functionDataFrame(layerclassesOMF, crs))
 
 
 ### Website content ###
@@ -563,7 +914,7 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
     ## Input for the layer and criterion to display ##
     ui.input_select("select_area", "Area", choices = areas)
 
-    ui.input_select("select_criterion", "Show", choices = quality_criteria)
+    ui.input_select("select_criterion", "Show", choices = quality_criteria_choices)
     
     ui.input_action_button("submit", "Load layers", class_ = "btn btn-outline-warning")
     
@@ -820,7 +1171,7 @@ with ui.nav_panel("Dashboard"):
                         Returns:
                             str: Number of OSM nodes.
                         """
-                        return str(nodeOSM().shape[0])
+                        return nbNodesOSM()
                     
                 
                 with ui.value_box(class_ = "value-box"):
@@ -835,7 +1186,7 @@ with ui.nav_panel("Dashboard"):
                         Returns:
                             str: Number of OMF nodes.
                         """
-                        return str(nodeOMF().shape[0])
+                        return nbNodesOMF()
         
         # Number of edges
         with ui.card():
@@ -855,7 +1206,7 @@ with ui.nav_panel("Dashboard"):
                         Returns:
                             str: Number of OSM edges.
                         """
-                        return str(edgeOSM().shape[0])
+                        return nbEdgesOSM()
                 
                 with ui.value_box(class_ = "value-box"):
                     "OMF"
@@ -869,102 +1220,125 @@ with ui.nav_panel("Dashboard"):
                         Returns:
                             str: Number of OMF edges.
                         """
-                        return str(edgeOMF().shape[0])
+                        return nbEdgesOMF()
         
-        # Total length in km
+        # Number of buildings
         with ui.card():
             
-            ui.card_header(ICONS["length"], " Total length (in kilometer)")
+            ui.card_header(ICONS["buildings"], " Number of buildings")
             
             with ui.layout_column_wrap(width=1 / 2):
                 with ui.value_box(class_ = "value-box"):
                     "OSM"
                     
                     @render.text
-                    def totalLengthOSM() -> str:
+                    def getOSMBuildings() -> str:
                         """Render text function.
                         
-                        Get the total length of OSM edges for the area.
+                        Get the number of OSM buildings for the area.
 
                         Returns:
-                            str: Total length of OSM edges.
+                            str: Number of OSM buildings.
                         """
-                        df = classesOSM()
-                        if df.empty:
-                            value = ""
-                        else:
-                            value = round(df["sum"].sum())
-                        return str(value)
+                        return nbBuildingsOSM()
+                    
                 
                 with ui.value_box(class_ = "value-box"):
                     "OMF"
                     
                     @render.text
-                    def totalLengthOMF() -> str:
+                    def getOMFBuildings() -> str:
                         """Render text function.
                         
-                        Get the total length of OMF edges for the area.
+                        Get the number of OMF buildings for the area.
 
                         Returns:
-                            str: Total length of OMF edges.
+                            str: Number of OMF buildings.
                         """
-                        df = classesOMF()
-                        if df.empty:
-                            value = ""
-                        else:
-                            value = round(df["sum"].sum())
-                        return str(value)
+                        return nbBuildingsOMF()
         
+        # Number of places
+        with ui.card():
+            
+            ui.card_header(ICONS["places"], " Number of places")
+            
+            with ui.layout_column_wrap(width=1 / 2):
+                with ui.value_box(class_ = "value-box"):
+                    "OSM"
+                    
+                    @render.text
+                    def getOSMPlaces() -> str:
+                        """Render text function.
+                        
+                        Get the number of OSM places for the area.
+
+                        Returns:
+                            str: Number of OSM places.
+                        """
+                        return nbPlacesOSM()
+                
+                with ui.value_box(class_ = "value-box"):
+                    "OMF"
+                    
+                    @render.text
+                    def getOMFPlaces() -> str:
+                        """Render text function.
+                        
+                        Get the number of OMF places for the area.
+
+                        Returns:
+                            str: Number of OMF places.
+                        """
+                        return nbPlacesOMF()
         
         # Criterion value (hidden if base layer is selected)
-        with ui.panel_conditional("input.select_criterion != 'base'"):
-            with ui.card(id = "card_quality_criterion", class_ = "card_data"):
+        with ui.card(id = "card_quality_criterion", class_ = "card_data"):
+            
+            with ui.card_header():
                 
-                with ui.card_header():
+                @render.ui
+                def getCardHeaderCriterion() -> str:
+                    """Render ui function.
                     
-                    @render.ui
-                    def getCardHeaderCriterion() -> str:
-                        """Render ui function.
+                    Get the card header for the criterion.
+
+                    Returns:
+                        str: Card header.
+                    """
+                    return getCardHeader()
+            
+            with ui.layout_column_wrap(width=1 / 2):
+                with ui.value_box(class_ = "value-box"):
+                    "OSM"
+                    
+                    @render.text
+                    @reactive.event(input.submit)
+                    def getOSMQualityValue() -> str:
+                        """Render text function triggered by the submit button event.
                         
-                        Get the card header for the criterion.
+                        Get the criterion value for OSM.
 
                         Returns:
-                            str: Card header.
+                            str: Criterion value.
                         """
-                        return getCardHeader()
+                        OSMValue, _ = getCriterionInformation()
+                        return OSMValue
                 
-                with ui.layout_column_wrap(width=1 / 2):
-                    with ui.value_box(class_ = "value-box"):
-                        "OSM"
-                        
-                        @render.text
-                        @reactive.event(input.submit)
-                        def getOSMQualityValue() -> str:
-                            """Render text function triggered by the submit button event.
-                            
-                            Get the criterion value for OSM.
-
-                            Returns:
-                                str: Criterion value.
-                            """
-                            OSMValue, _ = getCriterionInformation()
-                            return OSMValue
+                with ui.value_box(class_ = "value-box"):
+                    "OMF"
                     
-                    with ui.value_box(class_ = "value-box"):
-                        "OMF"
+                    @render.text
+                    @reactive.event(input.submit)
+                    def getOMFQualityValue() -> str:
+                        """Render text function triggered by the submit button event.
                         
-                        @render.text
-                        @reactive.event(input.submit)
-                        def getOMFQualityValue() -> str:
-                            """Render text function triggered by the submit button event.
-                            
-                            Get the criterion value for OMF.
+                        Get the criterion value for OMF.
 
-                            Returns:
-                                str: Criterion value.
-                            """
-                            _, OMFValue = getCriterionInformation()
-                            return OMFValue
+                        Returns:
+                            str: Criterion value.
+                        """
+                        _, OMFValue = getCriterionInformation()
+                        return OMFValue
 
     ## Maps and DataFrames
     with ui.layout_columns(col_widths=[6, 6, 6, 6], row_heights=[2, 1]):
@@ -986,11 +1360,9 @@ with ui.nav_panel("Dashboard"):
                     """
                     if currentCriterion() in quality_criteria:
                         if currentArea() != "":
-                            header = f"OSM - {currentArea()} : {quality_criteria[currentCriterion()]}"
-                        else:
-                            header = f"OSM - {currentArea()} : {quality_criteria[currentCriterion()]}"
+                            header = f"OpenStreetMap - {currentArea()}: {quality_criteria[currentCriterion()]}"
                     else:
-                        header = "OSM"
+                        header = "OpenStreetMap"
                     return header
 
             @render_widget
@@ -1006,8 +1378,8 @@ with ui.nav_panel("Dashboard"):
                 # Layers to display on the map
                 layers = []
                 
-                # If the layer are empty,an empty map is returned
-                if nodeOSM().empty or edgeOSM().empty:
+                # If the layer are empty, an empty map is returned
+                if layerOSM().empty:
                     
                     m = lon.Map([])
                     # Set zoom over Japan
@@ -1018,40 +1390,23 @@ with ui.nav_panel("Dashboard"):
                     )
                     return m
                 
-                # If the criterion is base, nodes AND edges are displayed
-                if input.select_criterion() == "base":
-                    
-                    # Construct point layer
-                    nodeLayer = lon.ScatterplotLayer.from_geopandas(
-                        nodeOSM(),
-                        radius_min_pixels = 2)
-                    
-                    # Construct edge layer
-                    edgeLayer = lon.PathLayer.from_geopandas(
-                        edgeOSM(),
-                        width_min_pixels = 2)
-                    
-                    layers = [nodeLayer, edgeLayer]
+                # Add mandatory layer
+                criterion = input.select_criterion()
+                # Get the class to add the layer (they all have a from_gropandas method)
+                lonboardClass = template_layers_name[criterion]["OSM"][0][1]
+                layer = lonboardClass.from_geopandas(layerOSM())
                 
-                # Otherwise, check the geometry type of the layer to add
-                else:
-                    for _, geomType in template_layers_name[input.select_criterion()]["OSM"]:
-                        if geomType == "Point":
-                            layer = lon.ScatterplotLayer.from_geopandas(
-                                qualityOSM(),
-                                radius_min_pixels = 2)
+                layers.append(layer)
+                
+                # Check if there are other elements to add
+                if len(otherLayersOSM()) > 0:
+                    # Add each element by taking the corresponding class in the template_layers_name dict
+                    for index in range(len(otherLayersOSM())):
+                        data = otherLayersOSM()[index]
                         
-                        elif geomType == "LineString":
-                            layer = lon.PathLayer.from_geopandas(
-                                qualityOSM(),
-                                width_min_pixels = 2)
-                        
-                        elif geomType == "Polygon":
-                            layer = lon.PolygonLayer.from_geopandas(
-                                qualityOSM(),
-                                line_width_min_pixels = 0)
-                        
-                        layers = [layer]
+                        lonboardClass = template_layers_name[criterion]["OSM"][index + 1][1]
+                        layer = lonboardClass.from_geopandas(data)
+                        layers.append(layer)
                 
                 # Construct map with the layers
                 return lon.Map(layers = layers)
@@ -1071,11 +1426,9 @@ with ui.nav_panel("Dashboard"):
                     """
                     if currentCriterion() in quality_criteria:
                         if currentArea() != "":
-                            header = f"OMF - {currentArea()} : {quality_criteria[currentCriterion()]}"
-                        else:
-                            header = f"OMF - {currentArea()} : {quality_criteria[currentCriterion()]}"
+                            header = f"Overture Maps Foundation - {currentArea()}: {quality_criteria[currentCriterion()]}"
                     else:
-                        header = "OMF"
+                        header = "Overture Maps Foundation"
                     return header
                 
             @render_widget
@@ -1092,7 +1445,7 @@ with ui.nav_panel("Dashboard"):
                 layers = []
                 
                 # If the layer are empty,an empty map is returned
-                if nodeOMF().empty or edgeOMF().empty:
+                if layerOMF().empty:
                     
                     m = lon.Map([])
                     # Set zoom over Japan
@@ -1103,39 +1456,23 @@ with ui.nav_panel("Dashboard"):
                     )
                     return m
                 
-                # If the criterion is base, nodes AND edges are displayed
-                if input.select_criterion() == "base":
-                    # Construct point layer
-                    nodeLayer = lon.ScatterplotLayer.from_geopandas(
-                        nodeOMF(),
-                        radius_min_pixels = 2)
-                    
-                    # Construct edge layer
-                    edgeLayer = lon.PathLayer.from_geopandas(
-                        edgeOMF(),
-                        width_min_pixels = 2)
-                    
-                    layers = [nodeLayer, edgeLayer]
+                # Add mandatory layer
+                criterion = input.select_criterion()
+                # Get the class to add the layer (they all have a from_gropandas method)
+                lonboardClass = template_layers_name[criterion]["OMF"][0][1]
+                layer = lonboardClass.from_geopandas(layerOMF())
                 
-                # Otherwise, check the geometry type of the layer to add
-                else:
-                    for _, geomType in template_layers_name[input.select_criterion()]["OSM"]:
-                        if geomType == "Point":
-                            layer = lon.ScatterplotLayer.from_geopandas(
-                                qualityOMF(),
-                                radius_min_pixels = 2)
+                layers.append(layer)
+                
+                # Check if there are other elements to add
+                if len(otherLayersOMF()) > 0:
+                    # Add each element by taking the corresponding class in the template_layers_name dict
+                    for index in range(len(otherLayersOMF())):
+                        data = otherLayersOMF()[index]
                         
-                        elif geomType == "LineString":
-                            layer = lon.PathLayer.from_geopandas(
-                                qualityOMF(),
-                                width_min_pixels = 2)
-                        
-                        elif geomType == "Polygon":
-                            layer = lon.PolygonLayer.from_geopandas(
-                                qualityOMF(),
-                                line_width_min_pixels = 0)
-                        
-                        layers = [layer]
+                        lonboardClass = template_layers_name[criterion]["OMF"][index + 1][1]
+                        layer = lonboardClass.from_geopandas(data)
+                        layers.append(layer)
                 
                 # Construct map with the layers
                 return lon.Map(layers = layers)
@@ -1154,12 +1491,11 @@ with ui.nav_panel("Dashboard"):
                     Returns:
                         str: Dataframe card header for OSM.
                     """
-                    if currentArea() != "":
-                        header = f"OSM: Number of edges and total length (in km) per class in {currentArea()}"
-                    else:
-                        header = "OSM: Number of edges and total length (in km) per class"
+                    header = "OpenStreetMap"
+                    if currentTheme() != "":
+                        header = f"{header}: {theme_dataframe_header[currentTheme()].format(currentArea())}"
                     return header
-                
+            
             @render.data_frame
             def lengthPerClassOSM() -> render.DataGrid:
                 """Render data frame function.
@@ -1172,11 +1508,9 @@ with ui.nav_panel("Dashboard"):
                     for each OSM class.
                 """
                 df = classesOSM()
-                df = df.rename(columns = {
-                    "class":"Class",
-                    "sum": "Total length (km)",
-                    "count":"Number of edges",
-                })
+                if currentTheme() != "":
+                    newNamesColumns = theme_column_names[currentTheme()]
+                    df = df.rename(columns = newNamesColumns)
                 return render.DataGrid(df.round(2)) 
 
         # Dataframe OMF
@@ -1191,10 +1525,9 @@ with ui.nav_panel("Dashboard"):
                     Returns:
                         str: Dataframe card header for OMF.
                     """
-                    if currentArea() != "":
-                        header = f"OMF: Number of edges and total length (in km) per class in {currentArea()}"
-                    else:
-                        header = "OMF: Number of edges and total length (in km) per class"
+                    header = "Overture Maps Foundation"
+                    if currentTheme() != "":
+                        header = f"{header}: {theme_dataframe_header[currentTheme()].format(currentArea())}"
                     return header
             
             @render.data_frame
@@ -1209,11 +1542,9 @@ with ui.nav_panel("Dashboard"):
                     for each OMF class.
                 """
                 df = classesOMF()
-                df = df.rename(columns = {
-                    "class":"Class",
-                    "sum": "Total length (km)",
-                    "count":"Number of edges",
-                })
+                if currentTheme() != "":
+                    newNamesColumns = theme_column_names[currentTheme()]
+                    df = df.rename(columns = newNamesColumns)
                 return render.DataGrid(df.round(2))
 
 
@@ -1299,10 +1630,7 @@ def getCardHeader() -> str:
     Returns:
         str: Card header with a logo
     """
-    if currentCriterion() != "base" and currentCriterion() != "":
-        return ICONS[currentCriterion()], f" {quality_criteria[currentCriterion()]}"
-    else:
-        return ""
+    return ICONS[currentCriterion()], f" {quality_criteria_display[currentCriterion()]}"
 
 
 ## Calculation of criterion information
@@ -1319,26 +1647,37 @@ def getCriterionInformation() -> tuple[str, str]:
         The first value is for OSM, the other for OMF.
     """
     OSMValue, OMFValue = "", ""
-    # Buildings or POIs
-    if input.select_criterion() == "building" or input.select_criterion() == "place":
-        OSMValue = qualityOSM().shape[0]
-        OMFValue = qualityOMF().shape[0]
+    # Get input
+    area = input.select_area()
+    criterion = input.select_criterion()
+    # Base (total length)
+    if criterion == "base":
+        OSMValue = getTotalLength(classesOSM())
+        OMFValue = getTotalLength(classesOMF())
+    # Coverage
+    elif criterion == "buildings":
+        OSMValue = getCoverage(layerOSM(), area)
+        OMFValue = getCoverage(layerOMF(), area)
+    # Density
+    elif criterion == "buildings_density" or criterion == "places":
+        OSMValue = getDensity(layerOSM(), area)
+        OMFValue = getDensity(layerOMF(), area)
     # (Strongly) connected components
-    if input.select_criterion() == "conn_comp" or input.select_criterion() == "strongly_comp":
-        OSMValue = getGroupByComp(qualityOSM())
-        OMFValue = getGroupByComp(qualityOMF())
+    elif criterion == "conn_comp" or criterion == "strongly_comp":
+        OSMValue = getGroupByComp(layerOSM())
+        OMFValue = getGroupByComp(layerOMF())
     # Isolated nodes
-    if input.select_criterion() == "isolated_nodes":
-        OSMValue = getNbElem(qualityOSM())
-        OMFValue = getNbElem(qualityOMF())
+    elif criterion == "isolated_nodes":
+        OSMValue = getNbElem(layerOSM())
+        OMFValue = getNbElem(layerOMF())
     # Overlap indicator
-    if input.select_criterion() == "overlap_indicator":
-        OSMValue = getOverlapIndicator(qualityOSM())
-        OMFValue = getOverlapIndicator(qualityOMF())
+    elif criterion == "overlap_indicator":
+        OSMValue = getOverlapIndicator(layerOSM(), area)
+        OMFValue = getOverlapIndicator(layerOMF(), area)
     # Corresponding nodes
-    if input.select_criterion() == "corresponding_nodes":
-        OSMValue = getCorrespondingNodes(qualityOSM())
-        OMFValue = getCorrespondingNodes(qualityOMF())
+    elif criterion == "corresponding_nodes":
+        OSMValue = getCorrespondingNodes(layerOSM())
+        OMFValue = getCorrespondingNodes(layerOMF())
     
     return OSMValue, OMFValue
 
@@ -1459,7 +1798,7 @@ def updateLayers():
                     layer.line_width_min_pixels = polygonWidth
     
     # If it is base layer, the color is changed too.
-    if currentCriterion() == "base" or currentCriterion() == "building" or currentCriterion() == "place":
+    if currentCriterion() == "base" or currentCriterion() == "buildings" or currentCriterion() == "buildings_density" or currentCriterion() == "places":
         # Check all layers
         for layer in osmLayers + omfLayers:
             
@@ -1509,9 +1848,9 @@ def colorBoolean():
             if type(layer) == lon._layer.ScatterplotLayer:
                 
                 if layer in omfLayers:
-                    gdfcopy = qualityOMF().copy()
+                    gdfcopy = layerOMF().copy()
                 else:
-                    gdfcopy = qualityOSM().copy()
+                    gdfcopy = layerOSM().copy()
                 
                 # Keep only intersecting columns
                 gdfcopy = gdfcopy[["id", "intersects"]]
@@ -1533,9 +1872,9 @@ def colorBoolean():
             if type(layer) == lon._layer.PathLayer:
                 
                 if layer in omfLayers:
-                    gdfcopy = qualityOMF().copy()
+                    gdfcopy = layerOMF().copy()
                 else:
-                    gdfcopy = qualityOSM().copy()
+                    gdfcopy = layerOSM().copy()
                 
                 gdfcopy = gdfcopy[["id", "overlap"]]
                 
@@ -1580,9 +1919,9 @@ def colorRange():
             if type(layer) == lon._layer.ScatterplotLayer:
 
                 if layer in omfLayers:
-                    gdfcopy = qualityOMF().copy()
+                    gdfcopy = layerOMF().copy()
                 else:
-                    gdfcopy = qualityOSM().copy()
+                    gdfcopy = layerOSM().copy()
                 
                 # Keep only interseting column
                 gdfcopy = gdfcopy[["id", "cardinality"]]
