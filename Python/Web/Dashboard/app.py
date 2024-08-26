@@ -551,6 +551,23 @@ def getUTMProj(point: shapely.Point) -> int:
     return int(epsgCode)
 
 
+def setMapState(view_state:dict,
+                map:lon.Map):
+    """Set a view state for a map.
+
+    Args:
+        view_state (_type_): View state of the map
+        map (lon.Map): Map to set the view state
+    """
+    # Set view state of OSM map
+    map.set_view_state(
+        longitude = view_state.longitude,
+        latitude = view_state.latitude,
+        zoom = view_state.zoom,
+        pitch = view_state.pitch,
+        bearing = view_state.bearing)
+
+
 ### Variables used in the application ###
 
 ## Constant values ##
@@ -747,6 +764,18 @@ currentArea = reactive.value("")
 currentCriterion = reactive.value("")
 currentTheme = reactive.value("")
 
+# Variable for the map state
+formerMapState = reactive.value(lon.models.ViewState(
+    latitude=36.390,
+    longitude=138.812,
+    zoom=7,
+    pitch=0,
+    bearing=0)
+)
+
+# Boolean to keep the former map state or not
+keepFormerMapState = reactive.value(False)
+
 # Variable for the cards
 nbNodesOSM = reactive.value("")
 nbNodesOMF = reactive.value("")
@@ -779,9 +808,15 @@ def getData():
     currentCriterionValue = currentCriterion()
     currentThemeValue = currentTheme()
     
+    # Get current map state (we take OSM for both maps) if the map is loaded
+    if currentAreaValue != "":
+        view_state = reactive_read(osm_map.widget, 'view_state')
+        formerMapState.set(view_state)
     
     # If the area has changed, the data must change too
     if currentAreaValue != area:
+        # Do not keep former map state
+        keepFormerMapState.set(False)
         
         # Change the last area chosen
         currentArea.set(area)
@@ -806,7 +841,9 @@ def getData():
         nbBuildingsOMF.set(getNbRowTable(engine, template_layers_name["buildings"]["OMF"][0][0].format(area.lower())))
         nbPlacesOSM.set(getNbRowTable(engine, template_layers_name["places"]["OSM"][0][0].format(area.lower())))
         nbPlacesOMF.set(getNbRowTable(engine, template_layers_name["places"]["OMF"][0][0].format(area.lower())))
-    
+    else:
+        # If the area is the same, we keep the former map state
+        keepFormerMapState.set(True)
     
     # If the area changed or the criterion changed, we download the data for the criterion
     if (currentCriterionValue != criterion) or (currentAreaValue != area):
@@ -1408,8 +1445,16 @@ with ui.nav_panel("Dashboard"):
                         layer = lonboardClass.from_geopandas(data)
                         layers.append(layer)
                 
+                # Construct map
+                m = lon.Map(layers = layers)
+                
+                # Check if the map state must be changed
+                if keepFormerMapState():
+                    # Set map state from the former view
+                    setMapState(formerMapState(), m)
+                
                 # Construct map with the layers
-                return lon.Map(layers = layers)
+                return m
         
         # Map OMF
         with ui.card(full_screen=True):
@@ -1454,6 +1499,7 @@ with ui.nav_panel("Dashboard"):
                         longitude=138.812,
                         zoom = 7
                     )
+                    
                     return m
                 
                 # Add mandatory layer
@@ -1472,10 +1518,18 @@ with ui.nav_panel("Dashboard"):
                         
                         lonboardClass = template_layers_name[criterion]["OMF"][index + 1][1]
                         layer = lonboardClass.from_geopandas(data)
-                        layers.append(layer)
+                        layers.append(layer)   
+                        
+                # Construct map
+                m = lon.Map(layers = layers)
+                
+                # Check if the map state must be changed
+                if keepFormerMapState():
+                    # Set map state from the former view
+                    setMapState(formerMapState(), m)
                 
                 # Construct map with the layers
-                return lon.Map(layers = layers)
+                return m
 
         # Dataframe OSM
         with ui.card(full_screen=True):
