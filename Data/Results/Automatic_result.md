@@ -1,6 +1,6 @@
 # Quality criterias result between OSM and OMF datasets
 
-The test were run on 14/08/2024 14:22, using the 2024-06-13-beta.1 release of OvertureMap data and the OSM data until 2024/06/07.
+The test were run on 21/08/2024 23:51, using the 2024-06-13-beta.1 release of OvertureMap data and the OSM data until 2024/06/07.
 
 ## General results
 
