@@ -1,6 +1,7 @@
 import psycopg2
 import sqlalchemy
 import os
+import utm
 
 def bboxCSVToBboxWKT(bboxCSV:str) -> str:
     """Transform a bounding box in CSV format to its equivalent in OGC WKT format.
@@ -383,7 +384,8 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
         connection (psycopg2.extensions.connection): Database connection token.
         wktGeom (str): Geometry in OGC WKT format.
         aeraName (str): Name of the area.
-        tableName (str, optional): Name of the table to create. Defaults to 'bounding_box'.
+        tableName (str, optional): Name of the bounding box table.
+        Defaults to 'bounding_box'.
     
     Return:
         int: Id of the inserted row
@@ -496,3 +498,43 @@ def downloadOMFTypeBbox(bbox: str,
     print(f"{dataType} data has been downloaded")
     
     return path
+
+
+def getUTMProjFromArea(connection:psycopg2.extensions.connection,
+                       aeraName:str,
+                       tableName:str = 'bounding_box') -> int:
+    """Get UTM projection for a specific point.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        aeraName (str): Name of the area.
+        tableName (str, optional): Name of the bounding box table.
+        Defaults to 'bounding_box'.
+
+    Returns:
+        int: UTM projection crs id
+    """
+    # Get centroid of the area
+    sql = f"""
+    WITH area_centroid AS (
+        SELECT public.ST_Centroid(geom) as center FROM public.{tableName}
+        WHERE name = '{aeraName.capitalize()}'
+        LIMIT 1
+    )
+    SELECT public.ST_X(ac.center) AS lon, public.ST_Y(ac.center) AS lat
+    FROM area_centroid AS ac;
+    """
+    
+    # Execute query
+    cursor = executeSelectQuery(connection, sql)
+    
+    # Get lat and lon from row
+    (lat, lon) = cursor.fetchone()
+    
+    # Get zone number
+    zone = utm.from_latlon(latitude = lat, longitude = lon)[2]
+    
+    # Return formatted string
+    epsgCode = f"326{zone:02d}" if lat >= 0 else f"327{zone:02d}"
+    
+    return int(epsgCode)

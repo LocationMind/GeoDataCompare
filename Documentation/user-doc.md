@@ -133,7 +133,7 @@ python.exe -m pip install --upgrade pip
 **Install dependencies**
 
 ```cmd
-pip install pip-tools && pip-compile Requirements\requirements.txt && pip install -r Requirements\requirements.txt
+pip install pip-tools && pip-compile Requirements\requirements.in && pip install -r Requirements\requirements.txt
 ```
 
 Of course, you have to adapt the path and names if you have changed anything.
