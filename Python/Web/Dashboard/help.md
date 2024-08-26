@@ -27,25 +27,54 @@ If the database does not respect this architecture, then the application might n
 
 To load layer, you simply have to choose an area and the criterion that you want to display.
 
-Each choice correspond to one or several tables stored in the database:
+Each choice corresponds to one or several tables stored in the database, and for each layer, a criterion is calculated. In the following list, `<area>` is the name of the area (in lowercase), e.g. `tokyo`, and `<schema>` is the name of the schema corresponding to the map (either `osm` or `omf`):
 
-- *Road network* : `<schema>.edge_with_cost_<area>` for nodes and `<schema>.edge_with_cost_<area>` for edges.
+- **Graph**:
 
-- *Buildings* : `<schema>.building_<area>`.
+    - *Original dataset*: Original graph dataset, where both edges (with cost) and nodes are represented.
+    The total length of the dataset in kilometres is calculated, based on the edge with cost layer. The corresponding layers are `<schema>.node_<area>` for nodes and `<schema>.edge_with_cost_<area>` for edges.
 
-- *Places / Points of interest* : `<schema>.place_<area>`.
+    - *Connected components*: The connected components of a graph correspond to the different connected subgraphs (i.e. in this subgraph, it is possible to go from every node to another one) that are not part of a larger connected subgraph.
+    Visit the <a href="https://en.wikipedia.org/wiki/Component_(graph_theory)" target="_blank" rel="noopener noreferrer">Wikipedia page</a> for more information about connected components of a graph.
+    Edges of the graph are also represented for the connected components (you might want to increase the width of nodes to see them more clearly).
+    The number of connected components of each graph is calculated.
+    The corresponding layer is `results.connected_components_<area>_<schema>` for connected components and `<schema>.edge_with_cost_<area>` for edges.
 
-- *Connected components* : `results.connected_components_<area>_<schema>`.
+    - *Strongly connected components*: The strongly connected components of a graph correspond to the different strongly connected subgraphs (i.e., in this subgraph, for every pair of vertices (u,v), there exists a path from u to v and another path from v to u) that are not part of a larger strongly connected subgraph.
+    Visit the <a href="https://en.wikipedia.org/wiki/Strongly_connected_component" target="_blank" rel="noopener noreferrer">Wikipedia page</a> for more information about strongly connected components of a graph.
+    Edges of the graph are also represented for the strongly connected components (you might want to increase the width of nodes to see the nodes more clearly).
+    The number of strongly connected components of each graph is calculated.
+    The corresponding layer is `results.strong_components_<area>_<schema>` for strongly connected components and `<schema>.edge_with_cost_<area>` for edges.
 
-- *Strongly connected components* : `results.strong_components_<area>_<schema>`.
+    - *Isolated nodes*: Isolated nodes are nodes that are not connected to the rest of the graph (i.e. there is no path coming from or to these nodes).
+    The number of isolated nodes is calculated.
+    The corresponding layer is `results.isolated_nodes_<area>_<schema>`.
 
-- *Isolated nodes* : `results.isolated_nodes_<area>_<schema>`.
+    - *Overlap indicator*: For one dataset, the overlap indicator corresponds to the roads that are overlapping roads in the other dataset.
+    Roads must be almost exactly the same to be considered overlapping (e.g. if there is a shift of 50 centimetres, roads will not be considered as overlapping).
+    The percentage of overlapping roads for each dataset is calculated.
+    The corresponding layer is `results.overlap_indicator_<area>_<schema>`.
 
-- *Overlap indicator* : `results.overlap_indicator_<area>_<schema>`.
+    - *Corresponding nodes*: Corresponding nodes are nodes that can be found in both datasets (using an intersect condition).
+    Both the number of corresponding nodes (same for each dataset) and the percentage of corresponding nodes per dataset (compared to the total number of nodes in the dataset) are calculated.
+    The corresponding layer is `results.corresponding_nodes_<area>_<schema>`.
 
-- *Corresponding nodes* : `results.corresponding_nodes_<area>_<schema>`.
+- **Buildings**:
 
-Where `<area>` is the name of the area (in lowercase), e.g. `tokyo` and `<schema>` the name of the schema corresponding to the map (either `osm` or `omf`).
+    - *Buildings (coverage)*: Original building dataset.
+    Buildings coverage in the area (percentage of building area in the test area) is calculated for this option.
+    The corresponding layer is `<schema>.building_<area>`.
+
+    - *Buildings (density)*: Original building dataset.
+    Building density in the area (number of buildings per $km^2$) is calculated for this option.
+    The corresponding layer is `<schema>.building_<area>`.
+
+- **Places**:
+
+    - *Places / Points of interest (density)*: Original places dataset.
+    Place density in the area (number of places per $km^2$) is calculated for this option.
+    The corresponding layer is `<schema>.place_<area>`.
+
 
 ## Change layer style
 
@@ -63,5 +92,7 @@ If the input is not compatible with a color, nothing will happen and the value w
 
 ## Change theme
 
+
 You can change the theme of the application between dark and light by clicking on the Moon or Sun logo, depending on your current theme.
-By default, the view used for the application will be the default view of your device.
+By default, the view used for the application will be the default view of your device
+<div class = "pb-3"></div>
