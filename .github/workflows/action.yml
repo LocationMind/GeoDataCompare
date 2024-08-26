@@ -17,7 +17,10 @@ jobs:
       - name: Dependencies installation
         run: |
           python -m pip install --upgrade pip
-          pip install -r Requirements/requirements_base.txt
+          if [[ "${{ runner.os }}" != "Windows" ]]; then
+            sed -i '/pywin32/d' Requirements/requirements.txt
+          fi
+          python -m pip install -r Requirements/requirements.txt
       
       - name: Docker setup
         run: docker compose up -d
