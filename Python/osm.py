@@ -513,6 +513,9 @@ def createGraph(connection:psycopg2.extensions.connection,
     # Set the geometry to the geom column
     edge_with_cost = edge_with_cost.set_geometry("geom")
     
+    # Reset index
+    edge_with_cost = edge_with_cost.reset_index()
+    
     # Load dataframe into postgis table
     edge_with_cost.to_postgis(edgeWithCostTable, engine, if_exists="replace", index=True, index_label = 'id', schema = schema)
     
@@ -544,6 +547,28 @@ def createGraph(connection:psycopg2.extensions.connection,
 
 
 ## Buildings
+def getClass(row:pd.core.series.Series) -> str:
+    """Get the class of a row depending on the value of
+    the two columns amenity and building of the dataframe.
+    If building is just yes, change it to 'building'
+
+    Args:
+        row (pd.core.series.Series): Row of the dataframe
+
+    Returns:
+        str: Class of the row
+    """
+    if row['amenity'] is not None:
+        return row['amenity']
+    elif row['building'] is not None:
+        # If building is only yes, return 'building'
+        if row['building'] == 'yes':
+            return 'building'
+        else:
+            return row['building']
+    else:
+        return None
+
 
 def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
                            bbox: str,
@@ -620,11 +645,31 @@ def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
     # Keep only polygon geometries
     gdf = gdf[gdf.geom_type == "Polygon"]
     
+    # Create a category column
+    gdf['class'] = gdf.apply(getClass, axis = 1)
+    
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
 
 
 ## Places
+def getCategory(row:pd.core.series.Series) -> str:
+    """Get the class of a row depending on the value of
+    the two columns amenity and shop of the dataframe.
+
+    Args:
+        row (pd.core.series.Series): Row of the dataframe
+
+    Returns:
+        str: Category of the row
+    """
+    if row['amenity'] is not None:
+        return row['amenity']
+    elif row['shop'] is not None:
+        return row['shop']
+    else:
+        return None
+
 
 def createPlaceFromBbox(engine:sqlalchemy.engine.base.Engine,
                         bbox: str,
@@ -689,6 +734,9 @@ def createPlaceFromBbox(engine:sqlalchemy.engine.base.Engine,
     
     # Get centroid of geometry
     gdf["geom"] = gdf["geom"].centroid
+    
+    # Create a category column
+    gdf['categories'] = gdf.apply(getCategory, axis=1)
     
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
