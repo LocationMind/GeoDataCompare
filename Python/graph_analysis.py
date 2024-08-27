@@ -425,7 +425,7 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
 		SELECT COUNT(*)
 		FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
 		GROUP BY DISTINCT component
-	)"""
+	) AS sub;"""
     
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
@@ -501,7 +501,7 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
 		SELECT COUNT(*)
 		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
 		GROUP BY DISTINCT component
-	)"""
+	) AS sub;"""
     
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
