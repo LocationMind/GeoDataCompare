@@ -424,13 +424,13 @@ def createGraph(connection:psycopg2.extensions.connection,
     log(f"Load graph: {end - start} seconds")
 
     # Save nodes to postgresql by renaming the osmid column
-    node.to_postgis(nodeTable, engine, if_exists="replace", schema=schema, index=True, index_label="id")
+    node.to_postgis(nodeTable, engine, if_exists="replace", schema = schema, index=True, index_label="id")
 
     end = time.time()
     log(f"Save node to postgis: {end - start} seconds")
 
     # Save edges to postgresql
-    edge.to_postgis(edgeTable, engine, if_exists="replace", schema=schema, index=True)
+    edge.to_postgis(edgeTable, engine, if_exists="replace", schema = schema, index=True)
 
     end = time.time()
     log(f"Save edge to postgis: {end - start} seconds")
@@ -443,24 +443,24 @@ def createGraph(connection:psycopg2.extensions.connection,
     log(f"Utm proj: {end - start} seconds")
     
     # Add missing columns if needed to the edge table
-    addMissingColumns(connection, edgeTable, schema=schema)
+    addMissingColumns(connection, edgeTable, schema = schema)
     
     end = time.time()
     log(f"Add missing columns: {end - start} seconds")
     
     # Create table to aggregate parallel edges
-    createTableToAggregateEdges(connection, edgeTable, area, schema)
+    createTableToAggregateEdges(connection, edgeTable, area, utmProj = utmProj, schema = schema)
     
     end = time.time()
     log(f"Execute query: {end - start} seconds")
     
     # Get bidirectional and unidirectional roads
-    bi = getBidirectionalRoads(engine, area, schema)
+    bi = getBidirectionalRoads(engine, area, utmProj = utmProj, schema = schema)
     
     end = time.time()
     log(f"Bidirectional roads: {end - start} seconds")
     
-    uni = getUnidirectionalRoads(engine, area, schema)
+    uni = getUnidirectionalRoads(engine, area, utmProj = utmProj, schema = schema)
 
     end = time.time()
     log(f"Unidirectional roads: {end - start} seconds")
@@ -542,15 +542,15 @@ def createGraph(connection:psycopg2.extensions.connection,
     log(f"Geom index with cost to postgis: {end - start} seconds")
     
     # Create mapped classes
-    createMappedClasses(connection, area, schema)
+    createMappedClasses(connection, area, schema = schema)
     
     end = time.time()
     log(f"Create mapped classes: {end - start} seconds")
     
     
     if deleteOtherTables:
-        utils.dropTableCascade(connection, edgeTable, schema)
-        utils.dropTableCascade(connection, area, schema)
+        utils.dropTableCascade(connection, edgeTable, schema = schema)
+        utils.dropTableCascade(connection, area, schema = schema)
         
         end = time.time()
         log(f"Delete useless tables: {end - start} seconds")
