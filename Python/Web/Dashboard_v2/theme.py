@@ -152,7 +152,6 @@ class Building(Theme):
     
     def __init__(self, area: str, crs: int, engine: sqlalchemy.Engine) -> None:
         self.dfHeader = f"Number of buildings and total area (in km2) per class in {area}"
-        self.dfHeader = f"Number of places per category in {area}"
         super().__init__(area, crs, engine)
     
     @property
