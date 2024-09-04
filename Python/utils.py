@@ -529,7 +529,7 @@ def getUTMProjFromArea(connection:psycopg2.extensions.connection,
     cursor = executeSelectQuery(connection, sql)
     
     # Get lat and lon from row
-    (lat, lon) = cursor.fetchone()
+    (lon, lat) = cursor.fetchone()
     
     # Get zone number
     zone = utm.from_latlon(latitude = lat, longitude = lon)[2]
