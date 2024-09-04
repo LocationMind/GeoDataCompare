@@ -1,3 +1,4 @@
+from datetime import datetime
 import geopandas as gpd
 import pandas as pd
 import faicons as fa
@@ -927,6 +928,9 @@ def getData():
 logo = "LM_icon_32-32.png"
 logo_omf = "logo-omf.png"
 
+# Get today's date
+today = datetime.today().strftime('%m/%d/%Y')
+
 # Include CSS
 ui.head_content(
     ui.tags.link(href="style.css", rel="stylesheet"),
@@ -935,9 +939,9 @@ ui.head_content(
 
 # Add page title and sidebar
 ui.page_opts(
-    title="OpenStreetMap (OSM) and Overture Maps Fundation (OMF) dataset comparison : Japan example",
+    title=f"OpenStreetMap (OSM) and Overture Maps Fundation (OMF) dataset comparison - {today}",
     full_width=True,
-    window_title="Test Dashboard shiny / lonboard",
+    window_title="OSM / OMF comparison",
     fillable=True
 )
 
