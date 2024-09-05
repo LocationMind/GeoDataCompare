@@ -1217,11 +1217,7 @@ def colorBoolean():
             colorFalse = getColorFromColorPicker(colorPickerNotOverlap)
     
         # Check all layers
-        for layer in omfLayers + osmLayers:
-            
-            # If the layer is of point type, we change with the appropriate propriety
-            # if type(layer) == lon._layer.ScatterplotLayer:
-            
+        for layer in omfLayers + osmLayers:            
             # Copy the layer GeoDataFrame for checking the color
             if layer in omfLayers:
                 gdfcopy = currentCriterion().omfGdf.copy()
@@ -1250,29 +1246,6 @@ def colorBoolean():
                     values = gdfcopy["id"],
                     cmap = colorMap
                 )
-            
-            # # If the layer is a line, then it is the overlap indicator 
-            # if type(layer) == lon._layer.PathLayer:
-                
-            #     if layer in omfLayers:
-            #         gdfcopy = currentCriterion().omfGdf.copy()
-            #     else:
-            #         gdfcopy = currentCriterion().osmGdf.copy()
-                
-            #     gdfcopy = gdfcopy[["id", "overlap"]]
-                
-            #     # Create the 'color' column with a custom function depending
-            #     # on the value of the true / false value 
-            #     gdfcopy['color'] = gdfcopy['overlap'].apply(lambda x: colorTrue if x else colorFalse)
-
-            #     # Convert to dictionary
-            #     colorMap = gdfcopy.set_index('id')['color'].to_dict()
-                
-            #     # Apply new style to the layer
-            #     layer.get_color = apply_categorical_cmap(
-            #         values = gdfcopy["id"],
-            #         cmap = colorMap
-            #     )
 
 
 @reactive.effect
