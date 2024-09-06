@@ -1,38 +1,38 @@
 # User doc: Quality criteria and dashboard
 
-This file provides information on how to use the Dashboard from scratch.
-It includes: formatting and preparing the database, adding a new area, downloading and integrating data in the database, launching and using the Dashboard.
+This file provides information on how to use the Dashboard from scratch. It includes: formatting and preparing the database, adding a new area, downloading and integrating data into the database, launching, and using the Dashboard.
+
+Refer to the [developer documentation](dev-doc.md) for information on how to add a criterion to the dashboard, for instance.
 
 - [User doc: Quality criteria and dashboard](#user-doc-quality-criteria-and-dashboard)
 - [Necessary components](#necessary-components)
   - [Database](#database)
+    - [Common model](#common-model)
     - [Schemas](#schemas)
     - [Download PostgreSQL and PostGIS](#download-postgresql-and-postgis)
-    - [Create the database and schemas](#create-the-database-and-schemas)
+    - [Create the Database and Schemas](#create-the-database-and-schemas)
   - [Python](#python)
-    - [Virtual environment](#virtual-environment)
-- [Quality assessment](#quality-assessment)
-  - [Adding areas](#adding-areas)
-  - [Custom database connection](#custom-database-connection)
-  - [Download and process data](#download-and-process-data)
-  - [Quality assessment criteria](#quality-assessment-criteria)
+    - [Virtual Environment](#virtual-environment)
+- [Quality Assessment](#quality-assessment)
+  - [Adding Areas](#adding-areas)
+  - [Custom Database Connection](#custom-database-connection)
+  - [Download and Process Data](#download-and-process-data)
+  - [Quality Assessment Criteria](#quality-assessment-criteria)
 - [Dashboard](#dashboard)
-  - [Custom environment variable (and app if needed)](#custom-environment-variable-and-app-if-needed)
-  - [Run the application](#run-the-application)
-  - [Use the application](#use-the-application)
+  - [Run the Application](#run-the-application)
+  - [Use the Application](#use-the-application)
 
 # Necessary components
 
-It was explained in other markdown, but to run the application, you will need mainly two components:
+It was explained in another markdown, but to run the application, two main components are required:
 
 - A PostgreSQL database with PostGIS extension;
-
 - Python
 
 ## Database
 
-For the database, the information of the version are written on the [Readme.md](../Readme.md#database) file at the root of the repository, in the Database section.
-This information is reminded here:
+For the database, the version information is documented in the [Readme.md](../Readme.md#database) file at the root of the repository, in the Database section.
+This information is reiterated here:
 
 | **Tool** | Version |
 | --- | --- |
@@ -50,41 +50,49 @@ The database used in this repository is:
 - `user`: `postgres`
 - `password`: `postgres`
 
+### Common model
+
+To compare OSM and OMF data, a common model was created (for transportation data), mainly based on the OMF transportation model. The model is as follows:
+
+![Common model for OSM and OMF dataset](./Images/common_model.png)
+
 ### Schemas
 
-4 schemas are used in this database:
+Four schemas are used in this database:
 
-- `public`: Defaults schema, where PostGIS and PgRouting are installed.
-It also means that to use these function, the `public.` prefix has to be used to avoid conflict and problems.
-Also, the bounding box table is located in the public schema, to be used by the other one easily.
+- `public`: The default schema, where PostGIS and PgRouting are installed. It also means that, to use these functions, the `public.` prefix must be used to avoid conflicts and problems. Additionally, the bounding box table is located in the public schema for easy access by the others.
 
-- `osm`: As the name indicates it, this schema contains all tables for OpenStreetMap data.
+- `osm`: As the name suggests, this schema contains all tables for OpenStreetMap data.
 
-- `omf`: Same than the `osm` schema, but for OvertureMap Fundation data.
+- `omf`: Similar to the `osm` schema, but for OvertureMaps Foundation data.
 
-- `results`: The name also speaks for itself, this schema contains the different results of quality assessment.
+- `results`: As implied by its name, this schema contains the different results of quality assessment.
 
-Using only one database with multiple schemas is better than using multiple ones as it is way easier to use tables from different schemas than table from different database (at least it is the case with PostgreSQL).
+Using a single database with multiple schemas is more efficient than using multiple databases, as it is much easier to reference tables across schemas than across databases (at least with PostgreSQL).
+
+This architecture can be represented with a UML diagram:
+
+![Database model](./Images/database_model.png)
 
 ### Download PostgreSQL and PostGIS
 
 The repository to download PostgreSQL is here: https://www.postgresql.org/download/.
-Please install the good version of PostgreSQL.
-During the installation, you will be able to install PostGIS too, so please do it.
+Please install the correct version of PostgreSQL.
+During the installation, one will be able to install PostGIS as well, so it should be done.
 
-### Create the database and schemas
+### Create the Database and Schemas
 
-If you are using PgAdmin, you can easily add a new database.
+If PgAdmin is being used, one can easily add a new database.
 Make sure to call it `pgrouting` to avoid having to change the database name in other files.
-Otherwise, you can create a database in a command line, using psql:
+Otherwise, one can create a database in the command line, using psql:
 
 Connect to the default database with the postgres user: `psql -U postgres`.
 
-Enter your password.
+Enter the password.
 
 Then, run this command to create the database: `CREATE DATABASE pgrouting;`, and run `\c pgrouting` to connect to the database.
 
-Now you can run these queries to create the schemas and extensions needed:
+Now, one can run these queries to create the schemas and extensions needed:
 
 ```sql
 CREATE SCHEMA osm;
@@ -94,22 +102,22 @@ CREATE EXTENSION postgis;
 CREATE EXTENSION pgrouting;
 ```
 
+*Note*: It is sufficient to create the database, as in the [main.py](../Python/Assessment/main.py#L24), these SQL commands are executed (inside the `utils.initialisePostgreSQL(connection)` function).
+
 ## Python
 
 Python 3.12.3 has been used for the dashboard and data integration.
-You can download Python here: https://www.python.org/downloads/ (you can change the os on this page too).
-Install it and add it to the path if you are using Windows.
+Python can be downloaded here: https://www.python.org/downloads/ (the operating system can be changed on this page as well).
+Install it and add it to the PATH if Windows is being used.
 
-### Virtual environment
+### Virtual Environment
 
-To prevent conflict with other applications, it is recommended to use a virtual environment to install only necessary dependencies in Python.
-It is recommended to use an IDE as VSCode and do everything in VSCode terminal.
-This way, you will be able to select your virtual environment for your python files.
-If you want to add several virtual environments, you might want to create a folder where you will put the different virtual environments that you will create in the future.
+To prevent conflicts with other applications, it is recommended to use a virtual environment to install only the necessary dependencies in Python.
+It is advisable to use an IDE such as VSCode and perform all tasks within the VSCode terminal.
+This way, one will be able to select the virtual environment for Python files.
+If multiple virtual environments are desired, one might create a folder to store the different virtual environments that will be created in the future.
 
-Most of these commands are also written in the [command.md](command.md) file.
-
-To do so, please run these commands, after downloading python:
+To do so, run these commands after downloading Python:
 
 **Create virtual environment**
 ```cmd
@@ -136,16 +144,15 @@ python.exe -m pip install --upgrade pip
 pip install pip-tools && pip-compile Requirements\requirements.in && pip install -r Requirements\requirements.txt
 ```
 
-Of course, you have to adapt the path and names if you have changed anything.
+Of course, it is necessary to adapt the path and names if any changes have been made.
 
-Note: it is quite long to download everything, between 10 and 20 minutes probably, but it should be working.
+*Note*: The download process may take between 10 and 20 minutes, but it should complete successfully.
 
+# Quality Assessment
 
-# Quality assessment
+## Adding Areas
 
-## Adding areas
-
-If you do not modify the python scripts, then the areas used are the one registered in the [bboxs.json](../Data/Bbox/bboxs.json) file.
+If the Python scripts are not modified, the areas used are those registered in the [bboxs.json](../Data/bboxs.json) file.
 Here is a sample of this file:
 
 ```json
@@ -183,91 +190,110 @@ Here is a sample of this file:
 }
 ```
 
-If you want to modify these areas to download data on other places, you can modify this file.
-The important part is to only add element in the `bboxs` array.
-Each element have two mandatory attributes:
+If modifications to these areas are desired to download data from other locations, the file can be updated accordingly.
+The important part is to only add elements to the `bboxs` array.
+Each element has two mandatory attributes:
 
-- `bbox`: Bounding box of the area, in a csv format. The data will be extracted from this area. You can use this [bounding box tool](https://boundingbox.klokantech.com/) to create easily a bounding box and you can directly copy and paste the result into a CSV format. For the moment, extended areas are not really available, so it is recommended to download bounding box of approximately 8 x 8 km. You cannot measure directly on the bounding box tool, but you can use [this website](https://www.freemaptools.com/measure-distance.htm) to measure approximatively your bounding box. Please make sure to have no space between numbers and comma.
+- `bbox`: The bounding box of the area, in CSV format. Data will be extracted from this area. The [bounding box tool](https://boundingbox.klokantech.com/) can be used to easily create a bounding box, and the result can be copied and pasted directly into CSV format. Currently, extended areas are not readily available, so it is recommended to use bounding boxes of approximately 8 x 8 km. Direct measurement on the bounding box tool is not possible, but [this website](https://www.freemaptools.com/measure-distance.htm) can be used to approximately measure the bounding box. Ensure there are no spaces between numbers and commas.
 
-- `name`: Name of the area. It should start by a capital letter, and the rest of it must be lower letters. No space or any special accent must be used. It is not convenient, but for the moment it is not possible to do otherwise. Also, the name should be unique, otherwise there will be problems in the process.
+- `name`: The name of the area. It should start with a capital letter, and the remaining characters must be in lowercase. No spaces or special accents should be used. Although inconvenient, this constraint is currently unavoidable. Additionally, the name should be unique to avoid issues during processing.
 
-Every area in this file will be downloaded and used in the other scripts, so please remove those you do not want to download. If the area has already been downloaded, then there will not be any problem.
+All areas listed in this file will be downloaded and used in the other scripts, so remove any that are not desired for download. If an area has already been downloaded, there will be no issues.
 
-## Custom database connection
+## Custom Database Connection
 
-In the python files, the database connection can take two forms:
+In the Python files, the database connection can take one of three forms:
 
-- `connection = utils.getConnection(database)`: Connection used for psycopg2 package;
+- `connection = utils.getConnection()`: Connection used by the psycopg2 package.
 
-- `engine = utils.getEngine(database)`: Engine used for geopandas (query to the database);
+- `engine = utils.getEngine()`: Engine used by GeoPandas (for querying the database).
 
-These functions are written in the [utils.py](../Python/utils.py) script.
-They take the same arguments, and you can custom your connections with other parameter than the database name:
+- `initialiseDuckDB()`: Initializes DuckDB and connects it to a PostgreSQL database.
 
-- `host`: Ip address for the database connection. The default is `127.0.0.1`
-- `user`: Username for the database connection. The default is `postgres`.
-- `password`: Password for the database connection. The default is `postgres`.
-- `port`: Port for the connection. The default is `5432`.
+These functions are defined in the [utils.py](../Python/Utils/utils.py) script.
+They require one argument, a path to a `.env` file. If no path is provided, the default path will be:
 
-Change these elements by adding them in the different files (such as `connection  = utils.getConnection(database, user = "myuser", password = "mypassword)` for instance)
+```python
+os.path.join(os.getcwd(), '.env')
+```
 
-## Download and process data
+This value corresponds to a `.env` file located in the same directory as the one from which the Python file is being run.
+It is located [here](../.env).
+If the Python file is being run from the root of the project, this should not be a problem.
+However, if it is not, the path to the `.env` file will need to be specified in every Python script, which can be inconvenient.
 
-You can download the data corresponding to the areas you have chosen by using the [main.py](../Python/main.py) script.
-You can change some attributes value in this file, such as:
+The connection parameters are:
 
-- `database`: Name of the database to connect to. Defaults to `pgrouting`.
+- `POSTGRES_DATABASE`: Name of the database. Defaults to `pgrouting`.
 
-- `createBoundingBoxTable`: If True, will create the bounding box table, even if it has already been created. Defaults to `True`.
+- `POSTGRES_HOST`: IP address of the host. Defaults to `127.0.0.1`.
 
-- `skipCheck`: If True, will recreate all layers for each area in the bounding box json file. Otherwise, will create layers only if they have not been created yet. Defaults to `False`.
+- `POSTGRES_USER`: User name. Defaults to `postgres`.
 
-- `ox.settings.overpass_settings`: This is a setting used to limit OSM data until a certain date. The default date is `2024-06-07T23:59:59Z`. You can change this date if you want, but it is better to change it with a data that is approximatively the same than the one corresponding to the overturemaps.py tool (the default date corresponds to the 2024-06-13-beta.1 release).
+- `POSTGRES_PASSWORD`: Password. Defaults to `postgres`.
 
-Normally, you should not need to change anyting else (such as template names for the layer, name of the schema or path of the bbox file etc.).
-If you need to change them, feel free to do it, but these changes must be coherent between the different files.
+- `POSTGRES_PORT`: Port to connect to. Defaults to `5432`.
 
-You should then only have to run the script in a command line or using an IDE to download and store data in the database. It can take some time to download everything, but some things are printed in the console to let you know how much time it is taking.
+The same environment file is used for the data integration, quality assessment, and application processes.
 
-## Quality assessment criteria
+## Download and Process Data
 
-Once you have downloaded the data, you can run the necessary scripts to assess the quality of the different layer.
-For the moment, the criteria are all on graph data. The python script is [graph_analysis.py](../Python/graph_analysis.py).
+Data corresponding to the chosen areas can be downloaded using the [main.py](../Python/Assessment/main.py) script.
+Certain attribute values in this file can be modified, such as:
 
-Here too, you can change some attributes value, such as:
+- [`createBoundingBoxTable`](../Python/Assessment/main.py#L19): If `True`, it will create the bounding box table, even if it has already been created. Defaults to `True`.
 
-- `fileName`: Name of the markdown file that will be produced. Defaults to `Automatic_result.md`.
+- [`skip<theme>Check`](../Python/Assessment/main.py#L57): If `True`, it will recreate all layers of each area for the specified theme (one of `Graph`, `Building`, or `Place`). Otherwise, layers will be created only if they have not been created yet. Defaults to `False`.
 
-- `pathSave`: Path to save the markdown file. If the folder does not exists, will return an error. Defaults to `./Data/Results/<fileName>`, where `<fileName>` is the variable mentioned previously.
+- [`ox.settings.overpass_settings`](../Python/Assessment/main.py#L38): This setting is used to limit OSM data to a specific date. The default date is `2024-06-07T23:59:59Z`. This date can be changed if desired, but it is preferable to select a date approximately the same as the one used by the `overturemaps.py` tool (the default date corresponds to the 2024-06-13-beta.1 release).
 
-- `database`: Name of the database to connect to. Defaults to `pgrouting`
+Normally, no additional changes should be necessary (such as altering template names for the layer, schema names, or the path to the bbox file, etc.).
+If changes are required, they should be made consistently across the different files.
 
-- `bounding_box_table`: Name of the bounding box table in the database. Defaults to `bounding_box`.
+The script can be run with this command:
 
-Here too, you can change some other variable, but it is not recommended, especially because after you will have to change them in the dashboard too.
+```cmd
+python Python\Assessment\main.py
+```
 
-As the previous script, you should then only have to run the script in a command line or using an IDE to calculate those criteria. It can take some time to calculate everything, but the results are printed to the console.
+Or directly by running the script in an IDE of choice.
+
+## Quality Assessment Criteria
+
+Once the data has been downloaded, the necessary scripts can be run to assess the quality of the different layers.
+Currently, the criteria are focused on graph data. The Python script is [graph_analysis.py](../Python/Assessment/graph_analysis.py).
+
+Certain attribute values can be modified, such as:
+
+- [`fileName`](../Python/Assessment/graph_analysis.py#L943): The name of the markdown file that will be produced. Defaults to `Automatic_result.md`.
+
+- [`pathSave`](../Python/Assessment/graph_analysis.py#L945): The path to save the markdown file. If the folder does not exist, an error will be returned. Defaults to `./Data/Results/<fileName>`, where `<fileName>` is the previously mentioned variable.
+
+- [`bounding_box_table`](../Python/Assessment/graph_analysis.py#L975): The name of the bounding box table in the public schema of the database. Defaults to `bounding_box`.
+
+Other variables can also be changed, but this is not recommended, especially since changes would need to be updated in the dashboard as well.
+
+As with the previous script, this script can be run with this command:
+
+```cmd
+python Python\Assessment\graph_analysis.py
+```
+
+Or directly by running the script in an IDE of choice.
+Calculating everything may take some time, but the results will be printed to the console.
 
 # Dashboard
 
-## Custom environment variable (and app if needed)
+## Run the Application
 
-Before running the [app.py](../Python/Web/Dashboard/app.py) script and being able to manipulate the Dashboard, you can custom the environment variable to connect to the database.
-You can change these variable in the [.env](../Python/Web/Dashboard/.env).
-
-Also, if you have make some changes in the name of the layer, then you might want to change some the `template_layers_name` variable.
-A dict with layer names for each dataset. Those names are the same than in the quality assessment process.
-
-## Run the application
-
-To run the application, as the requirements are already downloaded, you can just run this command:
+To run the application, since the requirements are already downloaded, one can simply use this command:
 
 ```
 shiny run .\Python\Web\Dashboard\app.py
 ```
 
-Then, go on your browser and go to http://127.0.0.1:8000
+Then, open your browser and navigate to [http://127.0.0.1:8000](http://127.0.0.1:8000).
 
-## Use the application
+## Use the Application
 
-To use it, you can check the `Help` panel of the application or see the [Shiny x Lonboard: Creating the dashboard](./tests-visualisation.md#shiny-x-lonboard-creating-the-dashboard) section of the [tests-visualisation.md](./tests-visualisation.md) file.
+To use the application, refer to the `Help` panel within the application or consult the [help.md](../Python/GeoDataCompare/help.md) file directly.
