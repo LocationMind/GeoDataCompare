@@ -57,7 +57,7 @@ def test_prgroutingVersion():
     query = "SELECT pgr_version();"
     cursor = utils.executeSelectQuery(connection, query)
     row = cursor.fetchone()
-    assert(row[0] == "3.6.0")
+    assert(row[0] == "3.6.1")
 
 
 def test_initDuckDB():

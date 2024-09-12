@@ -1,4 +1,4 @@
-# GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation
+# GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data
 
 |   |   |
 |:---:|:---:|
@@ -6,11 +6,12 @@
 | Dev  | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg?branch=dev)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml?query=branch%3Adev)  |
 | Last commit | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml) |
 
-- [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-fundation)
+- [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-fundation-data)
 - [Documentation](#documentation)
 - [Install](#install)
   - [Necessary components](#necessary-components)
   - [Requirements](#requirements)
+  - [Database](#database)
   - [Environment file](#environment-file)
 - [Using the scripts](#using-the-scripts)
   - [Download data](#download-data)
@@ -30,7 +31,7 @@ This project was initially created for an internship at the [ENSG-Géomatique](h
 
 If you want more information about data, quality criteria or how to use the DashBoard, you can refer to the [user documentation](./Documentation/user-doc.md).
 
-If you want to modify a process or the DashBoard (especially to add more criteria), please refer to the [developer documentation](./Documentation/dev-doc.md)
+If you want to modify a process or the DashBoard (especially to add more criteria or other themes), please refer to the [developer documentation](./Documentation/dev-doc.md)
 
 # Install
 
@@ -87,6 +88,14 @@ python.exe -m pip install --upgrade pip
 pip install pip-tools && pip-compile Requirements\requirements.in && pip install -r Requirements\requirements.txt
 ```
 
+## Database
+
+Create a PostGIS database named `pgrouting`.
+
+Then, to install the extensions and create the schemas according to the database model, run the [init.sql](./Data/init.sql) script in your database.
+
+More information about the database, including the [Database section](./Documentation/user-doc.md#database) of the user documentation.
+
 ## Environment file
 
 You can custom the [.env](./.env) file to custom your connection to the postgis database.
@@ -98,7 +107,7 @@ Initially, the parameters values are:
 - `POSTGRES_PASSWORD` (Password): postgres
 - `POSTGRES_PORT` (Port to connect to): 5432
 
-This file is used in all scripts, whether it is for the quality assessment or the dashboard
+This file is used in all scripts, whether it is for the quality assessment or the dashboard.
 
 # Using the scripts
 
