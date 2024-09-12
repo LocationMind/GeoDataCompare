@@ -1,4 +1,4 @@
-# OSM_Overture_Works
+# GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data
 
 |   |   |
 |:---:|:---:|
@@ -6,218 +6,155 @@
 | Dev  | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg?branch=dev)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml?query=branch%3Adev)  |
 | Last commit | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml) |
 
-- [OSM\_Overture\_Works](#osm_overture_works)
-- [Goal of this internship](#goal-of-this-internship)
-- [Repository structure](#repository-structure)
-  - [Data](#data)
-  - [Documentation](#documentation)
-  - [Python](#python)
+- [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-fundation-data)
+- [Documentation](#documentation)
+- [Install](#install)
+  - [Necessary components](#necessary-components)
   - [Requirements](#requirements)
-- [Database](#database)
-  - [Schemas](#schemas)
-  - [Table names](#table-names)
-- [Bounding box used to test algorithms:](#bounding-box-used-to-test-algorithms)
+  - [Database](#database)
+  - [Environment file](#environment-file)
+- [Using the scripts](#using-the-scripts)
+  - [Download data](#download-data)
+  - [Quality assessment](#quality-assessment)
+  - [Runnig the application](#runnig-the-application)
 - [Licenses](#licenses)
 - [Credits](#credits)
 
-This project has been created for an internship at the [ENSG-Géomatique](https://ensg.eu/fr) school, for [LocationMind Inc.](https://locationmind.com/).
+[Overture Maps Fundation](https://overturemaps.org/) (OMF) released their first official release in July 2024, and as their schemas is structured and their data come from different sources, it is interesting to know what one can do with this data.
+To answer this question, a comparison between them and [OpenStreetMap](https://www.openstreetmap.org/) (OSM), probably the most famous Open Source dataset for geoinformation data has been made.
 
-# Goal of this internship
+This project provides Python scripts to download and integrate data into a PostgreSQL database under a common model and assess their quality according to specific criteria and a visualisation system based on Shiny for Python and LonBoard, two Python packages, to compare data with a DashBoard.
 
-The goal of this internship is to compare and assess quality of two open sources dataset : [OpenStreetMap](https://www.openstreetmap.org/) and [OvertureMap Fundation](https://overturemaps.org/).
-A lot of data is available on these datasets, so the study focuses on building and road network data.
-In the rest of this document, OSM, respectively OMF, will be used for OpenStreetMap, respectively OvertureMap Fundation.
+This project was initially created for an internship at the [ENSG-Géomatique](https://ensg.eu/fr) school and is maintained by [LocationMind Inc.](https://locationmind.com/).
 
-# Repository structure
+# Documentation
 
-The repository have 3 main folders :
+If you want more information about data, quality criteria or how to use the DashBoard, you can refer to the [user documentation](./Documentation/user-doc.md).
 
-- [*Data*](#data): contains data such as bounding boxes used for testing the code or QGIS project to visualise data;
+If you want to modify a process or the DashBoard (especially to add more criteria or other themes), please refer to the [developer documentation](./Documentation/dev-doc.md)
 
-- [*Documentation*](#documentation): contains several markdown documents explaining different things such as how to download data, mapping OSM classes to OMF classes or the different criteria for graph analysis;
+# Install
 
-- [*Python*](#python): contains all python scripts, including test scripts.
+Whether it is for installing the dependencies, running the scripts or the application, it is always consider that the command line is at the root of the GitHub project.
+It is important as some scripts might not work if it is not run at the root of the project.
 
-- [*Requirements*](#requirements): contains requirements files for control version
+Also, depending on the os your are using, you might need to change `\` to `/` or vice versa.
+It should not be necessary to do so in the python scripts, only in the command line.
 
-## Data
+## Necessary components
 
-It is obviously impossible and useless to download OSM and OMF data over countries like Japan and then load them in this folder on GitHub.
-Therefore, data in *Data* folder are not references data.
+To run the application, it is necessary to have at least these two components:
 
-Inside [*Bbox*](./Data/Bbox/) subfolder, information about the bboxs used are provided, either in a csv format or in a JSON format.
+- A PostgreSQL database with PostGIS and PgRouting extension;
 
-Inside [*QGIS*](./Data/QGIS/) subfolder, a QGIS project is available.
-It is used to see the graph analysis over the different areas by cnnnecting each layer to the database (more information on this database in the [database](#database) section).
-QGIS layer style files are also included in this subfolder.
+- Python
 
-Inside [*Results*](./Data/Results/) subfolder, different kind of results are provided, mainly results from the python scripts.
-
-## Documentation
-
-This folder contains a lot of different documentations from data modelisation to graph analysis.
-The [*Images*](./Documentation/Images/) subfolder contains all the images used in the GitHub project (mainly for documentations files).
-
-Documents are explained here:
-
-- [Internship_reformulation](./Documentation/Internship_reformulation.md): Document providing a reformulation of the internship, created at the beginning of the internship so not up to date.
-
-- [Data_modelisation](./Documentation/Data_modelisation.md): Data model, created with both OSM and OMF documentation.
-
-- [OSM_PgRouting](./Documentation/OSM_PgRouting.md): Explains how to download and transform OSM data using OSMnx tool, especially to use PgRouting with it.
-
-- [Openstreetmap_h3_Test_Review](./Documentation/Openstreetmap_h3_Test_Review.docx): Written by Mathieu MARGOLLE, it show and to use openstreetmap_h3 tool to download and process data over all Japan.
-openstreetmap_h3 tool has not been used for integrating any kind of data, but the process of edges and node creations have been used for OMF data integration. 
-
-- [OvertureMap_data](./Documentation/OvertureMap_data.md): Explains how downloading OvertureMap data and why we need to transform it to use PgRouting with it.
-As mentionned before, it uses the same process than [Openstreetmap_h3_Test_Review](./Documentation/Openstreetmap_h3_Test_Review.docx) document, adapted for OMF data.
-
-- [Mapping_OSM_to_OMF](./Documentation/Mapping_OSM_to_OMF.md): Explains how to map OSM data to have the same classes than OMF, by using combination of several tags.
-
-- [Comparison-OSM-OvertureMap_PgRouting](./Documentation/Comparison-OSM-OvertureMap_PgRouting.md): Uses the previous documents and results to analyse the road network over several places.
-The first part of this document focuses on the process and the other part is about results.
-Only 3 areas have been made with that and it was with the May release of OvertureMap, so results might be slightly different from other documents and results in this repository.
-
-- [Research_paper](./Documentation/Research_paper.md): Notes taken for different research papers about quality assessment for example.
-
-- [Tests-visualisation](./Documentation/tests-visualisation.md): Notes taken for the tests to create the visualisation system.
-
-- [User_doc](./Documentation/user_doc.md): Documentation on how to use the application: from the requirements installation to the dashboard.
-
-## Python
-
-All python files are in this folder.
-
-In [*PyQGIS*](./Python/PyQGIS/) subfolder are scripts that have been used with PyQGIS, the python API for QGIS.
-For the moment, only corresponding nodes calculation and overlap indicator are calculated using PyQGIS.
-It is not necessary now to use them as the database structure has changed and it is now easier to use data from both datasets with easy SQL queries.
-
-In [*Test*](./Python/Test/) subfolder are test scripts.
-There are not many tests that have been made for the moment but more test are going to be created.
-
-Other scripts are:
-
-- [utils.py](./Python/utils.py): Provides useful functions that are used in other scripts too, such as database connection or function to run sql queries.
-
-- [osm_pgrouting.py](./Python/osm_pgrouting.py): Provides functions to download and integrate OSM data into a database, using bbox indicated in [bboxs.json](./Data/Bbox/bboxs.json) file.
-
-- [data_integration.py](./Python/data_integration.py): Provides functions to download OvertureMap Fundation data from a bbox using the overturemaps python tool.
-It also download and integrate data in the database.
-
-- [overtureMap_data_to_graph.py](./Python/overtureMap_data_to_graph.py): Provides functions to extract data from pre-integrated OMF data, using bbox indicated in [bboxs.json](./Data/Bbox/bboxs.json) file.
-Results are saved into the database and are compatible with PgRouting.
-
-- [graph_analysis.py](./Python/graph_analysis.py): Provides functions to calculate quality criteria for graph analysis, such as number of nodes or edges, overlap indicator etc.
-All these criteria are described in this document: [Comparison-OSM-OvertureMap_PgRouting.md](./Documentation/Comparison-OSM-OvertureMap_PgRouting.md).
-
-Except for the [utils.py](./Python/utils.py) file, all the other scripts needs to be run in this order (you can invert OSM and OMF data integration of course) so the graph analysis can be runned.
-
-It is thanks to the bbox JSON file that all can be done automatically, so please update it if you want to work on different areas for instance.
-
-## Requirements
-
-
-The files `requirements_*.in` and `requirements_*.txt` are used for control version.
-For each requirement file, usually one python virtual environment is created.
-Please check the [Virtual environment section](./Documentation/command.md#virtual-environnment) for explaination about how to create a python virtual environment and using the requirement files.
-Python version and explaination of each type of file is given here:
-
-- The [`requirements_base.in`](./Requirements/requirements_base.in) file is used as the main requirement file, for integrating OSM and OMF data into the database and for data quality assessment.
-The python version used for this one is **Python 3.12.3**.
-
-- The [`requirements_apache-superset.in`](./Requirements/requirements_apache-superset.in) file is used as the requirement file necessary for testing Apache-superset.
-The python version used for this one is **Python 3.11.9**.
-
-# Database
-
-Data integration and quality assessment revolve around a database.
-The version of the different database tools used are:
+with these specific versions used for developing and testing:
 
 | **Tool** | Version |
 | --- | --- |
 | **PostgreSQL** | 16.2 |
 | **PostGIS** | 3.4 |
 | **PgRouting** | 3.6.0 |
-| **PgAdmin** | 8.4 |
-| **DuckDB** | 0.10.2 |
+| **Python** | 3.12.3 |
 
-The database used in this repository is:
+## Requirements
 
-- `name`: `pgrouting`
-- `host`: `127.0.0.1`
-- `port`: `5432`
-- `user`: `postgres`
-- `password`: `postgres`
+It is strongly recommended to use a Python virtual environment to download the necessary dependencies only in the virtual environment.
+Here is how you can do this:
 
-## Schemas
+**Create virtual environment**
+```cmd
+python -m venv .venv
+.venv\Scripts\activate
+```
 
-4 schemas are used in this database:
+**Activate / deactivate**
 
-- `public`: Defaults schema, where PostGIS and PgRouting are installed.
-It also means that to use these function, the `public.` prefix has to be used to avoid conflict and problems.
-Also, the bounding box table is located in the public schema, to be used by the other one easily.
+```cmd
+.venv\Scripts\activate
 
-- `osm`: As the name indicates it, this schema contains all tables for OpenStreetMap data.
+.venv\Scripts\deactivate.bat
+```
 
-- `omf`: Same than the `osm` schema, but for Overture Maps Fundation data.
+**Upgrade pip version**
+```cmd
+python.exe -m pip install --upgrade pip
+```
 
-- `results`: The name also speaks for itself, this schema contains the different results of quality assessment.
+**Install dependencies**
 
-Using only one database with multiple schemas is better than using multiple ones as it is way easier to use tables from different schemas than table from different database (at least it is the case with PostgreSQL).
+```cmd
+pip install pip-tools && pip-compile Requirements\requirements.in && pip install -r Requirements\requirements.txt
+```
 
-## Table names
+## Database
 
-For either OSM or OMF data, the tables have templates names for their final usage with PgRouting:
+Create a PostGIS database named `pgrouting`.
 
-- Table of edges with cost : `edge_with_cost_<area>`;
+Then, to install the extensions and create the schemas according to the database model, run the [init.sql](./Data/init.sql) script in your database.
 
-- Table of nodes : `node_<area>`;
+More information about the database, including the [Database section](./Documentation/user-doc.md#database) of the user documentation.
 
-- Table of places : `places_<area>`;
+## Environment file
 
-- Table of buildings : `buildings_<area>`;
+You can custom the [.env](./.env) file to custom your connection to the postgis database.
+Initially, the parameters values are:
 
-where `<area>` correspond to the area name, like `tokyo` or `higashihiroshima`.
+- `POSTGRES_DATABASE` (Name of the database): pgrouting
+- `POSTGRES_HOST` (Address ip of the host): 127.0.0.1
+- `POSTGRES_USER` (User name): postgres
+- `POSTGRES_PASSWORD` (Password): postgres
+- `POSTGRES_PORT` (Port to connect to): 5432
 
-To access OSM data, the `osm` prefix needs to be used, same for OMF data with the `omf` prefix.
+This file is used in all scripts, whether it is for the quality assessment or the dashboard.
 
-# Bounding box used to test algorithms:
+# Using the scripts
 
-Assessinq quality of OSM and OMF datasets over entire Japan is complicated and take some time, so in order to do so, some tests have been run on different areas.
-Among these areas, some are urban, other rural and other are sub-urban areas.
-The name of these areas and their bbox are provided here.
-For more clarity, pictures of these areas are also included.
-All these information can also be found directly on the [bboxs.json](./Data/Bbox/bboxs.json) file.
+## Download data
 
-- **Hamamatsu**: `137.63671875,34.66935855, 137.72460938,34.7416125`
+Use the [main.py](Python\Assessment\main.py) file to download and integrate OSM and OMF data:
 
-![Hamamatsu bounding box area](./Documentation/Images/bounding_box_hamamatsu.png)
+```cmd
+python Python\Assessment\main.py
+```
 
-- **Higashihiroshima**: `132.69418348,34.38622724, 132.7820741,34.45848119`
+It uses the file containing the bounding box: [bboxs.json](./Data/bboxs.json).
+Refer to the [user documentation](./Documentation/user-doc.md#adding-areas) for more information about how to add new areas.
+You will also find information about how to configurate the [main.py](Python\Assessment\main.py) file for forcing the data download or preventing the bounding box table to be recreated again.
 
-![Higashihiroshima bounding box area](./Documentation/Images/bounding_box_higashihiroshima.png)
+## Quality assessment
 
-- **Kumamoto**: `130.68726409,32.72948989,130.77515472,32.80174385`
+This script needs to be run after the data integration process, but before running the DashBoard.
+It is contained in the [graph_analysis.py](./Python/Assessment/graph_analysis.py)
+To run this script:
 
-![Kumamoto bounding box area](./Documentation/Images/bounding_box_kumamoto.png)
+```cmd
+python Python\Assessment\graph_analysis.py
+```
 
-- **Morioka**: `141.07765453,39.6823863,141.16554516,39.75375112`
+This script will create layers in the database for the visible ones and also a sumup result located in a folder `.temp` in the `Data` folder of the repository.
 
-![Morioka bounding box area](./Documentation/Images/bounding_box_morioka.png)
+Once again, you can refer to the [user documentation](./Documentation/user-doc.md#quality-assessment-criteria) for more information about this script and how to configurate it.
 
-- **Tateyama**: `139.83398438,34.95799531, 139.921875,35.02999637`
+## Runnig the application
 
-![Tateyama bounding box area](./Documentation/Images/bounding_box_tateyama.png)
+Run this command to launch the application:
 
-- **Tokyo**: `139.74609375,35.67514744,139.83398438,35.74651226`
+```
+shiny run .\Python\GeoDataCompare\app.py
+```
 
-![Tokyo bounding box area](./Documentation/Images/bounding_box_tokyo.png)
+You can then go to this link: http://127.0.0.1:8000
+
+You can find more information about how to use the application in the `Help` section directly on the app.
 
 # Licenses
 
-Because of OpenStreetMap license ([Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/)), all the work done with OSM data must be release with the same license.
-OvertureMap Fundation might have different licenses (see [here](https://docs.overturemaps.org/attribution/)), but it uses OpenStreetMap data too, especially for building and road network data.
-Therefore, all of this work is under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/).
+OpenStreetMap data is under the ([Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/)), while Overture Maps Fundation might have different licenses (see [here](https://docs.overturemaps.org/attribution/)), but for buildings and transportation theme, as OSM data is used, it is under the same license.
+Place data of OvertureMap is under [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
+
+The visualisation platform and this project in general is under the [MISSING LICENSE!](.License.md).
 
 # Credits
 
