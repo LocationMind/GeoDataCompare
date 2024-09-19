@@ -291,8 +291,6 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
         # Execute query
         utils.executeQueryWithTransaction(connection, query)
         
-        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
-        
     return count
 
 
@@ -366,8 +364,6 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
         # Execute query
         utils.executeQueryWithTransaction(connection, query)
         
-        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
-        
     return count
 
 
@@ -377,7 +373,6 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
                      nodeTableName:str,
                      resultAsTable:str = "",
                      schemaResult:str = "public") -> int:
-    
     """Return the number of isolated nodes in the graph, by counting
     the number of nodes that do not intersect any roads
 
@@ -436,8 +431,6 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
         
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
-        
-        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
         
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
@@ -535,8 +528,6 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
         
-        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
-        
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
         cursor = utils.executeSelectQuery(connection, selectQuery)
@@ -556,11 +547,6 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     
     # Calculate indicator
     indicator = round((overlapLength / totalLength) * 100, 2)
-    
-    # Print info to user
-    print(f"Total length is {totalLength} km")
-    print(f"Overlap length is {overlapLength} km")
-    print(f"Percentage of road from dataset {schemaDatasetA} in dataset {schemaDatasetB} is: {indicator} %")
     
     return indicator
 
@@ -647,8 +633,6 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
         
-        print(f"Table {schemaResult}.{resultAsTable} created successfully.")
-        
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
         cursor = utils.executeSelectQuery(connection, selectQuery)
@@ -668,11 +652,6 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     
     # Calculate indicator
     percentage = round((intersectNodes / totalNodes) * 100, 2)
-    
-    # Print info to user
-    print(f"Total nodes: {totalNodes}")
-    print(f"Intersects nodes: {intersectNodes}")
-    print(f"Percentage of corresponding nodes from dataset {schemaDatasetA} in dataset {schemaDatasetB} is: {percentage} %")
     
     return intersectNodes, percentage
 
@@ -761,237 +740,90 @@ def listsToMardownTable(listOSM:list,
     return markdown
 
 
-if __name__ == "__main__":
-    import time
-    import datetime
-    start = time.time()
+def getDensityPlaceGrid(connection:psycopg2.extensions.connection,
+                        schema:str,
+                        placeTable:str,
+                        area:str,
+                        boundingBoxTable:str = 'bounding_box',
+                        resultAsTable:str = "",
+                        schemaResult:str = "public") -> int:
+    """Return the density of places in the bounding box.
+    If the result is save as a table then the density is calculated on
+    100 x 100 meters square.
+    Uses the geometry from the bounding box table for a density.
     
-    # Get today's date and hour for the result    
-    now = datetime.datetime.now()
-    dateTimeMarkdown = now.strftime("%d/%m/%Y %H:%M")
+    Args:
+        connection (psycopg2.extensions.connection): Connection token for the database.
+        schema (str): Name of the schema.
+        placeTable (str): Name of the place table.
+        area (str): Name of the bounding box area.
+        boundingBoxTable (str, optional): Name of the bounding box table.
+        Defaults to 'bounding_box'.
+        resultAsTable (str, optional). If given, the result will be saved as a table.
+        Defaults to "".
+        schemaResult (str, optional): Name of the schema for the results.
+        Not necessary if resultAsTable is empty. Defaults to "public".
     
-    # Path to save the results
-    fileName = "Automatic_result.md"
-    curdir = os.getcwd()
-    pathSave = os.path.join(curdir, "Results", fileName)
+    Raises:
+        ValueError: If no result schema is given when saving the result as table.
     
-    # Connect to the database and give table template for OSM and OMF dataset
-    connection = utils.getConnection()
+    Returns:
+        int: Density of places per kilometer square.
+    """
+    # Get density value
+    queryDensity = f"""
+    WITH area_bbox AS (
+        SELECT ST_Area(geom::geography) / 1000000 AS area
+        FROM public.{boundingBoxTable}
+        WHERE name = '{area}'
+    ),
+    nb_places AS (
+        SELECT count(*) AS nb FROM {schema}.{placeTable}
+    )
+    SELECT nb_places.nb / area_bbox.area AS density FROM nb_places, area_bbox
+    """
     
-    osmSchema = 'osm'
-    osmEdgeTableTemplate = "edge_with_cost_{}"
-    osmNodeTableTemplate = "node_{}"
+    cursor = utils.executeSelectQuery(connection, queryDensity)
+    value = cursor.fetchone()[0]
     
-    omfSchema = 'omf'
-    omfEdgeTableTemplate = "edge_with_cost_{}"
-    omfNodeTableTemplate = "node_{}"
+    # Create table if needed
+    if resultAsTable !="":
+        if schemaResult == "":
+            raise ValueError("A schema must be given for the result output")
+        
+        # Add drop / create table statement
+        query = f"""
+        DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
+        
+        CREATE TABLE {schemaResult}.{resultAsTable} AS
+        WITH grid AS (
+            SELECT (ST_SquareGrid(0.001, geom)).*
+            FROM public.{boundingBoxTable} WHERE name = '{area}'
+        ),
+        grid_intersects AS (
+            SELECT count(*) as nb, g.geom, g.i, g.j
+            FROM grid AS g
+            JOIN {schema}.{placeTable} AS p ON ST_Intersects(g.geom, p.geom)
+            GROUP BY (g.geom, g.i, g.j)
+        ),
+        grid_not_intersects AS (
+            SELECT 0 as nb, g.geom, g.i, g.j
+            FROM grid AS g
+            WHERE (g.i, g.j) NOT IN (
+                SELECT i, j FROM grid_intersects
+            )
+            GROUP BY (g.geom, g.i, g.j)
+        )
+        SELECT * FROM grid_not_intersects
+        UNION
+        SELECT * FROM grid_intersects
+        ORDER by i, j ASC;
+        
+        ALTER TABLE {schemaResult}.{resultAsTable}
+        ADD COLUMN id serial;
+        """
+        
+        # Create table
+        utils.executeQueryWithTransaction(connection, query)
     
-    
-    # Variable for markdown results
-    mappingResult = "### Total kilometer of roads by class"
-    
-    # Data to add to the dataFrame
-    data = []
-    
-    # Schema for saving result as tables
-    schemaResult = 'results'
-    # Templates table names for saving (1st : area / 2nd: dataset)
-    connectedComponentsTemplate = "connected_components_{}_{}"
-    strongConnectedComponentsTemplate = "strong_components_{}_{}"
-    isolatedNodesTemplate = "isolated_nodes_{}_{}"
-    overlapIndicatorTemplate = "overlap_indicator_{}_{}"
-    correspondingNodesTemplate = "corresponding_nodes_{}_{}"
-    
-    # Get list of areas from the bounding box table
-    bounding_box_table = "bounding_box"
-    listAreas = getListAreas(connection)
-    
-    for area in listAreas:
-        print(f"Start quality analysis for {area}")
-        
-        # Get edge and node tables
-        osmEdgeTable = osmEdgeTableTemplate.format(area.lower())
-        osmNodeTable = osmNodeTableTemplate.format(area.lower())
-        
-        omfEdgeTable = omfEdgeTableTemplate.format(area.lower())
-        omfNodeTable = omfNodeTableTemplate.format(area.lower())
-        
-        # Capitalize the area name to be able to filter with the bounding box
-        area = area.capitalize()
-        
-        # Add lines to before and after mapping results
-        mappingResult += f"\n\n#### *{area}*:\n\n"
-        
-        # Number of edges / nodes
-        
-        OSMValue = getNumberElements(connection, osmSchema, osmNodeTable)
-        print(f"Number of nodes in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getNumberElements(connection, omfSchema, omfNodeTable)
-        print(f"Number of nodes in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**1. Number of nodes**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        OSMValue = getNumberElements(connection, osmSchema, osmEdgeTable)
-        print(f"Number of edges in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getNumberElements(connection, omfSchema, omfEdgeTable)
-        print(f"Number of edges in OMF for {area} is: {OMFValue}")
-        # Add data to the data list
-        data.append(["**2. Number of edges**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        # Total length kilometer
-        OSMValue = getTotalLengthKilometer(connection, osmSchema, osmEdgeTable)
-        print(f"Total length in km in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getTotalLengthKilometer(connection, omfSchema, omfEdgeTable)
-        print(f"Total length in km in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**3. Total length (km)**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        # Total length kilometer per class
-        listClassesOSM = getLengthKilometerPerClass(connection, osmSchema, osmEdgeTable)
-        
-        listClassesOMF = getLengthKilometerPerClass(connection, omfSchema, omfEdgeTable)
-        
-        markdown = listsToMardownTable(listClassesOSM, listClassesOMF)
-        # Add markdown results
-        mappingResult += markdown
-        
-        print(f"Total length in km per class for {area}:")
-        print(markdown)
-        
-        
-        # Connected components
-        # Table names for saving
-        resultOSMTable = connectedComponentsTemplate.format(area.lower(), osmSchema)
-        resultOMFTable = connectedComponentsTemplate.format(area.lower(), omfSchema)
-        
-        OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
-        print(f"Number of connected components in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
-        print(f"Number of connected components in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**4. Number of connected components**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        # Strong connected components
-        # Table names for saving
-        resultOSMTable = strongConnectedComponentsTemplate.format(area.lower(), osmSchema)
-        resultOMFTable = strongConnectedComponentsTemplate.format(area.lower(), omfSchema)
-        
-        OSMValue = getStrongConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
-        print(f"Number of strong connected components in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getStrongConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
-        print(f"Number of strong connected components in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**5. Number of strong connected components**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        # Isolated nodes
-        # Table names for saving
-        resultOSMTable = isolatedNodesTemplate.format(area.lower(), osmSchema)
-        resultOMFTable = isolatedNodesTemplate.format(area.lower(), omfSchema)
-        
-        OSMValue = getIsolatedNodes(connection, osmSchema, osmEdgeTable, osmNodeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
-        print(f"Number of isolated nodes in OSM for {area} is: {OSMValue}")
-        
-        OMFValue = getIsolatedNodes(connection, omfSchema, omfEdgeTable, omfNodeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
-        print(f"Number of isolated nodes in OMF for {area} is: {OMFValue}")
-        
-        # Add data to the data list
-        data.append(["**6. Number of isolated nodes**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        end = time.time()
-        print(f"Criteria until now: {end - start} seconds")
-        
-        
-        # Overlap indicator
-        # Table names for saving
-        resultOSMTable = overlapIndicatorTemplate.format(area.lower(), osmSchema)
-        resultOMFTable = overlapIndicatorTemplate.format(area.lower(), omfSchema)
-        
-        OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
-        print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSMValue}")
-        
-        end = time.time()
-        print(f"Overlap indicator 1: {end - start} seconds")
-        
-        OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
-        print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMFValue}")
-        
-        end = time.time()
-        print(f"Overlap indicator 2: {end - start} seconds")
-        
-        # Add data to the data list
-        data.append([f"**7. Overlap indicator (%)**", f"*{area}*", OSMValue, OMFValue])
-        
-        
-        # Corresponding nodes
-        # Table names for saving
-        resultOSMTable = correspondingNodesTemplate.format(area.lower(), osmSchema)
-        resultOMFTable = correspondingNodesTemplate.format(area.lower(), omfSchema)
-        
-        OSMValue = getCorrespondingNodes(connection, osmSchema, osmNodeTable, omfSchema, omfNodeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
-        print(f"Number of corresponding nodes in OSM for {area} is: {OSMValue[0]} ({OSMValue[0]} %)")
-        
-        end = time.time()
-        print(f"Corresponding nodes for OSM: {end - start} seconds")
-        
-        OMFValue = getCorrespondingNodes(connection, omfSchema, omfNodeTable, osmSchema, osmNodeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
-        print(f"Number of corresponding nodes in OMF for {area} is: {OMFValue[0]} ({OMFValue[1]} %)")
-        
-        end = time.time()
-        print(f"Corresponding nodes for OMF: {end - start} seconds")
-        
-        # Add two rows in the dataframe (one for the number and the other for percentage)
-        data.append(["**8. Number of corresponding nodes**", f"*{area}*", OSMValue[0], OMFValue[0]])
-        data.append(["**9. Percentage of corresponding nodes (%)**", f"*{area}*", OSMValue[1], OMFValue[1]])
-    
-        end = time.time()
-        print(f"{area}: {end - start} seconds")
-    
-    
-    # Sort data per Criterion / Area
-    data.sort(key= lambda a: (a[0], a[1]))
-    
-    # Create dataframe to export as markdown in the end
-    columns = ['**Criterion**', '**Area**', '**OSM Value**', '**OMF Value**']
-    df = pd.DataFrame(data=data, columns=columns)
-    
-    df['**Difference (abs)**'] = abs(df["**OSM Value**"] - df["**OMF Value**"])
-    
-    print()
-    # Export to markdown table
-    generalResults = df.to_markdown(index=False, tablefmt="github")
-    
-    # Create final markdown
-    exportMarkdown = f"""# Quality criterias result between OSM and OMF datasets
-
-The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of OvertureMap data and the OSM data until 2024/06/07.
-
-## General results
-
-{generalResults}
-
-## Specific results
-
-{mappingResult}
-"""
-
-    # Export the results to a markdown file
-    with open(pathSave, 'w') as f:
-        f.writelines(exportMarkdown)
-    
-    end = time.time()
-    print(f"Process ended in {end - start} seconds")
+    return value

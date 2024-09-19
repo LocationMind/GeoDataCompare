@@ -1,4 +1,4 @@
-# GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data
+# GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Foundation data
 
 |   |   |
 |:---:|:---:|
@@ -6,7 +6,7 @@
 | Dev  | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg?branch=dev)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml?query=branch%3Adev)  |
 | Last commit | [![Test](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml/badge.svg)](https://github.com/LocationMind/OSM_Overture_Works/actions/workflows/action.yml) |
 
-- [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Fundation data](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-fundation-data)
+- [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Foundation data](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-foundation-data)
 - [Documentation](#documentation)
 - [Install](#install)
   - [Necessary components](#necessary-components)
@@ -20,7 +20,7 @@
 - [Licenses](#licenses)
 - [Credits](#credits)
 
-[Overture Maps Fundation](https://overturemaps.org/) (OMF) released their first official release in July 2024, and as their schemas is structured and their data come from different sources, it is interesting to know what one can do with this data.
+[Overture Maps Foundation](https://overturemaps.org/) (OMF) released their first official release in July 2024, and as their schemas is structured and their data come from different sources, it is interesting to know what one can do with this data.
 To answer this question, a comparison between them and [OpenStreetMap](https://www.openstreetmap.org/) (OSM), probably the most famous Open Source dataset for geoinformation data has been made.
 
 This project provides Python scripts to download and integrate data into a PostgreSQL database under a common model and assess their quality according to specific criteria and a visualisation system based on Shiny for Python and LonBoard, two Python packages, to compare data with a DashBoard.
@@ -113,24 +113,24 @@ This file is used in all scripts, whether it is for the quality assessment or th
 
 ## Download data
 
-Use the [main.py](Python\Assessment\main.py) file to download and integrate OSM and OMF data:
+Use the [data_integration.py](Python\Assessment\data_integration.py) file to download and integrate OSM and OMF data:
 
 ```cmd
-python Python\Assessment\main.py
+python Python\Assessment\data_integration.py
 ```
 
 It uses the file containing the bounding box: [bboxs.json](./Data/bboxs.json).
 Refer to the [user documentation](./Documentation/user-doc.md#adding-areas) for more information about how to add new areas.
-You will also find information about how to configurate the [main.py](Python\Assessment\main.py) file for forcing the data download or preventing the bounding box table to be recreated again.
+You will also find information about how to configurate the [data_integration.py](Python/Assessment/data_integration.py/) file for forcing the data download or preventing the bounding box table to be recreated again.
 
 ## Quality assessment
 
 This script needs to be run after the data integration process, but before running the DashBoard.
-It is contained in the [graph_analysis.py](./Python/Assessment/graph_analysis.py)
+It is contained in the [quality_assessment.py](./Python/Assessment/quality_assessment.py)
 To run this script:
 
 ```cmd
-python Python\Assessment\graph_analysis.py
+python Python\Assessment\quality_assessment.py
 ```
 
 This script will create layers in the database for the visible ones and also a sumup result located in a folder `.temp` in the `Data` folder of the repository.
@@ -151,7 +151,7 @@ You can find more information about how to use the application in the `Help` sec
 
 # Licenses
 
-OpenStreetMap data is under the ([Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/)), while Overture Maps Fundation might have different licenses (see [here](https://docs.overturemaps.org/attribution/)), but for buildings and transportation theme, as OSM data is used, it is under the same license.
+OpenStreetMap data is under the ([Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/)), while Overture Maps Foundation might have different licenses (see [here](https://docs.overturemaps.org/attribution/)), but for buildings and transportation theme, as OSM data is used, it is under the same license.
 Place data of OvertureMap is under [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
 
 The visualisation platform and this project in general is under the [MISSING LICENSE!](.License.md).

@@ -82,25 +82,25 @@ def hexToRgb255(hex:str) -> list[int, int, int]:
     return [int (255 * x) for x in rgb]
 
 
-def getColorComponents(cardinality:int,
-                       data:list) -> list[int, int, int]:
-    """Get color for components layers.
+def getColorRange(number:int,
+                  data:list) -> list[int, int, int]:
+    """Get color for layers with the range style.
 
     Args:
-        cardinality (int): Cardinality of the component.
-        data (list): List representing the component DataFrame.
+        number (int): Value of the dataframe row.
+        data (list): List representing the style DataFrame.
 
     Returns:
         list[int, int, int]: Color as a RGB list values.
     """
     # First color
-    if data[0][0] <= cardinality <= data[0][1]:
+    if data[0][0] <= number <= data[0][1]:
         color = data[0][2]
     # Second color
-    if data[1][0] <= cardinality <= data[1][1]:
+    elif data[1][0] <= number <= data[1][1]:
         color = data[1][2]
     # Third color
-    if data[2][0] <= cardinality <= data[2][1]:
+    elif data[2][0] <= number <= data[2][1]:
         color = data[2][2]
     # Last color
     else:
@@ -193,7 +193,7 @@ engine = utils.getEngine()
 # Name of the first dataset (left map), refer as dataset A in the rest of the application
 datasetA = d.OpenStreetMap()
 # Name of the second dataset (right map), refer as dataset B in the rest of the application
-datasetB = d.OvertureMapsFundation()
+datasetB = d.OvertureMapsFoundation()
 
 # Dict of the different criterion (group by theme) 
 quality_criteria_choices = {
@@ -211,6 +211,7 @@ quality_criteria_choices = {
     },
     "Place" : {
         "places_density":c.PlaceDensity.displayNameMap,
+        "places_grid_density":c.PlaceGridDensity.displayNameMap,
     }
 }
 
@@ -225,6 +226,7 @@ criteria_classes = {
     "buildings_coverage":c.BuildingCoverage,
     "buildings_density":c.BuildingDensity,
     "places_density":c.PlaceDensity,
+    "places_grid_density":c.PlaceGridDensity,
 }
 
 # Icons from font-awesome
@@ -459,7 +461,7 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                     render.DataGrid: Data grid to change component layers style.
                 """
                 data = {
-                    "Min value":[1, 6, 16, 251],
+                    "Min value":[0, 6, 16, 251],
                     "Max value":[5, 15, 250, "max"],
                     "Colors":["#0e4d0e", "#ff6a01", "#c401c0", "#b16d25"]
                 }
@@ -1214,7 +1216,7 @@ def colorRange():
     Change the style of components layers depending on
     the value of the DataFrame.
     """
-    if isinstance(currentCriterion(), (c.ConnectedComponents, c.StrongComponents)):
+    if isinstance(currentCriterion(), (c.ConnectedComponents, c.StrongComponents, c.PlaceGridDensity)):
         # Get map layers
         datasetALayers = reactive_read(datasetA_map.widget, "layers")
         datasetBLayers = reactive_read(datasetB_map.widget, "layers")
@@ -1242,7 +1244,7 @@ def colorRange():
                 gdfcopy = gdfcopy[["id", "cardinality"]]
                 
                 # Create the 'color' column by applying a custom function
-                gdfcopy['color'] = gdfcopy['cardinality'].apply(getColorComponents, args=(editData, ))
+                gdfcopy['color'] = gdfcopy['cardinality'].apply(getColorRange, args=(editData, ))
 
                 # Convert to dictionary
                 colorMap = gdfcopy.set_index('id')['color'].to_dict()
@@ -1259,7 +1261,33 @@ def colorRange():
                 colorLine = getColorFromColorPicker(colorPickerLine)
 
                 layer.get_color = colorLine
+            
+            # Polygon (grid)
+            
+            if type(layer) == lon._layer.PolygonLayer:
 
+                if layer in datasetBLayers:
+                    gdfcopy = currentCriterion().datasetBGdf.copy()
+                else:
+                    gdfcopy = currentCriterion().datasetAGdf.copy()
+                
+                # Keep only interseting column
+                gdfcopy = gdfcopy[["id", "nb"]]
+                
+                # Create the 'color' column by applying a custom function
+                gdfcopy['color'] = gdfcopy['nb'].apply(getColorRange, args=(editData, ))
+
+                # Convert to dictionary
+                colorMap = gdfcopy.set_index('id')['color'].to_dict()
+                
+                # Apply new style to the layer
+                layer.get_fill_color = apply_categorical_cmap(
+                    values = gdfcopy['id'],
+                    cmap = colorMap
+                )
+                
+                # Set opacity value
+                layer.opacity = 0.1
 
 ### Components Dataframe modification handler ###
 @legendComponents.set_patches_fn
@@ -1298,7 +1326,7 @@ async def patchesFn(*, patches: list[render.CellPatch]) -> list[render.CellPatch
         
         # First min value
         if patch["column_index"] == 0 and patch["row_index"] == 0:
-            returnPatch["value"] = 1
+            returnPatch["value"] = 0
 
         # Last max value
         elif patch["column_index"] == 1 and patch["row_index"] == 3:
@@ -1310,13 +1338,13 @@ async def patchesFn(*, patches: list[render.CellPatch]) -> list[render.CellPatch
             val = int(val)
             
             # If the value is not superior to 0, we do not change it
-            if returnPatch["value"] > 0:  
+            if returnPatch["value"] >= 0:  
                 aboveValue = None
                 underValue = None
                 
-                # First row, we assign 0 to the above value
+                # First row, we assign -1 to the above value
                 if row == 0:
-                    aboveValue = 0
+                    aboveValue = -1
                     underValue = currentData[row+1][col]
                 # Last row, we assign value + 2 to the under value
                 elif row == 3:

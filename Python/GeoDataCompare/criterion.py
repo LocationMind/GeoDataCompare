@@ -1124,7 +1124,101 @@ class PlaceDensity(Criterion):
             number = gdf.shape[0]
             
             # Calculate the density
-            value = f"{round((number / self.areaKm2), 2)} / km2"
+            value = f"{round(int(number / self.areaKm2), 2)} / km2"
+        
+        return str(value)
+
+
+class PlaceGridDensity(Criterion):
+    
+    displayNameMap = "Places grid density"
+    
+    @property
+    def _datasetALayerTemplate(self) -> str:
+        """
+        str: Template name for datasetA layer.
+        """
+        return "results.density_places_grid_{}_" + self.datasetA.schema
+    
+    
+    @property
+    def _datasetBLayerTemplate(self) -> str:
+        """
+        str: Template name for datasetB layer.
+        """
+        return "results.density_places_grid_{}_" + self.datasetB.schema
+    
+    
+    @property
+    def _datasetAOtherLayerTemplate(self) -> list[str]:
+        """
+        list: Template name for datasetA other layers.
+        """
+        return []
+    
+    
+    @property
+    def _datasetBOtherLayerTemplate(self) -> list[str]:
+        """
+        list: Template names for datasetB other layers.
+        """
+        return []
+    
+    
+    def __init__(self,
+                 area:str,
+                 areaKm2:float,
+                 crs:int,
+                 engine:sqlalchemy.engine.base.Engine,
+                 datasetA:d.Dataset,
+                 datasetB:d.Dataset,) -> None:
+        """Constructor for a criterion
+
+        Args:
+            area (str): Name of the area.
+            areaKm2 (float): Area in km2 of the area.
+            crs (int): UTM projection id.
+            engine (sqlalchemy.engine.base.Engine): Engine for database connexion.
+            datasetA (dataset.Dataset): First dataset.
+            datasetB (dataset.Dataset): Second dataset.
+        """
+        # Theme
+        self.theme = t.Place
+        
+        # Layer type
+        self.layerType = lonboard.PolygonLayer
+        self.otherLayersType = []
+        
+        # Name of the column for the criterion and for displaying it
+        self.displayNameCriterion = "Density of POI (nb / km2)"
+        
+        self.columnCriterion = 'nb'
+        
+        self.icon = fa.icon_svg("arrows-to-dot")
+        
+        # Get GeoDataFrames
+        super().__init__(area, areaKm2, crs, engine, datasetA = datasetA, datasetB = datasetB)
+    
+    
+    def calculateInformation(self, gdf:gpd.GeoDataFrame) -> str:
+        """Calulate the criterion information for the given GeoDataFrame.
+
+        Args:
+            gdf (gpd.GeoDataFrame): GeoDataFrame for Dataset A or Dataset B value.
+        
+        Returns:
+            str: Criterion value.
+        """
+        # Missing value if the GeoDataFrame is empty
+        if gdf.empty:
+            value = ""
+        
+        else:
+            # Get sum of element
+            number = gdf[self.columnCriterion].sum()
+            
+            # Calculate the density
+            value = f"{round(int(number / self.areaKm2), 2)} / km2"
         
         return str(value)
 

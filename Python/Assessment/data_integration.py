@@ -40,9 +40,9 @@ curdir = os.getcwd()
 
 # Load the 3 bbox that we will use from the json file
 pathJson = os.path.join(curdir, "Data", "bboxs.json")
-folderSave = os.path.join(curdir, "Data", ".temp")
+folderSave = os.path.join(curdir, ".temp")
 
-# Create folder if it does not exists
+# Create save folder if it does not exists
 if not os.path.isdir(folderSave):
     os.makedirs(folderSave)
 
@@ -89,7 +89,7 @@ for elem in bboxJson["bboxs"]:
     ### Places ###
     ## OMF
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_omf, skipBuildingCheck):
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_omf, skipPlaceCheck):
     
         omf.createPlaceFromBbox(
             bbox = bbox,
@@ -106,9 +106,10 @@ for elem in bboxJson["bboxs"]:
     
     ## OSM
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_osm, skipBuildingCheck):
+    if not utils.isProcessAlreadyDone(connection, placeTable.format(area), schema_osm, skipPlaceCheck):
     
         osm.createPlaceFromBbox(
+            connection = connection,
             engine = engine,
             bbox = bbox,
             area = area,
@@ -126,7 +127,7 @@ for elem in bboxJson["bboxs"]:
     ### Buildings ###
     ## OMF
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_omf, skipPlaceCheck):
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_omf, skipBuildingCheck):
     
         omf.createBuildingFromBbox(
             bbox = bbox,
@@ -143,7 +144,7 @@ for elem in bboxJson["bboxs"]:
     
     ## OSM
     # Check if the process has already been done
-    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_osm, skipPlaceCheck):
+    if not utils.isProcessAlreadyDone(connection, buildingTable.format(area), schema_osm, skipBuildingCheck):
     
         osm.createBuildingFromBbox(
             engine = engine,

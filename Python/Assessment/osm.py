@@ -684,9 +684,11 @@ def getCategory(row:pd.core.series.Series) -> str:
         return None
 
 
-def createPlaceFromBbox(engine:sqlalchemy.engine.base.Engine,
+def createPlaceFromBbox(connection:psycopg2.extensions.connection,
+                        engine:sqlalchemy.engine.base.Engine,
                         bbox: str,
                         area:str,
+                        boundingBoxTable:str = 'bounding_box',
                         schema:str = "public"):
     """Create place table from a bbox.
 
@@ -694,6 +696,7 @@ def createPlaceFromBbox(engine:sqlalchemy.engine.base.Engine,
         engine (sqlalchemy.engine.base.Engine): Engine with the database connection.
         bbox (str): Bbox in the format 'east, south, west, north'.
         area (str): Name of the area.
+        Defaults to 'bounding_box'.
         schema (str, optional): Schema to save the table. Defaults to "public".
     """
     # Tags to download buildings only
@@ -753,3 +756,16 @@ def createPlaceFromBbox(engine:sqlalchemy.engine.base.Engine,
     
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
+    
+    # Delete places outside of the bounding box
+    queryDelete = f"""
+    DELETE FROM {schema}.{tableName} AS p
+    WHERE p.id NOT IN (
+        SELECT p.id
+        FROM {schema}.{tableName} AS p
+        JOIN public.{boundingBoxTable} AS b ON ST_Intersects(b.geom, p.geom)
+        WHERE b.name = '{area.capitalize()}'
+    )
+    """
+    
+    utils.executeQueryWithTransaction(connection, queryDelete)

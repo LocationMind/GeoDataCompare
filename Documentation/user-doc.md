@@ -106,7 +106,7 @@ CREATE SCHEMA IF NOT EXISTS omf;
 CREATE SCHEMA IF NOT EXISTS results;
 ```
 
-*Note*: It is sufficient to create the database, as in the [main.py](../Python/Assessment/main.py#L24), these SQL commands are executed (inside the `utils.initialisePostgreSQL(connection)` function).
+*Note*: It is sufficient to create the database, as in the [data_integration.py](../Python/Assessment/data_integration.py#L24), these SQL commands are executed (inside the `utils.initialisePostgreSQL(connection)` function).
 
 ## Python
 
@@ -242,14 +242,14 @@ The same environment file is used for the data integration, quality assessment, 
 
 ## Download and Process Data
 
-Data corresponding to the chosen areas can be downloaded using the [main.py](../Python/Assessment/main.py) script.
+Data corresponding to the chosen areas can be downloaded using the [data_integration.py](../Python/Assessment/data_integration.py) script.
 Certain attribute values in this file can be modified, such as:
 
-- [`createBoundingBoxTable`](../Python/Assessment/main.py#L19): If `True`, it will create the bounding box table, even if it has already been created. Defaults to `True`.
+- [`createBoundingBoxTable`](../Python/Assessment/data_integration.py#L19): If `True`, it will create the bounding box table, even if it has already been created. Defaults to `True`.
 
-- [`skip<theme>Check`](../Python/Assessment/main.py#L57): If `True`, it will recreate all layers of each area for the specified theme (one of `Graph`, `Building`, or `Place`). Otherwise, layers will be created only if they have not been created yet. Defaults to `False`.
+- [`skip<theme>Check`](../Python/Assessment/data_integration.py#L57): If `True`, it will recreate all layers of each area for the specified theme (one of `Graph`, `Building`, or `Place`). Otherwise, layers will be created only if they have not been created yet. Defaults to `False`.
 
-- [`ox.settings.overpass_settings`](../Python/Assessment/main.py#L38): This setting is used to limit OSM data to a specific date. The default date is `2024-06-07T23:59:59Z`. This date can be changed if desired, but it is preferable to select a date approximately the same as the one used by the `overturemaps.py` tool (the default date corresponds to the 2024-06-13-beta.1 release).
+- [`ox.settings.overpass_settings`](../Python/Assessment/data_integration.py#L37): This setting is used to limit OSM data to a specific date. The default date is `2024-06-07T23:59:59Z`. This date can be changed if desired, but it is preferable to select a date approximately the same as the one used by the `overturemaps.py` tool (the default date corresponds to the 2024-06-13-beta.1 release).
 
 Normally, no additional changes should be necessary (such as altering template names for the layer, schema names, or the path to the bbox file, etc.).
 If changes are required, they should be made consistently across the different files.
@@ -257,7 +257,7 @@ If changes are required, they should be made consistently across the different f
 The script can be run with this command:
 
 ```cmd
-python Python\Assessment\main.py
+python Python\Assessment\data_integration.py
 ```
 
 Or directly by running the script in an IDE of choice.
@@ -265,22 +265,22 @@ Or directly by running the script in an IDE of choice.
 ## Quality Assessment Criteria
 
 Once the data has been downloaded, the necessary scripts can be run to assess the quality of the different layers.
-Currently, the criteria are focused on graph data. The Python script is [graph_analysis.py](../Python/Assessment/graph_analysis.py).
+Currently, the criteria are focused on graph data. The Python script is [quality_assessment.py](../Python/Assessment/quality_assessment.py), that uses the function in the [quality.py](../Python/Assessment/quality.py) script.
 
 Certain attribute values can be modified, such as:
 
-- [`fileName`](../Python/Assessment/graph_analysis.py#L943): The name of the markdown file that will be produced. Defaults to `Automatic_result.md`.
+- [`fileName`](../Python/Assessment/quality_assessment.py#L21): The name of the markdown file that will be produced. Defaults to `Automatic_result.md`.
 
-- [`pathSave`](../Python/Assessment/graph_analysis.py#L945): The path to save the markdown file. If the folder does not exist, an error will be returned. Defaults to `./Data/Results/<fileName>`, where `<fileName>` is the previously mentioned variable.
+- [`pathSave`](../Python/Assessment/quality_assessment.py#L23): The path to save the markdown file. If the folder does not exist, an error will be returned. Defaults to `./Data/Results/<fileName>`, where `<fileName>` is the previously mentioned variable.
 
-- [`bounding_box_table`](../Python/Assessment/graph_analysis.py#L975): The name of the bounding box table in the public schema of the database. Defaults to `bounding_box`.
+- [`bounding_box_table`](../Python/Assessment/quality_assessment.py#60): The name of the bounding box table in the public schema of the database. Defaults to `bounding_box`.
 
 Other variables can also be changed, but this is not recommended, especially since changes would need to be updated in the dashboard as well.
 
 As with the previous script, this script can be run with this command:
 
 ```cmd
-python Python\Assessment\graph_analysis.py
+python Python\Assessment\quality_assessment.py
 ```
 
 Or directly by running the script in an IDE of choice.

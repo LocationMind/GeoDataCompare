@@ -8,8 +8,8 @@ This documentation provides information on how to modify various scripts to eith
     - [Mapping Transportation Data to the Common Model](#mapping-transportation-data-to-the-common-model)
     - [Building and Places Data](#building-and-places-data)
     - [Changes in Python Scripts](#changes-in-python-scripts)
-      - [`main.py` File](#mainpy-file)
-      - [`graph_analysis.py` File](#graph_analysispy-file)
+      - [`data_integration.py` File](#data_integrationpy-file)
+      - [`quality.py` and `quality_assessment.py` File](#qualitypy-and-quality_assessmentpy-file)
   - [Adding a new criterion](#adding-a-new-criterion)
   - [Adding a new theme](#adding-a-new-theme)
 - [GeoDataCompare](#geodatacompare)
@@ -101,15 +101,15 @@ Additional attributes can be included for both layers.
 
 After completing the data download and integration process into the database, modifications to two files will be necessary:
 
-- [main.py](#mainpy-file): For integrating data into the database automatically from bounding boxes.
+- [data_integration.py](#data_integrationpy-file): For integrating data into the database automatically from bounding boxes.
 
-- [graph_analysis.py](#graph_analysispy-file): For calculating criteria on the different layers.
+- [quality.py and quality_assessment.py](#qualitypy-and-quality_assessmentpy-file): For calculating criteria on the different layers.
 
 The process for adding a new area to the bounding box file is explained in the [user documentation](user-doc.md#adding-areas).
 
-#### `main.py` File
+#### `data_integration.py` File
 
-The new Python script created to download data should only provide functions to be used in the [main.py](../Python/Assessment/main.py) file. Ideally, three functions should be created in the new Python script:
+The new Python script created to download data should only provide functions to be used in the [data_integration.py](../Python/Assessment/data_integration.py) file. Ideally, three functions should be created in the new Python script:
 
 - `createGraphFromBbox`: For creating edge with cost and node layers from a specific bounding box.
 
@@ -129,7 +129,7 @@ Indeed, with functions like these, adding a new dataset to this process becomes 
 
 1. Import the dataset into the Python file.
 
-2. Add the schema name with an appropriate variable name, such as `schema_<dataset>` [here](../Python/Assessment/main.py#L18).
+2. Add the schema name with an appropriate variable name, such as `schema_<dataset>` [here](../Python/Assessment/data_integration.py#L18).
 
 3. For each theme, add an `if / else` statement to check if the layer has already been created.
 
@@ -169,57 +169,44 @@ else:
 ```
 Of course, it is not mandatory to change the file in this manner; it is merely recommended to maintain the initial file structure.
 
-#### `graph_analysis.py` File
+#### `quality.py` and `quality_assessment.py` File
 
-After downloading the data for your new dataset, it will be necessary to calculate the criteria for this dataset as well. Changes to the [graph_analysis.py](../Python/Assessment/graph_analysis.py) file are somewhat similar to those required for the [main.py](../Python/Assessment/main.py) file. As currently only graph analysis is supported, these changes would be applicable solely to datasets added for the road network.
+After downloading the data for your new dataset, it will be necessary to calculate the criteria for this dataset as well. Changes to the [quality_assessment.py](../Python/Assessment/quality_assessment.py) file are somewhat similar to those required for the [data_integration.py](../Python/Assessment/data_integration.py) file. As currently only graph analysis is supported, these changes would be applicable solely to datasets added for the road network.
 
 To implement these changes, follow these guidelines (the process will still calculate criteria for each dataset):
 
-1. First, create three variables: [`datasetSchema`](../Python/Assessment/graph_analysis.py#L785), [`datasetEdgeTableTemplate`](../Python/Assessment/graph_analysis.py#L786), and [`datasetNodeTableTemplate`](../Python/Assessment/graph_analysis.py#L787). These variables should correspond to your schema name, the name of the edge table, and the name of the node table for the new dataset, respectively. The `dataset` part of the variable names should match the name of your dataset, which is likely the same as the schema name.
+1. First, create three variables: [`datasetSchema`](../Python/Assessment/quality_assessment.py#L36), [`datasetEdgeTableTemplate`](../Python/Assessment/quality_assessment.py#L37), and [`datasetNodeTableTemplate`](../Python/Assessment/quality_assessment.py#L38). These variables should correspond to your schema name, the name of the edge table, and the name of the node table for the new dataset, respectively. The `dataset` part of the variable names should match the name of your dataset, which is likely the same as the schema name.
 
-2. Next, within the `for` statement, create two variables: [`datasetEdgeTable`](../Python/Assessment/graph_analysis.py#L816) and [`datasetNodeTable`](../Python/Assessment/graph_analysis.py#L817). These variables should be defined as:
+2. Next, within the `for` statement, create two variables: [`datasetEdgeTable`](../Python/Assessment/quality_assessment.py#L70) and [`datasetNodeTable`](../Python/Assessment/quality_assessment.py#L71). These variables should be defined as:
 
 ```python
 datasetEdgeTable = datasetEdgeTableTemplate.format(area.lower())
 datasetNodeTable = datasetNodeTableTemplate.format(area.lower())
 ```
 
-3. For each criterion, copy and paste the lines already created for the OSM and OMF datasets, and replace them with variables corresponding to your dataset. It is likely that a new column will need to be added to the variable [`data`](../Python/Assessment/graph_analysis.py#L794) to include your dataset value. For instance, the following examples illustrate two scenarios: the first does not save any layer to the database, while the second does:
+3. For each criterion, copy and paste the lines already created for the OSM and OMF datasets, and replace them with variables corresponding to your dataset. It is likely that a new column will need to be added to the variable [`data`](../Python/Assessment/quality_assessment.py#L84) to include your dataset value. For instance, the following examples illustrate two scenarios: the first does not save any layer to the database, while the second does:
 
 ```python
 
-# Number of edges / nodes
-OSMValue = getNumberElements(connection, osmSchema, osmNodeTable)
-print(f"Number of nodes in OSM for {area} is: {OSMValue}")
-
-OMFValue = getNumberElements(connection, omfSchema, omfNodeTable)
-print(f"Number of nodes in OMF for {area} is: {OMFValue}")
-
+# Number of nodes
+OSMValue = quality.getNumberElements(connection, osmSchema, osmNodeTable)
+OMFValue = quality.getNumberElements(connection, omfSchema, omfNodeTable)
 # Line added for the new dataset
-datasetValue = getNumberElements(connection, datasetSchema, datasetNodeTable)
-print(f"Number of nodes in Dataset for {area} is: {datasetValue}")
+datasetValue = quality.getNumberElements(connection, datasetSchema, datasetNodeTable)
 
-# Add data to the data list
 data.append(["**1. Number of nodes**", f"*{area}*", OSMValue, OMFValue, datasetValue])
 
 ...
 
 # Connected components
-# Table names for saving
 resultOSMTable = connectedComponentsTemplate.format(area.lower(), osmSchema)
 resultOMFTable = connectedComponentsTemplate.format(area.lower(), omfSchema)
 resultDatasetTable = connectedComponentsTemplate.format(area.lower(), datasetTable)
 
-OSMValue = getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
-print(f"Number of connected components in OSM for {area} is: {OSMValue}")
+OSMValue = quality.getConnectedComponents(connection, osmSchema, osmEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult, nodeTableName=osmNodeTable)
+OMFValue = quality.getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
+datasetValue = quality.getConnectedComponents(connection, datasetSchema, datasetEdgeTable, resultAsTable=resultDatasetTable, schemaResult=schemaResult, nodeTableName=datasetNodeTable)
 
-OMFValue = getConnectedComponents(connection, omfSchema, omfEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult, nodeTableName=omfNodeTable)
-print(f"Number of connected components in OMF for {area} is: {OMFValue}")
-
-datasetValue = getConnectedComponents(connection, datasetSchema, datasetEdgeTable, resultAsTable=resultDatasetTable, schemaResult=schemaResult, nodeTableName=datasetNodeTable)
-print(f"Number of connected components in Dataset for {area} is: {datasetValue}")
-
-# Add data to the data list
 data.append(["**4. Number of connected components**", f"*{area}*", OSMValue, OMFValue, datasetValue])
 ```
 
@@ -244,18 +231,15 @@ correspondingNodesTemplate = "corresponding_nodes_{}_{}_{}"
 
 ```python
 # Overlap indicator
-# Table names for saving
 resultOSMTable = overlapIndicatorTemplate.format(area.lower(), osmSchema)
 resultOMFTable = overlapIndicatorTemplate.format(area.lower(), omfSchema)
 
-OSMValue = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
-print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSMValue}")
+OSMValue = quality.getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
 
 end = time.time()
-print(f"Overlap indicator 1: {end - start} seconds")
+print(f"Overlap indicator : {end - start} seconds")
 
-OMFValue = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
-print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMFValue}")
+OMFValue = quality.getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
 
 end = time.time()
 print(f"Overlap indicator 2: {end - start} seconds")
@@ -273,13 +257,13 @@ Would become:
 result_OSM_OMF_Table = overlapIndicatorTemplate.format(area.lower(), osmSchema, omfSchema)
 result_OMF_OSM_Table = overlapIndicatorTemplate.format(area.lower(), omfSchema, osmSchema)
 
-OSM_OMF_Value = getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=result_OSM_OMF_Table, schemaResult=schemaResult)
+OSM_OMF_Value = quality.getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=result_OSM_OMF_Table, schemaResult=schemaResult)
 print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSM_OMF_Value}")
 
 end = time.time()
 print(f"Overlap indicator OSM x OMF: {end - start} seconds")
 
-OMF_OSM_Value = getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=result_OMF_OSM_Table, schemaResult=schemaResult)
+OMF_OSM_Value = quality.getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=result_OMF_OSM_Table, schemaResult=schemaResult)
 print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {OMF_OSM_Value}")
 
 end = time.time()
@@ -293,13 +277,13 @@ data.append([f"**7. Overlap indicator (OSM - OMF) (%)**", f"*{area}*", OSM_OMF_V
 result_OSM_Dataset_Table = overlapIndicatorTemplate.format(area.lower(), osmSchema, datasetSchema)
 result_Dataset_OSM_Table = overlapIndicatorTemplate.format(area.lower(), datasetSchema, osmSchema)
 
-OSM_Dataset_Value = getOverlapIndicator(connection, osmSchema, osmEdgeTable, datasetSchema, datasetEdgeTable, resultAsTable=result_OSM_Dataset_Table, schemaResult=schemaResult)
+OSM_Dataset_Value = quality.getOverlapIndicator(connection, osmSchema, osmEdgeTable, datasetSchema, datasetEdgeTable, resultAsTable=result_OSM_Dataset_Table, schemaResult=schemaResult)
 print(f"OSM Overlap indicator (% of OSM roads in OMF dataset) for {area} is: {OSM_Dataset_Value}")
 
 end = time.time()
 print(f"Overlap indicator OSM x Dataset: {end - start} seconds")
 
-Dataset_OSM_Value = getOverlapIndicator(connection, datasetSchema, datasetEdgeTable, osmSchema, osmEdgeTable, resultAsTable=result_Dataset_OSM_Table, schemaResult=schemaResult)
+Dataset_OSM_Value = quality.getOverlapIndicator(connection, datasetSchema, datasetEdgeTable, osmSchema, osmEdgeTable, resultAsTable=result_Dataset_OSM_Table, schemaResult=schemaResult)
 print(f"OMF Overlap indicator (% of OMF roads in OSM dataset) for {area} is: {Dataset_OSM_Value}")
 
 end = time.time()
@@ -313,13 +297,13 @@ data.append([f"**8. Overlap indicator (OSM - Dataset) (%)**", f"*{area}*", OSM_D
 result_Dataset_OMF_Table = overlapIndicatorTemplate.format(area.lower(), datasetSchema, omfSchema)
 result_OMF_Dataset_Table = overlapIndicatorTemplate.format(area.lower(), omfSchema, datasetSchema)
 
-Dataset_OMF_Value = getOverlapIndicator(connection, datasetSchema, datasetEdgeTable, omfSchema, omfEdgeTable, resultAsTable=result_Dataset_OMF_Table, schemaResult=schemaResult)
+Dataset_OMF_Value = quality.getOverlapIndicator(connection, datasetSchema, datasetEdgeTable, omfSchema, omfEdgeTable, resultAsTable=result_Dataset_OMF_Table, schemaResult=schemaResult)
 print(f"Dataset Overlap indicator (% of Dataset roads in OMF dataset) for {area} is: {Dataset_OMF_Value}")
 
 end = time.time()
 print(f"Overlap indicator OMF x Dataset: {end - start} seconds")
 
-OMF_Dataset_Value = getOverlapIndicator(connection, omfSchema, omfEdgeTable, datasetSchema, datasetEdgeTable, resultAsTable=result_OMF_Dataset_Table, schemaResult=schemaResult)
+OMF_Dataset_Value = quality.getOverlapIndicator(connection, omfSchema, omfEdgeTable, datasetSchema, datasetEdgeTable, resultAsTable=result_OMF_Dataset_Table, schemaResult=schemaResult)
 print(f"OMF Overlap indicator (% of OMF roads in Dataset dataset) for {area} is: {OMF_Dataset_Value}")
 
 end = time.time()
@@ -351,7 +335,7 @@ print()
 generalResults = df.to_markdown(index=False, tablefmt="github")
 ```
 
-With this, you would probably have the markdown well formatted, if you change the name of the title of the markdown (by changing the value of [`exportMarkdown`](../Python/Assessment/graph_analysis.py#L979)). The only feature not implemented is for the length per class, as it only takes two lists as parameters, and not a list of lists, so it is not adapted yet for more than two datasets.
+With this, you would probably have the markdown well formatted, if you change the name of the title of the markdown (by changing the value of [`exportMarkdown`](../Python/Assessment/quality_assessment.py#L211)). The only feature not implemented is for the length per class, as it only takes two lists as parameters, and not a list of lists, so it is not adapted yet for more than two datasets.
 
 ## Adding a new criterion
 
@@ -361,9 +345,9 @@ Adding a new criterion should be quite easy, as there are not many changes to do
 
 2. **Calculate the criterion**: Once layers and theme have been identified, it is necessary to calculate the criterion. One should choose wisely the method to calculate the criterion, as some methods might be easier to implement or have better efficiency than others. The common methods to calculate these criteria are SQL requests, GeoPandas, or DuckDB, but any method can be used as long as it is possible to save the results into the database.
 
-3. **Implement these changes in a Python script**: If you know how to calculate the criterion for a layer, then it is necessary to create or change an existing Python script. The next steps are indicated for the `graph_analysis.py` file, but if another script was created, the modification would be the same:
+3. **Implement these changes in a Python script**: If you know how to calculate the criterion for a layer, then it is necessary to create or change an existing Python script. The next steps are indicated for the `quality_assessment.py` and `quality_assessment.py` file, but if another script was created, the modification would be the same:
 
-- First, create a function to calculate the criterion. Usually, these functions have this signature (only when it is possible to save the result as a layer):
+- First, create a function to calculate the criterion in the [quality.py](../Python/Assessment/quality.py) script. Usually, these functions have this signature (when it is possible to save the result as a layer):
 
 ```python
 def getCorrespondingNodes(
@@ -376,37 +360,29 @@ def getCorrespondingNodes(
 
 - If the criterion is for a direct comparison between two datasets or more, there might be more parameters in the function, such as `schemaDatasetB` and `tableNameDatasetB`, for instance.
 
-- Then, in the main part of the script, add template layer names for each dataset if they are different from edge and node tables [here](../Python/Assessment/graph_analysis.py#L778). For instance: `osmBuildingTableTemplate = building_{}` or `omfPlaceTableTemplate = place_{}`.
+- Then, in the [quality_assessment](../Python/Assessment/quality_assessment.py) script, add template layer names for each dataset if they are different from edge and node tables [here](../Python/Assessment/quality_assessment.py#L34). For instance: `osmAddressTableTemplate = address_{}`.
 
-- The template layer name for the result should be added [here](../Python/Assessment/graph_analysis.py#L798), like `criterionTemplate = criterion_{}_{}`.
+- The template layer name for the result should be added [here](../Python/Assessment/quality_assessment.py#L58), like `criterionTemplate = criterion_{}_{}`.
 
-- Create the actual table by formatting the previous string with the area [here](../Python/Assessment/graph_analysis.py#812). For instance: `osmBuildingTable = osmBuildingTableTemplate.format(area.lower())`.
+- Create the actual table by formatting the previous string with the area [here](../Python/Assessment/quality_assessment.py#). For instance: `osmAddressTable = osmAddressTableTemplate.format(area.lower())`.
 
-- Then, add lines for calculating your criterion anywhere in the `for` statement. It would be better to add it [here](../Python/Assessment/graph_analysis.py#812), before the end of the `for` loop.
+- Then, add lines for calculating your criterion anywhere in the `for` statement. It would be better to add it [here](../Python/Assessment/quality_assessment.py#812), before the end of the `for` loop.
 
 ```python
 # New criterion
-# Table names for saving
 resultOSMTable = criterionTemplate.format(area.lower(), osmSchema)
 resultOMFTable = criterionTemplate.format(area.lower(), omfSchema)
 
-OSMValue = getCriterion(connection, osmSchema, osmBuildingTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
-print(f"Criterion in OSM for {area} is: {OSMValue}")
+OSMValue = quality.getCriterion(connection, osmSchema, osmAddressTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
+OMFValue = quality.getCriterion(connection, omfSchema, omfAddressTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
 
-end = time.time()
-print(f"Corresponding nodes for OSM: {end - start} seconds")
-
-OMFValue = getCriterion(connection, omfSchema, omfBuildingTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
-print(f"Criterion in OMF for {area} is: {OMFValue}")
-
-end = time.time()
-print(f"Corresponding nodes for OMF: {end - start} seconds")
-
-# Add data to the data list
 data.append([f"**10. Criterion**", f"*{area}*", OSMValue, OMFValue])
+
+end = time.time()
+print(f"Criterion: {end - start} seconds")
 ```
 
-- If another dataset is used, then refer to the section "[Adding a new dataset](#adding-a-new-dataset)" for more information on how to change the `graph_analysis.py` script.
+- If another dataset is used, then refer to the section "[Adding a new dataset](#adding-a-new-dataset)" for more information on how to change the `quality_assessment.py` script.
 
 ## Adding a new theme
 
@@ -416,9 +392,9 @@ You might want to add a new theme for OSM or OMF (or another dataset), such as r
 
 2. **Write a Python script for this process**: If you create a new theme, then you might want to create a new process for downloading data for this theme from a bounding box, by creating a final function like the existing `createGraphFromBbox` or `createPlaceFromBbox`. This way, you will be able to integrate the new theme into the other process.
 
-3. **Change the `main.py` file**: Once the new process is made, one can add it to the `main.py` file. One can follow these steps for adding the new theme to the `main.py` file:
+3. **Change the `data_integration.py` file**: Once the new process is made, one can add it to the `data_integration.py` file. One can follow these steps for adding the new theme to the `data_integration.py` file:
 
-- Add a new template name for the layer(s) to create, [here](../Python/Assessment/main.py#L49):
+- Add a new template name for the layer(s) to create, [here](../Python/Assessment/data_integration.py#L49):
 
 ```python
 # Template names for layers
@@ -431,7 +407,7 @@ nodeTable = "node_{}"
 themeTable = "theme_{}"
 ```
 
-- Add a new boolean to check if layer(s) have already been created, [here](../Python/Assessment/main.py#L55):
+- Add a new boolean to check if layer(s) have already been created, [here](../Python/Assessment/data_integration.py#L55):
 
 ```python
 # If true, will recreate all tables even if they already exists
@@ -443,7 +419,7 @@ skipGraphCheck = False
 skipThemeCheck = False
 ```
 
-- Finally, add an `if / else` statement for the new theme for each dataset, [here](../Python/Assessment/main.py#L205):
+- Finally, add an `if / else` statement for the new theme for each dataset, [here](../Python/Assessment/data_integration.py#L205):
 
 ```python
 ### Other Theme ###
@@ -470,7 +446,7 @@ else:
 This example is only for OSM, but it would be the same for OMF or another dataset.
 
 4. **Create quality criteria and calculate them**: For this part, there are not really any help that can be provided.
-The best would probably to do another Python script that would look like the `graph_analysis.py` script, with functions to calculate and save criterion layers in the database, and in the main part of the script, calculate these criteria.
+The best would probably to do another Python script that would look like the `quality_assessment.py` script, with functions to calculate and save criterion layers in the database, and in the main part of the script, calculate these criteria.
 
 This way, it should be possible to add a new theme and possible criteria on it.
 To add this theme to the dashboard, please refer to the [GeoDataCompare](#adding-a-new-theme-to-the-dashboard) section.
@@ -792,7 +768,7 @@ quality_criteria_choices = {
     "places_density":c.PlaceDensity.displayNameMap,
   }
   "My theme": {
-    "my_criterion":c.MyCriterion.displayName
+    "my_criterion":c.MyCriterion.displayNameMap,
   }
 }
 ```

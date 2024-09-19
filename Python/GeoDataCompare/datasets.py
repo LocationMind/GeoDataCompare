@@ -47,12 +47,12 @@ class OpenStreetMap(Dataset):
         self.placeTable = "osm.place_{}"
 
 
-class OvertureMapsFundation(Dataset):
-    """Overture Maps Fundation dataset
+class OvertureMapsFoundation(Dataset):
+    """Overture Maps Foundation dataset
     """
     
     def __init__(self) -> None:
-        self.name = "Overture Maps Fundation"
+        self.name = "Overture Maps Foundation"
         self.acronym = "OMF"
         self.schema = "omf"
         self.iconSrc = "https://docs.overturemaps.org/img/omf_logo_transparent.png"
