@@ -95,11 +95,15 @@ Then, run this command to create the database: `CREATE DATABASE pgrouting;`, and
 Now, one can run these queries to create the schemas and extensions needed:
 
 ```sql
-CREATE SCHEMA osm;
-CREATE SCHEMA omf;
-CREATE SCHEMA results;
-CREATE EXTENSION postgis;
-CREATE EXTENSION pgrouting;
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE EXTENSION IF NOT EXISTS pgrouting;
+
+CREATE SCHEMA IF NOT EXISTS osm;
+
+CREATE SCHEMA IF NOT EXISTS omf;
+
+CREATE SCHEMA IF NOT EXISTS results;
 ```
 
 *Note*: It is sufficient to create the database, as in the [main.py](../Python/Assessment/main.py#L24), these SQL commands are executed (inside the `utils.initialisePostgreSQL(connection)` function).
