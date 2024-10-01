@@ -23,6 +23,7 @@ class Theme(ABC):
     crs:int
     
     dfHeader:str
+    columnGroupBy:str
     
     @property
     @abstractmethod
@@ -108,6 +109,10 @@ class Graph(Theme):
                  datasetB:d.Dataset,) -> None:
         
         self.dfHeader = f"Number of edges and total length (in km) per class in {area}"
+        
+        self.columnGroupBy = "class"
+        self.columnDisplay = "Class"
+        
         super().__init__(area, crs, engine, datasetA = datasetA, datasetB = datasetB)
     
     @property
@@ -151,14 +156,14 @@ class Graph(Theme):
             gdf['length'] = gdfProj['geom'].length / 1000
             
             # Agregate per class and calculate the sum and count for each class
-            gdfSumup = gdf[['class', 'length']].groupby('class', dropna = False)['length'].agg(['sum', 'count'])
+            gdfSumup = gdf[[self.columnGroupBy, 'length']].groupby(self.columnGroupBy, dropna = False)['length'].agg(['sum', 'count'])
             
             # Reset index to export class
             gdfSumup.reset_index(inplace=True)
             
             # Rename columns
             gdfSumup = gdfSumup.rename(columns = {
-                "class":"Class",
+                self.columnGroupBy:self.columnDisplay,
                 "sum": "Total length (km)",
                 "count":"Number of edges",
             })
@@ -176,6 +181,10 @@ class Building(Theme):
                  datasetB:d.Dataset,) -> None:
         
         self.dfHeader = f"Number of buildings and total area (in km2) per class in {area}"
+        
+        self.columnGroupBy = "class"
+        self.columnDisplay = "Class"
+        
         super().__init__(area, crs, engine, datasetA = datasetA, datasetB = datasetB)
     
     @property
@@ -217,14 +226,14 @@ class Building(Theme):
             gdf['area'] = gdfProj['geom'].area / 1000000
             
             # Agregate per class and calculate the sum and count for each class
-            gdfSumup = gdf[['class', 'area']].groupby('class', dropna = False)['area'].agg(['sum', 'count'])
+            gdfSumup = gdf[[self.columnGroupBy, 'area']].groupby(self.columnGroupBy, dropna = False)['area'].agg(['sum', 'count'])
             
             # Reset index to export class
             gdfSumup.reset_index(inplace=True)
             
             # Rename columns
             gdfSumup = gdfSumup.rename(columns = {
-                "class":"Class",
+                self.columnGroupBy:self.columnDisplay,
                 "sum": "Total area (km2)",
                 "count":"Number of buildings",
             })
@@ -242,6 +251,10 @@ class Place(Theme):
                  datasetB:d.Dataset,) -> None:
         
         self.dfHeader = f"Number of places per category in {area}"
+        
+        self.columnGroupBy = "category"
+        self.columnDisplay = "Category"
+        
         super().__init__(area, crs, engine, datasetA = datasetA, datasetB = datasetB)
     
     @property
@@ -279,18 +292,8 @@ class Place(Theme):
             # Set geometry column and project to another crs
             gdf = gdf.set_geometry("geom")
             
-            # Check first value not null of categories
-            value = gdf[gdf['categories'].notnull()]["categories"].iloc[0]
-            
-            # If it is a dictionnary, it is dataset B dataset. We take the main category
-            if type(value) == dict:
-                gdf['category'] = gdf['categories'].apply(lambda categories: categories['main'] if (categories is not None) else None)
-            # Otherwise, we rename the column to 'category'
-            else:
-                gdf = gdf.rename(columns = {'categories':'category'})
-            
             # Agregate per categories and calculate the sum and count for each category
-            gdfSumup = gdf[['category']].groupby('category', dropna = False)['category'].agg(['size'])
+            gdfSumup = gdf[[self.columnGroupBy]].groupby(self.columnGroupBy, dropna = False)[self.columnGroupBy].agg(['size'])
             
             # Reset index to export class
             gdfSumup.reset_index(inplace=True)
@@ -300,7 +303,7 @@ class Place(Theme):
             
             # Rename columns
             gdfSumup = gdfSumup.rename(columns = {
-                "category":"Category",
+                self.columnGroupBy:self.columnDisplay,
                 "size":"Number of places",
             })
         

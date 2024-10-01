@@ -34,7 +34,7 @@ else:
     print("The bounding box table was not created")
 
 # Limit date of data
-ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-06-07T23:59:59Z"]'
+ox.settings.overpass_settings = '[out:json][timeout:{timeout}]{maxsize}[date:"2024-08-31T23:59:59Z"]'
 
 curdir = os.getcwd()
 
@@ -165,14 +165,24 @@ for elem in bboxJson["bboxs"]:
     ## OMF
     # Check if the process has already been done
     if not (utils.isProcessAlreadyDone(connection, edgeTable.format(area), schema_omf, skipGraphCheck) and
-            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_omf, skipGraphCheck)):
-    
-        omf.createGraphFromBbox(
-            bbox = bbox,
-            savePathFolder = folderSave,
-            area = area,
-            connection = connection,
-            schema = schema_omf
+            utils.isProcessAlreadyDone(connection, nodeTable.format(area), schema_omf, True)):
+
+        # # Old version
+        # omf.createGraphFromBbox(
+        #     bbox = bbox,
+        #     savePathFolder = folderSave,
+        #     area = area,
+        #     connection = connection,
+        #     schema = schema_omf
+        # )
+        
+        # New version
+        omf.createGraphFromBboxNewVersion(
+            bbox=bbox,
+            savePathFolder=folderSave,
+            area=area,
+            connection=connection,
+            schema=schema_omf
         )
         
         end = time.time()

@@ -270,6 +270,55 @@ def addGetEdgeCostFunction(connection):
     executeQueryWithTransaction(connection, sqlAddFunction)
 
 
+def addGetValueBetweenFunction(connection):
+    """Add a custom function named "get_value_between" to the public schema.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+    """
+    
+    # Create and add the function
+    sqlAddFunction = """
+    CREATE OR REPLACE FUNCTION public.get_value_between(
+        data json,
+        key character varying,
+        start_fraction double precision,
+        end_fraction double precision
+    )
+    RETURNS character varying AS
+    $BODY$
+    DECLARE
+        elem json;
+    BEGIN
+        FOR elem IN SELECT json_array_elements(data) AS data_array
+        LOOP
+		-- Check if it can be apply for this portion of the road
+		IF (start_fraction >= (elem->'between'->>0)::double precision
+			AND end_fraction <= (elem->'between'->>1)::double precision)
+			OR (elem->'between'->>0 IS NULL) THEN
+			RETURN elem ->> key;
+		END IF;
+		END LOOP;
+		
+		-- No value
+		RETURN NULL;
+    END
+    $BODY$
+    LANGUAGE plpgsql;
+
+    ALTER FUNCTION public.get_value_between(json, character varying, double precision, double precision)
+        OWNER TO postgres;
+
+    COMMENT ON FUNCTION public.get_value_between(json, character varying, double precision, double precision)
+        IS 'args: data, key, start_fraction, end_fraction -
+        Return the value stored in the JSON data in between the start and the end of the fraction.
+        The key corresponds to the key to check in the data.
+        If the start and the end are respectively equals to 0 and 1, return the value directly.
+        Same if the ''between'' value is null.';"""
+    
+    executeQueryWithTransaction(connection, sqlAddFunction)
+
+
 def initialisePostgreSQL(connection:psycopg2.extensions.connection):
     """Initialise postgreSQL by installing postgis and pgrouting extensions.
     If the extensions already exist, it skip the query.
@@ -294,6 +343,7 @@ def initialisePostgreSQL(connection:psycopg2.extensions.connection):
     # Add functions to postgresql
     addSplitLineFromPointsFunction(connection)
     addGetEdgeCostFunction(connection)
+    addGetValueBetweenFunction(connection)
 
 
 def createIndex(connection:psycopg2.extensions.connection,

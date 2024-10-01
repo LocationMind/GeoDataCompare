@@ -752,7 +752,7 @@ def createPlaceFromBbox(connection:psycopg2.extensions.connection,
     gdf["geom"] = gdf["geom"].centroid
     
     # Create a category column
-    gdf['categories'] = gdf.apply(getCategory, axis=1)
+    gdf['category'] = gdf.apply(getCategory, axis=1)
     
     # Export gdf to PostGIS
     gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")

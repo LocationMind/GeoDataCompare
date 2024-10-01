@@ -169,7 +169,7 @@ for area in listAreas:
     OSMValue = quality.getOverlapIndicator(connection, osmSchema, osmEdgeTable, omfSchema, omfEdgeTable, resultAsTable=resultOSMTable, schemaResult=schemaResult)
     
     end = time.time()
-    print(f"Overlap indicator : {end - start} seconds")
+    print(f"Overlap indicator 1: {end - start} seconds")
     
     OMFValue = quality.getOverlapIndicator(connection, omfSchema, omfEdgeTable, osmSchema, osmEdgeTable, resultAsTable=resultOMFTable, schemaResult=schemaResult)
     
@@ -229,7 +229,7 @@ generalResults = df.to_markdown(index=False, tablefmt="github")
 # Create final markdown
 exportMarkdown = f"""# Quality criterias result between OpenStreetMap and Overture Maps Foundation datasets
 
-The test were run on {dateTimeMarkdown}, using the 2024-06-13-beta.1 release of Overture Maps Foundation data and the OpenStreetMap data until 2024/06/07.
+The test were run on {dateTimeMarkdown}, using the 2024-09-18.0 release of Overture Maps Foundation data and the OpenStreetMap data until 2024-08-31.
 
 ## General results
 

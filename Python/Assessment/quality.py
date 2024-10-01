@@ -213,7 +213,11 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
     listClasses = []
     # Get result
     for (newClass, length, number) in cursor:
+        # None case
+        if newClass is None:
+            newClass = 'None'
         listClasses.append((newClass, float(length), number))
+    
     
     listClasses.sort(key= lambda a: a[0].lower())
     

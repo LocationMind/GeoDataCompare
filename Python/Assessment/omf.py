@@ -143,9 +143,8 @@ def createBuildingTable(pathBuildingData: str,
     duckdb.execute(f"""CREATE TABLE dbpostgresql.{schema}.{tableName} AS (SELECT
                id,
                version,
-               update_time,
                JSON(sources) AS sources,
-               names.primary AS primary_name,
+               names.primary AS name,
                class,
                level,
                height,
@@ -323,15 +322,14 @@ def createPlaceTable(pathPlaceData: str,
     duckdb.execute(f"""CREATE TABLE dbpostgresql.{schema}.{tableName} AS (SELECT
                id,
                version,
-               update_time,
                JSON(sources) AS sources,
                names.primary AS primary_name,
-               JSON(categories) as categories,
+               categories.primary AS category,
                confidence,
-               websites,
-               emails,
-               socials,
-               phones,
+               JSON(websites) AS websites,
+               JSON(emails) AS emails,
+               JSON(socials) AS socials,
+               JSON(phones) AS phones,
                JSON(addresses) as addresses,
                JSON(brand) as brand,
                ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
@@ -347,15 +345,15 @@ def createIndexIdDuckDB(tableName: str,
                         idTableName:str = "id",
                         schema:str = 'public'):
     """Create an index on the id column of the table.
-    The name of the index will be `<tableName>_id_idx`
+    The name of the index will be `<tableName>_<idTableName>_idx`
 
     Args:
         tableName (str): Name of the table.
         idTableName (str, optional): Name of the id column. Defaults to "id".
         schema (str, optional): Name of the schema. Defaults to 'public'.
     """
-    duckdb.execute(f"DROP INDEX IF EXISTS dbpostgresql.{schema}.{tableName}_id_idx CASCADE")
-    duckdb.execute(f"CREATE INDEX {tableName}_id_idx ON dbpostgresql.{schema}.{tableName} ({idTableName});")
+    duckdb.execute(f"DROP INDEX IF EXISTS dbpostgresql.{schema}.{tableName}_{idTableName}_idx CASCADE;")
+    duckdb.execute(f"CREATE INDEX {tableName}_{idTableName}_idx ON dbpostgresql.{schema}.{tableName} ({idTableName});")
 
 
 def createGeometryDuckDB(tableName: str,
@@ -374,7 +372,7 @@ def createGeometryDuckDB(tableName: str,
     # Create the geometry from the wkt one
     duckdb.execute(f"""CALL postgres_execute('dbpostgresql',
                 'UPDATE {schema}.{tableName} 
-                SET geom = public.ST_GeomFromText(geom_wkt, 4326)')""")
+                SET geom = public.ST_GeomFromText(geom_wkt, 4326);')""")
     
     # Remove the geom_wkt column
     duckdb.execute(f"""CALL postgres_execute('dbpostgresql',
@@ -393,6 +391,51 @@ def createGeometryDuckDB(tableName: str,
 
 
 ## Graph
+
+def deleteRoads(connection:psycopg2.extensions.connection,
+                roadTable:str,
+                area:str,
+                schema:str = 'public',
+                boundingBoxTable:str = 'bounding_box') -> int:
+    """Delete from the road table all entity that do not intersect
+    the bounding box.
+    Return the number of entity deleted.
+
+    Args:
+        connection (psycopg2.extensions.connection): Database connection token.
+        roadTable (str): Name of the road table.
+        area (str): Name of the area.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+        boundingBoxTable (str, optional): Name of the bounding box table.
+        Defaults to 'bounding_box'.
+
+    Returns:
+        int: Number of entity deleted
+    """
+    # Create query
+    sqlDelete = f"""
+    DELETE FROM {schema}.{roadTable}
+    WHERE id not in (
+        SELECT DISTINCT ON (s.id)
+        s.id
+        FROM {schema}.{roadTable} AS s
+        JOIN public.{boundingBoxTable} AS b ON (public.ST_Intersects(b.geom, s.geom))
+        WHERE b.name = '{area.capitalize()}'
+    );
+    """
+    
+    # Execute the query and commit it
+    cursor = utils.executeSelectQuery(connection, sqlDelete)
+    connection.commit()
+    
+    # Get number of deleted connector
+    nbDeleted = cursor.rowcount
+    
+    # Close cursor
+    cursor.close()
+    
+    return nbDeleted
+
 
 def getExtentTable(connection:psycopg2.extensions.connection,
                    tableName:str,
@@ -434,20 +477,20 @@ def getExtentTable(connection:psycopg2.extensions.connection,
     return bbox
 
 
-def deleteConnectors(connection:psycopg2.extensions.connection,
-                     roadTable:str,
-                     connectorTable:str,
-                     schemaConnector:str = 'public',
-                     schemaRoad:str = 'public') -> int:
-    """Delete from the connector table all entity that does not intersects
+def deleteNodes(connection:psycopg2.extensions.connection,
+                roadTable:str,
+                nodeTable:str,
+                schemaConnector:str = 'public',
+                schemaRoad:str = 'public') -> int:
+    """Delete from the node table all entity that does not intersects
     the road table.
     Return the number of entity deleted.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         roadTable (str): Name of the road table.
-        connectorTable (str): Name of the connector table.
-        schemaConnector (str, optional): Name of the schema for the connector table.
+        nodeTable (str): Name of the node table.
+        schemaNode (str, optional): Name of the schema for the node table.
         Defaults to 'public'.
         schemaRoad (str, optional): Name of the schema for the road table.
         Defaults to 'public'.
@@ -457,11 +500,11 @@ def deleteConnectors(connection:psycopg2.extensions.connection,
     """
     # Create query
     sqlDelete = f"""
-    DELETE FROM {schemaConnector}.{connectorTable}
+    DELETE FROM {schemaConnector}.{nodeTable}
     WHERE id not in (
         SELECT DISTINCT ON (c.id)
         c.id
-        FROM {schemaConnector}.{connectorTable} AS c
+        FROM {schemaConnector}.{nodeTable} AS c
         JOIN {schemaRoad}.{roadTable} AS r ON (public.ST_Intersects(c.geom, r.geom))
     );
     """
@@ -492,7 +535,6 @@ def createTablesFromBbox(bbox: str,
     Args:
         bbox (str): Bbox in the format 'east, south, west, north'.
         savePathFolder (str): Path of the destination folder.
-        aeraName (str): Name of the area.
         roadTable (str): Name of the road table to create.
         connectorTable (str): Name of the road table to create.
         connection (psycopg2.extensions.connection): Database connection token.
@@ -518,11 +560,11 @@ def createTablesFromBbox(bbox: str,
     createConnectorTable(pathConnectorFile, connectorTable, schema = schema)
     
     # Delete connectors that do not intersects with the 
-    nb = deleteConnectors(connection,
-                          roadTable = roadTable,
-                          connectorTable = connectorTable,
-                          schemaConnector = schema,
-                          schemaRoad = schema)
+    nb = deleteNodes(connection,
+                     roadTable = roadTable,
+                     nodeTable = connectorTable,
+                     schemaConnector = schema,
+                     schemaRoad = schema)
     
     print(f"Number of entity deleted: {nb} ")
     
@@ -1293,6 +1335,567 @@ def createGraphFromBbox(bbox:str,
     
     end = time.time()
     log(f"Graph download for {area.capitalize()}: {end - start} seconds")
+
+
+def createGraphFromBboxNewVersion(bbox:str,
+                                  savePathFolder:str,
+                                  area:str,
+                                  connection:psycopg2.extensions.connection,
+                                  schema:str = 'public',
+                                  dropTablesIfExist:bool = True,
+                                  deleteDataWhenFinish:bool = True,
+                                  deleteOtherTables:bool = True,
+                                  printTime:bool = True):
+    """Create graph from a bounding box.
+    The name of the tables are created with a template name,
+    depending on the name of the area.
+
+    DuckDb must be initialised with PostgreSQL first.
+    
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        bbox (str): Bbox to extract data in it. Must be in the format 'E, S, W, N'.
+        savePathFolder (str): Path of the destination folder.
+        area (str): Name of the area.
+        connection (psycopg2.extensions.connection): Database connection token.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+        newVersion (bool, optional): If True, take the new schema to integrate data.
+        Otherwise, take the old schema.
+        Defaults to True.
+        dropTablesIfExist (bool, optional): Drop all tables if True. Defaults to True.
+        deleteDataWhenFinish (bool, optional): Delete downloaded at the end of the
+        process if True. Defaults to True.
+        deleteOtherTables (bool, optional): Delete other tables if True. Defaults to True.
+        printTime (bool, optional): If true, print the time taken to the user. Defaults to True.
+    """
+    start = time.time()
+    
+    # Check if we print to the user or not
+    if printTime:
+        log = print
+    else:
+        # Empty function
+        log = lambda x : x
+    
+    # If the area is not null, we create the name of the table
+    if area != "":
+        roadTable = f"road_{area}"
+        nodeTable = f'node_{area}'
+        edgeWithCostTable = f'edge_with_cost_{area}'
+    else:
+        raise ValueError("Area must not be an empty string")
+    
+    # Download and create extract tables
+    createTablesFromBboxNewVersion(bbox = bbox,
+                                   savePathFolder = savePathFolder,
+                                   area = area,
+                                   roadTable = roadTable,
+                                   nodeTable = nodeTable,
+                                   connection = connection,
+                                   schema = schema,
+                                   deleteDataWhenFinish = deleteDataWhenFinish)
+    
+    end = time.time()
+    log(f"createTablesFromBbox: {end - start} seconds")
+
+    # Create the edge with cost table
+    createEdgeWithCostTableNewVersion(roadTable = roadTable,
+                                      nodeTable = nodeTable,
+                                      connection = connection,
+                                      schema = schema,
+                                      edgeWithCostTable = edgeWithCostTable,
+                                      dropTableIfExists = dropTablesIfExist)
+    
+    end = time.time()
+    log(f"createEdgeWithCostTableNewVersion: {end - start} seconds")
+    
+    # Update topology and graph to keep data only in the bbox
+    keepDataOnlyInBboxNewVersion(area = area,
+                                 connection = connection,
+                                 schema = schema,
+                                 edgeWithCostTable = edgeWithCostTable,
+                                 nodeTable = nodeTable)
+    
+    end = time.time()
+    log(f"keepDataOnlyInBbox: {end - start} seconds")
+    
+    # Delete all useless tables if the user wants to
+    if deleteOtherTables:
+        utils.dropTableCascade(connection, roadTable, schema)
+        
+        end = time.time()
+        log(f"deleteOtherTables: {end - start} seconds")
+    
+    end = time.time()
+    log(f"Graph download for {area.capitalize()}: {end - start} seconds")
+
+
+def createRoadTableNewVersion(pathSegmentData: str,
+                              tableName: str = 'road',
+                              dropTableIfExists:bool = True,
+                              schema:str = 'public'):
+    """Create the road table in postgis.
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        pathSegmentData (str): Path of the road data.
+        tableName (str, optional): Name of the table to create. Defaults to 'road'.
+        dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Drop table if the user wants to
+    if dropTableIfExists:
+        duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.{schema}.{tableName} CASCADE;")
+    
+    duckdb.execute(f"""
+    CREATE TABLE dbpostgresql.{schema}.{tableName} AS (
+        SELECT 
+        id,
+        ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt,
+        version,
+        class AS class_omf,
+        subclass,
+        names.primary AS name,
+        JSON(subclass_rules) AS subclass_rules,
+        JSON(connectors) AS connectors,
+        JSON(routes) AS routes,
+        JSON(access_restrictions) AS access_restrictions,
+        JSON(level_rules) AS level_rules,
+        JSON(destinations) AS destinations,
+        JSON(prohibited_transitions) AS prohibited_transitions,
+        JSON(road_surface) AS road_surface,
+        JSON(road_flags) AS road_flags,
+        JSON(speed_limits) AS speed_limits,
+        JSON(width_rules) AS width_rules,
+        JSON(sources) AS sources,
+        FROM '{pathSegmentData}'
+        WHERE subtype = 'road');
+    """)
+    
+    # Create index id and geometry
+    createIndexIdDuckDB(tableName, schema = schema)
+    createGeometryDuckDB(tableName, schema = schema)
+
+
+def createNodeTableNewVersion(pathConnectorData: str,
+                              tableName: str = 'node',
+                              dropTableIfExists:bool = True,
+                              schema:str = 'public'):
+    """Create the node table in postgis.
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        pathConnectorData (str): Path of the connector data.
+        tableName (str, optional): Name of the table to create. Defaults to 'node'.
+        dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+    """
+    # Drop table if the user wants to
+    if dropTableIfExists:
+        duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.{schema}.{tableName} CASCADE;")
+
+    duckdb.execute(f"""
+    CREATE TABLE dbpostgresql.{schema}.{tableName} AS (
+        SELECT
+        ROW_NUMBER() OVER (ORDER BY id) AS id,
+        id AS original_id,
+        version,
+        JSON(sources) AS sources,
+        ST_AsText(ST_GeomFromWKB(geometry)) AS geom_wkt
+        FROM '{pathConnectorData}');
+    """)
+    
+    # Create index id and geometry
+    createIndexIdDuckDB(tableName, schema = schema)
+    createGeometryDuckDB(tableName, schema = schema)
+    
+    # Create also an index on the original_id column
+    createIndexIdDuckDB(tableName, schema = schema, idTableName = 'original_id')
+
+
+def createTablesFromBboxNewVersion(bbox: str,
+                                   savePathFolder: str,
+                                   area:str,
+                                   roadTable:str,
+                                   nodeTable:str,
+                                   connection:psycopg2.extensions.connection,
+                                   schema:str = "public",
+                                   deleteDataWhenFinish:bool = True):
+    """Create road and nodes tables from a bbox.
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        bbox (str): Bbox in the format 'east, south, west, north'.
+        savePathFolder (str): Path of the destination folder.
+        area (str): Name of the area.
+        roadTable (str): Name of the road table to create.
+        nodeTable (str): Name of the node table to create.
+        connection (psycopg2.extensions.connection): Database connection token.
+        schema (str, optional): Name of the schema for saving the tables.
+        Defaults to "public".
+        deleteDataWhenFinish (bool, optional): Delete downloaded at the end of the
+        process if True. Defaults to True.
+    """
+    # Download segment data
+    pathSegmentFile = utils.downloadOMFTypeBbox(bbox, savePathFolder, "segment")
+    
+    # Create the road table and get its extent
+    createRoadTableNewVersion(pathSegmentFile, roadTable, schema = schema)
+    
+    # Delete roads outside bounding box
+    nb = deleteRoads(connection,
+        roadTable = roadTable,
+        area = area,
+        schema = schema)
+    
+    print(f"Number of segment deleted: {nb} ")
+    
+    newBbox = getExtentTable(connection, roadTable, schema = schema)
+    
+    # Download connector data from this bbox 
+    pathConnectorFile = utils.downloadOMFTypeBbox(newBbox, savePathFolder, "connector")
+    
+    # Create the connector table
+    createNodeTableNewVersion(pathConnectorFile, nodeTable, schema = schema)
+    
+    # Delete connectors that do not intersects with the roads
+    nb = deleteNodes(connection,
+                     roadTable = roadTable,
+                     nodeTable = nodeTable,
+                     schemaConnector = schema,
+                     schemaRoad = schema)
+    
+    print(f"Number of connector deleted: {nb} ")
+    
+    # Delete the downloaded data if user wants
+    if deleteDataWhenFinish:
+        # Segment file
+        if os.path.isfile(pathSegmentFile):
+            os.remove(pathSegmentFile)
+            print(f"{pathSegmentFile} has been deleted")
+        else:
+            print(f"{pathSegmentFile} is not a file")
+        
+        # Connector file
+        if os.path.isfile(pathConnectorFile):
+            os.remove(pathConnectorFile)
+            print(f"{pathConnectorFile} has been deleted")
+        else:
+            print(f"{pathConnectorFile} is not a file")
+
+
+def createEdgeWithCostTableNewVersion(roadTable:str,
+                                      nodeTable:str,
+                                      connection:psycopg2.extensions.connection,
+                                      schema:str = 'public',
+                                      edgeWithCostTable:str = 'edge_with_cost',
+                                      dropTableIfExists:bool = True):
+    """Create a table for edges with associated cost and reversed cost.
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        roadTable (str): Name of the road table.
+        nodeTable (str): Name of the node table.
+        connection (psycopg2.extensions.connection): Database connection token.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+        edgeWithCostTable (str, optional): Name of the edge with cost table to create. Defaults to 'edge_with_cost'.
+        dropTableIfExists (bool, optional): Drop table if True. Defaults to True.
+    """
+    # Drop table if the user wants to
+    if dropTableIfExists:
+        duckdb.execute(f"DROP TABLE IF EXISTS dbpostgresql.{schema}.{edgeWithCostTable} CASCADE;")
+    
+    # Query to create the table
+    sqlCreateTable = f"""
+    CREATE TABLE IF NOT EXISTS {schema}.{edgeWithCostTable} AS
+    SELECT
+        ROW_NUMBER() OVER (ORDER BY r.id) AS id,
+        r.id AS original_id,
+        '' AS class,
+        r.class_omf,
+        r.subclass,
+        public.get_value_between(r.subclass_rules, 'value'::character varying, sub.start_value, sub.end_value) AS subclass_rules,
+        n1.id AS source,
+        n2.id AS target,
+        -- Cost and reverse_cost will be recalculated later
+        public.get_edge_cost(1, r.access_restrictions, 'forward', sub.start_value, sub.end_value) AS cost,
+        public.get_edge_cost(1, r.access_restrictions, 'backward', sub.start_value, sub.end_value) AS reverse_cost,
+        r.name,
+        public.ST_SplitLineFromPoints(r.geom, n1.geom, n2.geom) AS geom,
+        r.routes,
+        public.get_value_between(r.level_rules, 'value', sub.start_value, sub.end_value)::int AS level_rules,
+        r.destinations,
+        r.prohibited_transitions AS prohibited_transitions,
+        public.get_value_between(r.road_surface, 'value', sub.start_value, sub.end_value) AS road_surface,
+        JSON(public.get_value_between(r.road_flags, 'values', sub.start_value, sub.end_value)) AS road_flags,
+        JSON(public.get_value_between(r.speed_limits, 'min_speed', sub.start_value, sub.end_value)) AS min_speed,
+        JSON(public.get_value_between(r.speed_limits, 'max_speed', sub.start_value, sub.end_value)) AS max_speed,
+        public.get_value_between(r.width_rules, 'value', sub.start_value, sub.end_value) AS width_rules,
+        r.version,
+        r.sources
+    FROM {schema}.{roadTable} AS r
+    CROSS JOIN LATERAL (
+        SELECT ((c.obj ->> 'at')::double precision) AS end_value,
+        lag((c.obj ->> 'at')::double precision) OVER (ORDER BY rn) start_value,
+        (c.obj ->> 'connector_id') AS end_connector_id,
+        lag((c.obj ->> 'connector_id')) OVER (ORDER BY rn) start_connector_id, c.rn
+        FROM json_array_elements(r.connectors) WITH ordinality as c(obj, rn)
+    ) sub
+    LEFT JOIN {schema}.{nodeTable} AS n1 ON sub.start_connector_id = n1.original_id
+    LEFT JOIN {schema}.{nodeTable} AS n2 ON sub.end_connector_id = n2.original_id
+    WHERE sub.rn > 1;
+    """
+    # Execute query
+    utils.executeQueryWithTransaction(connection, sqlCreateTable)
+    
+    # Create indexes
+    utils.createIndex(connection, edgeWithCostTable, columnName="id", schema=schema)
+    utils.createGeomIndex(connection, edgeWithCostTable, schema=schema)
+    
+    # Update cost
+    sqlUpdateCost = f"""UPDATE {schema}.{edgeWithCostTable}
+    SET cost = public.ST_Length(geom) WHERE cost != -1;
+    """
+    # Execute query
+    utils.executeQueryWithTransaction(connection, sqlUpdateCost)
+    
+    # Update reverse cost
+    sqlUpdateReverseCost = f"""UPDATE {schema}.{edgeWithCostTable}
+    SET reverse_cost = public.ST_Length(geom) WHERE reverse_cost != -1;
+    """
+    # Execute query
+    utils.executeQueryWithTransaction(connection, sqlUpdateReverseCost)
+    
+    
+    # Update classes
+    sqlUpdateClasses = f"""UPDATE {schema}.{edgeWithCostTable}
+    SET class = CASE
+        WHEN class_omf = 'bridleway' THEN 'bridleway'
+        WHEN class_omf = 'cycleway' THEN 'cycleway'
+        WHEN class_omf = 'footway' AND (subclass = 'crosswalk' OR subclass_rules = 'crosswalk') THEN 'crosswalk'
+        WHEN class_omf = 'footway' AND (subclass = 'sidewalk' OR subclass_rules = 'sidewalk') THEN 'sidewalk'
+        WHEN class_omf = 'footway' THEN 'footway'
+        WHEN class_omf = 'living_street' THEN 'living_street'
+        WHEN class_omf = 'motorway' THEN 'motorway'
+        WHEN class_omf = 'path' THEN 'path'
+        WHEN class_omf = 'pedestrian' THEN 'pedestrian'
+        WHEN class_omf = 'primary' THEN 'primary'
+        WHEN class_omf = 'residential' THEN 'residential'
+        WHEN class_omf = 'secondary' THEN 'secondary'
+        WHEN class_omf = 'service' AND (subclass = 'alley' OR subclass_rules = 'alley') THEN 'alley'
+        WHEN class_omf = 'service' AND (subclass = 'driveway' OR subclass_rules = 'driveway') THEN 'driveway'
+        WHEN class_omf = 'service' AND (subclass = 'parking_aisle' OR subclass_rules = 'parking_aisle') THEN 'parking_aisle'
+        WHEN class_omf = 'service' THEN 'service'
+        WHEN class_omf = 'steps' THEN 'steps'
+        WHEN class_omf = 'tertiary' THEN 'tertiary'
+        WHEN class_omf = 'track' THEN 'track'
+        WHEN class_omf = 'trunk' THEN 'trunk'
+        WHEN class_omf = 'unclassified' THEN 'unclassified'
+        WHEN class_omf = 'unknown' THEN 'unknown'
+        WHEN class_omf is null AND subclass is not null THEN subclass
+        WHEN class_omf is null AND subclass_rules is not null THEN subclass_rules
+		END;"""
+    # Execute query
+    utils.executeQueryWithTransaction(connection, sqlUpdateClasses)
+
+
+def keepDataOnlyInBboxNewVersion(area:str,
+                                 connection:psycopg2.extensions.connection,
+                                 schema:str = 'public',
+                                 edgeWithCostTable:str = 'edge_with_cost',
+                                 nodeTable:str = 'node'):
+    """Update nodes and edges with cost table to keep only those inside the bbox.
+    It creates new nodes and new edges if needed, and change the graph topology too.
+    This function is adapted to data released after
+    the 2024-08-20.0 release included.
+
+    Args:
+        area (str): Name of the area.
+        connection (psycopg2.extensions.connection): Database connection token.
+        schema (str, optional): Name of the schema. Defaults to 'public'.
+        edgeWithCostTable (str, optional): Name of the edge table. Defaults to 'edge'.
+        nodeTable (str, optional): Name of the node table. Defaults to 'node'.
+    """
+    print("ARGUMENT")
+    print(area, schema, edgeWithCostTable, nodeTable)
+    # Delete features outside the bounding box
+    deleteOutsideBbox = f"""
+    -- Delete not contains
+    DELETE FROM {schema}.{edgeWithCostTable}
+    WHERE id NOT IN (
+        SELECT e.id FROM {schema}.{edgeWithCostTable} AS e
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(b.geom, e.geom)
+        WHERE b.name = '{area.capitalize()}');
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, deleteOutsideBbox)
+    
+    print("deleteOutsideBbox is done")
+    
+    # Update geometry of features intersecting the border of the bounding box
+    updateGeomBbox = f"""
+    -- Update geom by clipping with the bounding box
+    WITH edge_border AS (
+        SELECT e.id AS edge_id,
+        public.ST_Intersection(b.geom, e.geom) AS new_geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    )
+    UPDATE {schema}.{edgeWithCostTable} AS e
+    SET geom = eb.new_geom
+    FROM edge_border AS eb
+    WHERE e.id = eb.edge_id;
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, updateGeomBbox)
+    
+    print("updateGeomBbox is done")
+    
+    # Delete nodes that are not intersecting edges anymore
+    deleteNodesNotIntersect = f"""
+    -- Delete nodes not intersecting edges anymore
+    DELETE FROM {schema}.{nodeTable} AS n
+    WHERE n.id not in (
+        SELECT DISTINCT ON (n.id) n.id
+        FROM {schema}.{nodeTable} AS n
+        JOIN {schema}.{edgeWithCostTable} AS e ON ST_Intersects(e.geom, n.geom)
+    );
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, deleteNodesNotIntersect)
+    
+    print("deleteNodesNotIntersect is done")
+    
+    # For multigeom edges, dump them in single geometry and save them in the database
+    multiGeomQuery = f"""
+    -- multigeom case
+    WITH multigeom AS (
+        SELECT * FROM {schema}.{edgeWithCostTable} AS e
+        WHERE public.ST_NumGeometries(e.geom) != 1
+    ),
+    dumpgeom AS (
+        SELECT (public.ST_Dump(m.geom)).geom AS line, * FROM multigeom AS m
+    ),
+    insert_edges AS (
+        INSERT INTO {schema}.{edgeWithCostTable} (
+            id, original_id, class, subclass, subclass_rules, source, target, cost, reverse_cost, name,
+            routes, level_rules, destinations, prohibited_transitions, road_surface,
+            road_flags, min_speed, max_speed, width_rules, version, sources, geom
+        )
+        -- Increment id to ensure the unicity of this column
+        SELECT ((SELECT
+            MAX(id) FROM {schema}.{edgeWithCostTable}) + row_number() OVER (order by d.id)),
+            original_id, class, subclass, subclass_rules, source, target, cost, reverse_cost, name,
+            routes, level_rules, destinations, prohibited_transitions, road_surface,
+			road_flags, min_speed, max_speed, width_rules, version, sources, d.line
+        FROM dumpgeom AS d
+    )
+    DELETE FROM {schema}.{edgeWithCostTable}
+    WHERE id IN (SELECT id FROM multigeom);
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, multiGeomQuery)
+    
+    print("multiGeomQuery is done")
+    
+    # Create new nodes at the border of the bounding box
+    nodesClipQuery = f"""
+    -- nodes
+    WITH edge_border AS (
+        SELECT e.id, e.source, e.target, e.geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    clip_point AS (
+        SELECT (public.ST_Dump(public.ST_Intersection(public.ST_Boundary(b.geom), e.geom))).geom AS point
+        FROM edge_border AS e
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    insert_nodes AS (
+        INSERT INTO {schema}.{nodeTable} AS n (id, geom)
+        -- Increment id to ensure the unicity of this column
+        SELECT ((SELECT MAX(id) FROM {schema}.{nodeTable}) + row_number() OVER (order by cp.point)),
+        cp.point
+        FROM clip_point AS cp
+    )
+    DELETE FROM {schema}.{nodeTable} AS n
+    WHERE id NOT IN (
+        SELECT n.id FROM {schema}.{nodeTable} AS n
+        JOIN {schema}.{edgeWithCostTable} AS e
+        ON public.ST_Intersects(n.geom, e.geom)
+    );
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, nodesClipQuery)
+    
+    print("nodesClipQuery is done")
+    
+    # Correct the topology by modifying the source, target and cost
+    correctTopology = f"""
+    -- Correct topology
+    WITH edge_border AS (
+        SELECT e.id, e.source, e.target, e.geom
+        FROM {schema}.{edgeWithCostTable} AS e 
+        JOIN public.bounding_box AS b
+        ON public.ST_Intersects(public.ST_Boundary(b.geom), e.geom)
+        WHERE b.name = '{area.capitalize()}'
+    ),
+    edge_nodes AS (
+        SELECT e.id, e.source, e.target, array_agg(n.id) AS nodes
+        FROM edge_border AS e
+        JOIN {schema}.{nodeTable} AS n
+        ON public.ST_Intersects(n.geom, e.geom)
+        GROUP BY e.id, e.source, e.target
+        ORDER BY e.id
+    ),
+    new_source_target AS (
+        SELECT e.id,
+        CASE 
+            WHEN e.source IN (e.nodes[1], e.nodes[2]) THEN e.source
+            WHEN e.target = e.nodes[1] THEN e.nodes[2]
+            WHEN e.target = e.nodes[2] THEN e.nodes[1]
+            ELSE e.nodes[1]
+        END AS new_source,
+        CASE 
+            WHEN e.target IN (e.nodes[1], e.nodes[2]) THEN e.target
+            WHEN e.source = e.nodes[1] THEN e.nodes[2]
+            WHEN e.source = e.nodes[2] THEN e.nodes[1]
+            ELSE e.nodes[2]
+        END AS new_target
+        FROM edge_nodes AS e
+    )
+    UPDATE {schema}.{edgeWithCostTable} AS e
+    SET
+        source = nst.new_source,
+        target = nst.new_target,
+        cost = CASE WHEN cost = -1 THEN -1 ELSE public.ST_Length(e.geom::geography) END,
+        reverse_cost = CASE WHEN reverse_cost = -1 THEN -1 ELSE public.ST_Length(e.geom::geography) END
+    FROM new_source_target AS nst
+    WHERE e.id = nst.id;
+    """
+    
+    # Execute query
+    utils.executeQueryWithTransaction(connection, correctTopology)
+    
+    print("correctTopology is done")
 
 
 ## Buildings
