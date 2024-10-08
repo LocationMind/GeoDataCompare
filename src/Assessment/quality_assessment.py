@@ -3,10 +3,10 @@ import pandas as pd
 import sys
 import time
 import datetime
-from src.Utils import utils
-from src.Assessment import quality
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src.Utils import utils
+from src.Assessment import quality
 
 
 # Value for the time taken

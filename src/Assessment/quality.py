@@ -2,9 +2,9 @@ import os
 import pandas as pd
 import psycopg2
 import sys
-from src.Utils import utils
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src.Utils import utils
 
 
 def getListAreas(

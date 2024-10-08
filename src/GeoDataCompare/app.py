@@ -13,17 +13,16 @@ from lonboard.colormap import apply_categorical_cmap
 from matplotlib.colors import is_color_like, to_hex, to_rgb
 import utm
 import shapely
-
-# Import custom classes and functions
 import os
 import sys
+
+# Import custom classes and functions
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 import src.GeoDataCompare.theme as t
 import src.GeoDataCompare.criterion as c
 import src.GeoDataCompare.datasets as d
 from src.GeoDataCompare.general_values import DefaultGeneralValues, GeneralValues
 import src.Utils.utils as utils
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
 ### Static functions used in the rest of the script ###

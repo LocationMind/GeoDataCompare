@@ -1,12 +1,11 @@
 import pandas as pd
 import sqlalchemy
 from abc import ABC
-
 import os
 import sys
-import datasets as d
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
+import datasets as d
 
 
 class AbstractGeneralValues(ABC):

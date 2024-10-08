@@ -1,5 +1,3 @@
-import os
-import sys
 import geopandas as gpd
 import theme as t
 import datasets as d
@@ -8,8 +6,6 @@ from abc import ABC, abstractmethod
 import sqlalchemy
 from htmltools import Tag
 import faicons as fa
-
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__))))
 
 
 class Criterion(ABC):

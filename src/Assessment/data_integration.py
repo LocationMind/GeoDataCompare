@@ -1,14 +1,14 @@
 import sys
 import os
-from src.Utils import utils
-from src.Assessment import osm
-from src.Assessment import omf
 import osmnx as ox
 import time
 import json
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
+from src.Utils import utils
+from src.Assessment import osm
+from src.Assessment import omf
 
 # Number of seconds in total
 total = 0

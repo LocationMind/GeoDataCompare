@@ -1,9 +1,9 @@
 import sys
 import os
 import duckdb
-from src.Utils import utils
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
+from src.Utils import utils
 
 
 # Connections to the database
