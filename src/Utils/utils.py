@@ -5,7 +5,8 @@ import os
 import utm
 import dotenv
 
-def bboxCSVToBboxWKT(bboxCSV:str) -> str:
+
+def bboxCSVToBboxWKT(bboxCSV: str) -> str:
     """Transform a bounding box in CSV format to its equivalent in OGC WKT format.
 
     Args:
@@ -14,12 +15,12 @@ def bboxCSVToBboxWKT(bboxCSV:str) -> str:
     Returns:
         str: Bbox in OGC WKT format : 'POLYGON ((W S, E S, E N, W N, W S))'.
     """
-    (W, S, E, N) = bboxCSV.split(',')
+    (W, S, E, N) = bboxCSV.split(",")
     bboxWKT = f"POLYGON (({W} {N}, {E} {N}, {E} {S}, {W} {S}, {W} {N}))"
     return bboxWKT
 
 
-def bboxCSVToTuple(bboxCSV:str) -> tuple[float, float, float, float]:
+def bboxCSVToTuple(bboxCSV: str) -> tuple[float, float, float, float]:
     """Tranform a bbox in a CSV format to a tuple.
     The bbox is in format west, south, east, north.
     The tuple will be as (north, south, east, west).
@@ -30,14 +31,14 @@ def bboxCSVToTuple(bboxCSV:str) -> tuple[float, float, float, float]:
     Returns:
         (tuple(float, float, float, float)): bbox in the format (N, S, E, W)
     """
-    (west, south, east, north) = bboxCSV.split(',')
+    (west, south, east, north) = bboxCSV.split(",")
     return (float(north), float(south), float(east), float(west))
 
 
-def initialiseDuckDB(path:str = None):
+def initialiseDuckDB(path: str = None):
     """Initialise duckdb and connect it to a postgresql database.
     It also create postgis and pgrouting extension if not installed yet.
-    
+
     To use the database, use "dbpostgresql" as the name of the database
     you will be connected to.
 
@@ -48,17 +49,17 @@ def initialiseDuckDB(path:str = None):
     """
     # Check if the path is provided
     if path is None:
-        path = os.path.join(os.getcwd(), '.env')
-    
+        path = os.path.join(os.getcwd(), ".env")
+
     # Read environnment variables
     dotenv.load_dotenv(path)
-    
+
     database = os.getenv("POSTGRES_DATABASE")
     host = os.getenv("POSTGRES_HOST")
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
     port = os.getenv("POSTGRES_PORT")
-    
+
     # Create and load the spatial extension
     duckdb.install_extension("spatial")
     duckdb.load_extension("spatial")
@@ -66,12 +67,14 @@ def initialiseDuckDB(path:str = None):
     # Create and load the postgres extension
     duckdb.install_extension("postgres")
     duckdb.load_extension("postgres")
-    
+
     # Attach to the PostgreSQL database
-    duckdb.execute(f"ATTACH 'postgresql://{user}:{password}@{host}:{port}/{database}' AS dbpostgresql (TYPE POSTGRES);")
+    duckdb.execute(
+        f"ATTACH 'postgresql://{user}:{password}@{host}:{port}/{database}' AS dbpostgresql (TYPE POSTGRES);"
+    )
 
 
-def getConnection(path:str = None) -> psycopg2.extensions.connection:
+def getConnection(path: str = None) -> psycopg2.extensions.connection:
     """Get connection token to the database from .env file.
     If no path is provided, consider that the file is at the project root.
 
@@ -84,30 +87,28 @@ def getConnection(path:str = None) -> psycopg2.extensions.connection:
         psycopg2.extensions.connection: Database connection token.
     """
     if path is None:
-        path = os.path.join(os.getcwd(), '.env')
-    
+        path = os.path.join(os.getcwd(), ".env")
+
     # Read environnment variables
     dotenv.load_dotenv(path)
-    
+
     database = os.getenv("POSTGRES_DATABASE")
     host = os.getenv("POSTGRES_HOST")
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
     port = os.getenv("POSTGRES_PORT")
-    
+
     # Get connection token
-    connection = psycopg2.connect(database=database,
-                                  host=host,
-                                  user=user,
-                                  password=password,
-                                  port=port)
+    connection = psycopg2.connect(
+        database=database, host=host, user=user, password=password, port=port
+    )
     return connection
 
 
-def getEngine(path:str = None) -> sqlalchemy.engine.base.Engine:
+def getEngine(path: str = None) -> sqlalchemy.engine.base.Engine:
     """Get engine from .env file.
     If no path is provided, consider that the file is at the project root.
-    
+
     Args:
         path (str, optional): Path of the .env file.
         The default value correspond to the .env file being at the project root.
@@ -119,24 +120,25 @@ def getEngine(path:str = None) -> sqlalchemy.engine.base.Engine:
     """
     # Check if the path is provided
     if path is None:
-        path = os.path.join(os.getcwd(), '.env')
-    
+        path = os.path.join(os.getcwd(), ".env")
+
     # Read environnment variables
     dotenv.load_dotenv(path)
-    
+
     database = os.getenv("POSTGRES_DATABASE")
     host = os.getenv("POSTGRES_HOST")
     user = os.getenv("POSTGRES_USER")
     password = os.getenv("POSTGRES_PASSWORD")
     port = os.getenv("POSTGRES_PORT")
-    
+
     # Create engine
-    engine = sqlalchemy.create_engine(f"postgresql://{user}:{password}@{host}:{port}/{database}")
+    engine = sqlalchemy.create_engine(
+        f"postgresql://{user}:{password}@{host}:{port}/{database}"
+    )
     return engine
 
 
-def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
-                                query:str):
+def executeQueryWithTransaction(connection: psycopg2.extensions.connection, query: str):
     """Execute a query safely by using a SQL transaction.
     It does not return anything, so this function should not be used
     for SELECT queries for instance.
@@ -144,7 +146,7 @@ def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         query (str): Insert query already formatted.
-    
+
     Raises:
         Exeption: If an exception occur.
     """
@@ -164,14 +166,15 @@ def executeQueryWithTransaction(connection:psycopg2.extensions.connection,
         cursor.close()
 
 
-def executeSelectQuery(connection:psycopg2.extensions.connection,
-                       query:str) -> psycopg2.extensions.cursor:
+def executeSelectQuery(
+    connection: psycopg2.extensions.connection, query: str
+) -> psycopg2.extensions.cursor:
     """Execute a select query and return the cursor.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         query (str): Insert query already formatted.
-    
+
     Return:
         psycopg2.extensions.cursor: cursor for the query.
     """
@@ -212,10 +215,10 @@ def addSplitLineFromPointsFunction(connection):
 
     ALTER FUNCTION public.ST_SplitLineFromPoints(geometry, geometry, geometry)
         OWNER TO postgres;
-    
+
     COMMENT ON FUNCTION public.ST_SplitLineFromPoints(geometry, geometry, geometry)
         IS 'args: line, point_a, point_b - Returns a collection of geometries created by splitting a line by two points. It only returns the line that intersects the two points.';"""
-    
+
     executeQueryWithTransaction(connection, sqlAddFunction)
 
 
@@ -225,7 +228,7 @@ def addGetEdgeCostFunction(connection):
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
     """
-    
+
     # Create and add the function
     sqlAddFunction = """
     CREATE OR REPLACE FUNCTION public.get_edge_cost(
@@ -253,7 +256,7 @@ def addGetEdgeCostFunction(connection):
                 RETURN -1;
             END IF;
         END LOOP;
-        
+
         -- Access granted, return length of the edge
         RETURN len;
     END
@@ -266,7 +269,7 @@ def addGetEdgeCostFunction(connection):
     COMMENT ON FUNCTION public.get_edge_cost(double precision, json, character varying, double precision, double precision)
         IS 'args: len, access_restrictions, direction, start_fraction, end_fraction -
         Return cost of the edge with the right direction and start and end of line fraction.';"""
-    
+
     executeQueryWithTransaction(connection, sqlAddFunction)
 
 
@@ -276,7 +279,7 @@ def addGetValueBetweenFunction(connection):
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
     """
-    
+
     # Create and add the function
     sqlAddFunction = """
     CREATE OR REPLACE FUNCTION public.get_value_between(
@@ -292,16 +295,16 @@ def addGetValueBetweenFunction(connection):
     BEGIN
         FOR elem IN SELECT json_array_elements(data) AS data_array
         LOOP
-		-- Check if it can be apply for this portion of the road
-		IF (start_fraction >= (elem->'between'->>0)::double precision
-			AND end_fraction <= (elem->'between'->>1)::double precision)
-			OR (elem->'between'->>0 IS NULL) THEN
-			RETURN elem ->> key;
-		END IF;
-		END LOOP;
-		
-		-- No value
-		RETURN NULL;
+        -- Check if it can be apply for this portion of the road
+        IF (start_fraction >= (elem->'between'->>0)::double precision
+            AND end_fraction <= (elem->'between'->>1)::double precision)
+            OR (elem->'between'->>0 IS NULL) THEN
+            RETURN elem ->> key;
+        END IF;
+        END LOOP;
+
+        -- No value
+        RETURN NULL;
     END
     $BODY$
     LANGUAGE plpgsql;
@@ -315,11 +318,11 @@ def addGetValueBetweenFunction(connection):
         The key corresponds to the key to check in the data.
         If the start and the end are respectively equals to 0 and 1, return the value directly.
         Same if the ''between'' value is null.';"""
-    
+
     executeQueryWithTransaction(connection, sqlAddFunction)
 
 
-def initialisePostgreSQL(connection:psycopg2.extensions.connection):
+def initialisePostgreSQL(connection: psycopg2.extensions.connection):
     """Initialise postgreSQL by installing postgis and pgrouting extensions.
     If the extensions already exist, it skip the query.
 
@@ -327,7 +330,7 @@ def initialisePostgreSQL(connection:psycopg2.extensions.connection):
         connection (psycopg2.extensions.connection): Database connection token.
     """
     # Create extensions and schemas if not exist
-    sqlInitPostgreSQL  = """
+    sqlInitPostgreSQL = """
     CREATE EXTENSION IF NOT EXISTS postgis SCHEMA public;
 
     CREATE EXTENSION IF NOT EXISTS pgrouting SCHEMA public;
@@ -337,19 +340,21 @@ def initialisePostgreSQL(connection:psycopg2.extensions.connection):
     CREATE SCHEMA IF NOT EXISTS omf;
 
     CREATE SCHEMA IF NOT EXISTS results;"""
-    
+
     executeQueryWithTransaction(connection, sqlInitPostgreSQL)
-    
+
     # Add functions to postgresql
     addSplitLineFromPointsFunction(connection)
     addGetEdgeCostFunction(connection)
     addGetValueBetweenFunction(connection)
 
 
-def createIndex(connection:psycopg2.extensions.connection,
-                tableName:str,
-                columnName:str,
-                schema:str = 'public'):
+def createIndex(
+    connection: psycopg2.extensions.connection,
+    tableName: str,
+    columnName: str,
+    schema: str = "public",
+):
     """Create a non geometrical index on the column table.
     Drop the index if already exists.
     The name of the index will be `<table_name>_<column>_idx`.
@@ -362,17 +367,19 @@ def createIndex(connection:psycopg2.extensions.connection,
     """
     # Create the query
     sqlQuery = f"""DROP INDEX IF EXISTS {schema}.{tableName}_{columnName}_idx CASCADE;
-    
+
     CREATE INDEX IF NOT EXISTS {tableName}_{columnName}_idx ON {schema}.{tableName} USING btree ({columnName} ASC NULLS LAST);"""
-    
+
     # And execute it
     executeQueryWithTransaction(connection, sqlQuery)
 
 
-def createGeomIndex(connection:psycopg2.extensions.connection,
-                    tableName:str,
-                    geomColumnName:str = 'geom',
-                    schema:str = 'public'):
+def createGeomIndex(
+    connection: psycopg2.extensions.connection,
+    tableName: str,
+    geomColumnName: str = "geom",
+    schema: str = "public",
+):
     """Create a geometrical index on the geom column for the speciefied table.
     Drop the index if already exists.
     The name of the index will be `<table_name>_geom_idx`.
@@ -385,17 +392,17 @@ def createGeomIndex(connection:psycopg2.extensions.connection,
     """
     # Create the query
     sqlQuery = f"""DROP INDEX IF EXISTS {schema}.{tableName}_geom_idx CASCADE;
-        
+
     CREATE INDEX IF NOT EXISTS {tableName}_geom_idx
     ON {schema}.{tableName} USING GIST ({geomColumnName});"""
-    
+
     # And execute it
     executeQueryWithTransaction(connection, sqlQuery)
 
 
-def dropTableCascade(connection:psycopg2.extensions.connection,
-                     tableName:str,
-                     schema:str):
+def dropTableCascade(
+    connection: psycopg2.extensions.connection, tableName: str, schema: str
+):
     """Drop (cascade) a table for the given schema
 
     Args:
@@ -405,11 +412,13 @@ def dropTableCascade(connection:psycopg2.extensions.connection,
     """
     dropSQL = f"DROP TABLE IF EXISTS {schema}.{tableName} CASCADE;"
     executeQueryWithTransaction(connection, dropSQL)
-    
 
-def createBoundingboxTable(connection:psycopg2.extensions.connection,
-                           tableName:str = 'bounding_box',
-                           dropTableIfExists:bool = True):
+
+def createBoundingboxTable(
+    connection: psycopg2.extensions.connection,
+    tableName: str = "bounding_box",
+    dropTableIfExists: bool = True,
+):
     """Create the bounding box table in the public schema.
 
     Args:
@@ -419,8 +428,8 @@ def createBoundingboxTable(connection:psycopg2.extensions.connection,
     """
     # Drop table if the user wants to
     if dropTableIfExists:
-        dropTableCascade(connection, tableName, schema = "public")
-    
+        dropTableCascade(connection, tableName, schema="public")
+
     # Create bounding_box structure
     sqlBbox = f"""
     CREATE TABLE IF NOT EXISTS public.{tableName} (
@@ -429,20 +438,22 @@ def createBoundingboxTable(connection:psycopg2.extensions.connection,
         wkt_geom character varying COLLATE pg_catalog."default",
         name character varying COLLATE pg_catalog."default",
         CONSTRAINT {tableName}_pkey PRIMARY KEY (id))"""
-    
+
     executeQueryWithTransaction(connection, sqlBbox)
-    
+
     # Index creation
-    createIndex(connection, tableName, 'id', schema='public')
+    createIndex(connection, tableName, "id", schema="public")
 
     # Geometry index creation
-    createGeomIndex(connection, tableName, geomColumnName='geom', schema='public')
+    createGeomIndex(connection, tableName, geomColumnName="geom", schema="public")
 
 
-def insertBoundingBox(connection:psycopg2.extensions.connection,
-                      wktGeom:str,
-                      aeraName:str,
-                      tableName:str = 'bounding_box') -> int:
+def insertBoundingBox(
+    connection: psycopg2.extensions.connection,
+    wktGeom: str,
+    aeraName: str,
+    tableName: str = "bounding_box",
+) -> int:
     """Insert a bounding box inside the table.
     The geometry is provided in the WKT format.
 
@@ -452,7 +463,7 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
         aeraName (str): Name of the area.
         tableName (str, optional): Name of the bounding box table.
         Defaults to 'bounding_box'.
-    
+
     Return:
         int: Id of the inserted row
     """
@@ -460,7 +471,7 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
     sqlInsert = f"""
     INSERT INTO public.{tableName} (geom, wkt_geom, name)
     VALUES (public.ST_GeomFromText('{wktGeom}', 4326), '{wktGeom}', '{aeraName}');"""
-    
+
     executeQueryWithTransaction(connection, sqlInsert)
     # Select the entity with the greatest id among those that corresponds exactly to the one added before
     sqlId = f"""
@@ -470,22 +481,24 @@ def insertBoundingBox(connection:psycopg2.extensions.connection,
     AND name = '{aeraName}'
     ORDER BY id DESC
     LIMIT 1"""
-    
+
     cursor = executeSelectQuery(connection, sqlId)
-    
+
     # Get id of the inserted row
     id = cursor.fetchone()[0]
-    
+
     # Close the cursor
     cursor.close()
-    
+
     return id
 
 
-def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
-                         tableName:str,
-                         schema:str,
-                         skipCheck:bool = False) -> bool:
+def isProcessAlreadyDone(
+    connection: psycopg2.extensions.connection,
+    tableName: str,
+    schema: str,
+    skipCheck: bool = False,
+) -> bool:
     """Return a boolean that indicates if the table is stored in the database.
 
     Args:
@@ -500,31 +513,30 @@ def isProcessAlreadyDone(connection:psycopg2.extensions.connection,
     # If the user do not want to check if it exists, return False
     if skipCheck:
         return False
-    
-    # Otherwise, check if the table exists    
+
+    # Otherwise, check if the table exists
     # Create query
     query = f"""
     SELECT t.table_schema, t.table_name FROM information_schema.tables AS t
     WHERE t.table_name = '{tableName}' and t.table_schema = '{schema}'
     ORDER BY t.table_schema, t.table_name ASC
     """
-    
+
     # Execute query
     cursor = executeSelectQuery(connection, query)
-    
+
     done = False
     # There should be only one row in the cursor
     if cursor.rowcount == 1:
         # If it is the case, because of the query, we do not need to check more information
-       done = True
-    
+        done = True
+
     return done
 
 
-def downloadOMFTypeBbox(bbox: str,
-                        savePathFolder: str,
-                        dataType:str,
-                        fileName:str = "") -> str:
+def downloadOMFTypeBbox(
+    bbox: str, savePathFolder: str, dataType: str, fileName: str = ""
+) -> str:
     """Download OvertureMap data of a certain type for the designated bbox.
     Return the path of the saved file.
     Overturemaps must be already install using pip command tool :
@@ -537,38 +549,40 @@ def downloadOMFTypeBbox(bbox: str,
         fileName(str, optional): Name of the file without the extension.
         If empty, the filename will be the provided type.
         Defaults to ''.
-    
+
     Raises:
         ValueError: If an error occured while downloading the data.
-    
+
     Returns:
         str: Path of the saved file.
     """
     # Create the command line
     cmd = "overturemaps download --bbox={0} -f geoparquet --type={1} -o {2}"
-    
+
     if fileName == "":
         fileName = dataType
-        
+
     # Download OvertureMap connector data
     path = os.path.join(savePathFolder, f"{fileName}.parquet")
-    
+
     # Run command
     print("Run command: ", cmd.format(bbox, dataType, path))
     result = os.system(cmd.format(bbox, dataType, path))
-    
+
     # Check if result is okay
     if result != 0:
-        raise(ValueError("An error as ocured"))
-    
+        raise (ValueError("An error as ocured"))
+
     print(f"{dataType} data has been downloaded")
-    
+
     return path
 
 
-def getUTMProjFromArea(connection:psycopg2.extensions.connection,
-                       aeraName:str,
-                       tableName:str = 'bounding_box') -> int:
+def getUTMProjFromArea(
+    connection: psycopg2.extensions.connection,
+    aeraName: str,
+    tableName: str = "bounding_box",
+) -> int:
     """Get UTM projection for a specific point.
 
     Args:
@@ -590,17 +604,26 @@ def getUTMProjFromArea(connection:psycopg2.extensions.connection,
     SELECT public.ST_X(ac.center) AS lon, public.ST_Y(ac.center) AS lat
     FROM area_centroid AS ac;
     """
-    
+
     # Execute query
     cursor = executeSelectQuery(connection, sql)
-    
+
     # Get lat and lon from row
     (lon, lat) = cursor.fetchone()
-    
+
     # Get zone number
-    zone = utm.from_latlon(latitude = lat, longitude = lon)[2]
-    
+    zone = utm.from_latlon(latitude=lat, longitude=lon)[2]
+
     # Return formatted string
     epsgCode = f"326{zone:02d}" if lat >= 0 else f"327{zone:02d}"
-    
+
     return int(epsgCode)
+
+
+def doNotPrint(x: str):
+    """Empty function that takes a string but do not do anything with it.
+
+    Args:
+        x (str): Any string.
+    """
+    pass

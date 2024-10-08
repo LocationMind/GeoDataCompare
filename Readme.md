@@ -121,12 +121,12 @@ python Python\Assessment\data_integration.py
 
 It uses the file containing the bounding box: [bboxs.json](./Data/bboxs.json).
 Refer to the [user documentation](./Documentation/user-doc.md#adding-areas) for more information about how to add new areas.
-You will also find information about how to configurate the [data_integration.py](Python/Assessment/data_integration.py/) file for forcing the data download or preventing the bounding box table to be recreated again.
+You will also find information about how to configurate the [data_integration.py](src/Assessment/data_integration.py/) file for forcing the data download or preventing the bounding box table to be recreated again.
 
 ## Quality assessment
 
 This script needs to be run after the data integration process, but before running the DashBoard.
-It is contained in the [quality_assessment.py](./Python/Assessment/quality_assessment.py)
+It is contained in the [quality_assessment.py](./src/Assessment/quality_assessment.py)
 To run this script:
 
 ```cmd

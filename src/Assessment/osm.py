@@ -3,18 +3,19 @@ from osmnx import convert as con
 import geopandas as gpd
 import pandas as pd
 import sqlalchemy
-from shapely.geometry import Polygon
 import psycopg2
 import time
 import os
 import sys
+from src.Utils import utils
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from Python.Utils import utils
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 ## Graph
 
-def downloadGraphOSM(bbox:str) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
+
+def downloadGraphOSM(bbox: str) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     """Download data using osmnx and return two geodataframes.
     Also simplify the graph but do not merge them via their osmid.
     Both edges and nodes have their geometry column rename to 'geom'.
@@ -29,33 +30,33 @@ def downloadGraphOSM(bbox:str) -> tuple[gpd.GeoDataFrame, gpd.GeoDataFrame]:
     # Get network data for a specific bbox
     bboxTuple = utils.bboxCSVToTuple(bbox)
     graph = ox.graph_from_bbox(bbox=bboxTuple, simplify=False, retain_all=True)
-    
+
     # Simplify the graph by using the simplify_graph function but without aggregating edges
-    graph = ox.simplify_graph(graph, edge_attrs_differ=['osmid'])
+    graph = ox.simplify_graph(graph, edge_attrs_differ=["osmid"])
 
     # Transform the graph to geodataframe for the edges and nodes
     node = con.graph_to_gdfs(graph, nodes=True, edges=False, node_geometry=True)
     edge = con.graph_to_gdfs(graph, nodes=False, edges=True, fill_edge_geometry=True)
-    
+
     # Rename geometry column to geom
-    node = node.rename(columns={'geometry':'geom'})
+    node = node.rename(columns={"geometry": "geom"})
     node = node.set_geometry("geom")
-    
-    edge = edge.rename(columns={'geometry':'geom'})
+
+    edge = edge.rename(columns={"geometry": "geom"})
     edge = edge.set_geometry("geom")
     return node, edge
 
 
-def addMissingColumns(connection:psycopg2.extensions.connection,
-                      edgeTable:str,
-                      schema:str = 'public'):
+def addMissingColumns(
+    connection: psycopg2.extensions.connection, edgeTable: str, schema: str = "public"
+):
     """Add missing columns to the edge table.
 
     Args:
         connection (psycopg2.extensions.connection): Database connection token.
         edgeTable (str): Name of the edge table.
         schema (str, optional): Name of the schema. Defaults to 'public'.
-    """    
+    """
     # Add missing columns if not exists
     sqlMissingColumns = f"""
     ALTER TABLE {schema}.{edgeTable} ADD COLUMN IF NOT EXISTS osmid text;
@@ -74,7 +75,7 @@ def addMissingColumns(connection:psycopg2.extensions.connection,
 
     ALTER TABLE {schema}.{edgeTable} ADD COLUMN IF NOT EXISTS maxspeed text;
 
-    ALTER TABLE {schema}.{edgeTable} ADD COLUMN IF NOT EXISTS maxspeed text; 
+    ALTER TABLE {schema}.{edgeTable} ADD COLUMN IF NOT EXISTS maxspeed text;
 
     ALTER TABLE {schema}.{edgeTable} ADD COLUMN IF NOT EXISTS name text;
 
@@ -98,11 +99,13 @@ def addMissingColumns(connection:psycopg2.extensions.connection,
     utils.executeQueryWithTransaction(connection, sqlMissingColumns)
 
 
-def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
-                                edgeTable:str,
-                                area:str,
-                                utmProj:int,
-                                schema:str = 'public'):
+def createTableToAggregateEdges(
+    connection: psycopg2.extensions.connection,
+    edgeTable: str,
+    area: str,
+    utmProj: int,
+    schema: str = "public",
+):
     """Create a table to join parallel edges.
 
     Args:
@@ -115,10 +118,10 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
     sql = f"""
     -- Add id column to edge table
     ALTER TABLE {schema}.{edgeTable} ADD COLUMN id serial;
-    
+
     -- Drop table if exists
     DROP TABLE IF EXISTS {schema}.{area} CASCADE;
-    
+
     -- Create table with a self join
     CREATE TABLE IF NOT EXISTS {schema}.{area} AS
     SELECT
@@ -172,7 +175,7 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
     AND ST_Contains(ST_Buffer(ST_Transform(e1.geom, {utmProj}), 0.5), ST_Transform(e2.geom, {utmProj}))
     AND ST_Contains(ST_Buffer(ST_Transform(e2.geom, {utmProj}), 0.5), ST_Transform(e1.geom, {utmProj}))
     ORDER BY e1.id;
-    
+
     -- Add cost and reverse cost columns
     ALTER TABLE {schema}.{area} DROP COLUMN IF EXISTS cost;
     ALTER TABLE {schema}.{area} DROP COLUMN IF EXISTS reverse_cost;
@@ -181,34 +184,36 @@ def createTableToAggregateEdges(connection:psycopg2.extensions.connection,
     ALTER TABLE {schema}.{area} ADD COLUMN reverse_cost double precision DEFAULT -1;
 
     -- Set cost to length of the road
-    UPDATE {schema}.{area} 
+    UPDATE {schema}.{area}
     SET cost = ST_Length(geom1::geography);
 
-    -- Set reverse cost for parallel roads 
+    -- Set reverse cost for parallel roads
     UPDATE {schema}.{area}
     SET reverse_cost = ST_Length(geom1::geography)
     WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2 AND id1 != id2
     AND ST_Contains(ST_Buffer(ST_Transform(geom1, {utmProj}), 0.5), ST_Transform(geom2, {utmProj}))
     AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj}));
-    
+
     CREATE INDEX {area}_geom1_idx
     ON {schema}.{area} USING gist (geom1);
-    
+
     CREATE INDEX {area}_geom2_idx
     ON {schema}.{area} USING gist (geom2);
-    
+
     CREATE INDEX {area}_id1_idx
     ON {schema}.{area} USING btree (id1);"""
-    
+
     # Execute the query
     utils.executeQueryWithTransaction(connection, sql)
 
 
-def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
-                          area:str,
-                          utmProj:int,
-                          schema:str = 'public',
-                          geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
+def getBidirectionalRoads(
+    engine: sqlalchemy.engine.base.Engine,
+    area: str,
+    utmProj: int,
+    schema: str = "public",
+    geomColumn: str = "geom1",
+) -> gpd.GeoDataFrame:
     """Get only bidirectional roads from the parallel edge table.
 
     Args:
@@ -217,7 +222,7 @@ def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
         utmProj (int): UTM projection for the area.
         schema (str, optional): Name of the schema. Defaults to 'public'.
         geomColumn (str, optional): Name of the geomColumn to use. Defaults to 'geom1'.
-    
+
     Return:
         geopandas.GeoDataFrame: Geodataframe of bidirectional roads.
     """
@@ -229,15 +234,17 @@ def getBidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
     AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj}));"""
 
     bi = gpd.read_postgis(sql_bi_roads, engine, geom_col=geomColumn)
-    
+
     return bi
 
 
-def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
-                           area:str,
-                           utmProj:int,
-                           schema:str = 'public',
-                           geomColumn:str = 'geom1') -> gpd.GeoDataFrame:
+def getUnidirectionalRoads(
+    engine: sqlalchemy.engine.base.Engine,
+    area: str,
+    utmProj: int,
+    schema: str = "public",
+    geomColumn: str = "geom1",
+) -> gpd.GeoDataFrame:
     """Get only unidirectional roads from the parallel edge table.
 
     Args:
@@ -246,7 +253,7 @@ def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
         utmProj (int): UTM projection for the area.
         schema (str, optional): Name of the schema. Defaults to 'public'.
         geomColumn (str, optional): Name of the geomColumn to use. Defaults to 'geom1'.
-    
+
     Return:
         geopandas.GeoDataFrame: Geodataframe of unidirectional roads.
     """
@@ -258,13 +265,13 @@ def getUnidirectionalRoads(engine:sqlalchemy.engine.base.Engine,
         WHERE u1 = v2 AND v1 = u2 AND highway1 = highway2
         AND ST_Contains(ST_Buffer(ST_Transform(geom1, {utmProj}), 0.5), ST_Transform(geom2, {utmProj}))
         AND ST_Contains(ST_Buffer(ST_Transform(geom2, {utmProj}), 0.5), ST_Transform(geom1, {utmProj})));"""
-    
+
     uni = gpd.read_postgis(sql_uni_road, engine, geom_col=geomColumn)
-    
+
     return uni
 
 
-def aggregateBiRoads(bi:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+def aggregateBiRoads(bi: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     """Aggregate bidirectional roads to keep only one occurence of each.
 
     Args:
@@ -296,7 +303,7 @@ def aggregateBiRoads(bi:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         if len(dict[key]) != 2:
             # If there are not exactly two occurences of the pair, we remove it but keep a track of it
             listNot2Count.append(dict.pop(key))
-    
+
     # If there are elements, we print them
     for elem in listNot2Count:
         print(f"These ids do not have exactly 2 occurences : {elem}")
@@ -312,13 +319,13 @@ def aggregateBiRoads(bi:gpd.GeoDataFrame) -> gpd.GeoDataFrame:
 
     # Take only the row with the index on the list
     bi_without_parallel = bi.loc[listIndex]
-    
+
     return bi_without_parallel
 
 
-def createMappedClasses(connection:psycopg2.extensions.connection,
-                        area:str,
-                        schema:str = "public"):
+def createMappedClasses(
+    connection: psycopg2.extensions.connection, area: str, schema: str = "public"
+):
     """Create the mapped class as a new attribute class.
     The mapping is made from OSM classes to OMF classes.
 
@@ -332,9 +339,9 @@ def createMappedClasses(connection:psycopg2.extensions.connection,
     ALTER TABLE IF EXISTS {schema}.edge_with_cost_{area}
     ADD COLUMN class character varying;
     """
-    
+
     utils.executeQueryWithTransaction(connection, sql_create_class_column)
-    
+
     # Update the table
     sql_class_omf = f"""
     UPDATE {schema}.edge_with_cost_{area}
@@ -363,18 +370,19 @@ def createMappedClasses(connection:psycopg2.extensions.connection,
         ELSE 'unknown'
     END
     """
-    
+
     utils.executeQueryWithTransaction(connection, sql_class_omf)
 
 
-def createGraphFromBbox(connection:psycopg2.extensions.connection,
-                        engine:sqlalchemy.engine.base.Engine,
-                        bbox:str,
-                        area:str,
-                        schema:str = 'public',
-                        printTime:bool = True,
-                        deleteOtherTables:bool = True):
-    
+def createGraphFromBbox(
+    connection: psycopg2.extensions.connection,
+    engine: sqlalchemy.engine.base.Engine,
+    bbox: str,
+    area: str,
+    schema: str = "public",
+    printTime: bool = True,
+    deleteOtherTables: bool = True,
+):
     """Create node and edges table for OSM dataset from a bbox.
 
     Args:
@@ -394,77 +402,86 @@ def createGraphFromBbox(connection:psycopg2.extensions.connection,
     """
     # Beginning
     start = time.time()
-    
+
     ## Check parameters
     # Area and table names
     if area != "":
         edgeTable = f"edge_{area}"
         nodeTable = f"node_{area}"
         edgeWithCostTable = f"edge_with_cost_{area}"
-    
+
     # Else create the table names
     else:
         raise ValueError("Area must not be an empty string.")
-    
+
     # Check if we print to the user or not
     if printTime:
         log = print
     else:
         # Empty function
-        log = lambda x : x
-    
+        log = utils.doNotPrint
+
     end = time.time()
     log(f"Start download {area}: {end - start} seconds")
 
     ## Download data with OSMnx
     # Get network data for a specific bbox
     node, edge = downloadGraphOSM(bbox)
-    
+
     end = time.time()
     log(f"Load graph: {end - start} seconds")
 
     # Save nodes to postgresql by renaming the osmid column
-    node.to_postgis(nodeTable, engine, if_exists="replace", schema = schema, index=True, index_label="id")
+    node.to_postgis(
+        nodeTable,
+        engine,
+        if_exists="replace",
+        schema=schema,
+        index=True,
+        index_label="id",
+    )
 
     end = time.time()
     log(f"Save node to postgis: {end - start} seconds")
 
     # Save edges to postgresql
-    edge.to_postgis(edgeTable, engine, if_exists="replace", schema = schema, index=True)
+    edge.to_postgis(edgeTable, engine, if_exists="replace", schema=schema, index=True)
 
     end = time.time()
     log(f"Save edge to postgis: {end - start} seconds")
-    
+
     # Get utm proj for the area
     utmProj = utils.getUTMProjFromArea(connection, area)
-    
+
     end = time.time()
     log(f"UTM Proj is {utmProj}")
     log(f"Utm proj: {end - start} seconds")
-    
+
     # Add missing columns if needed to the edge table
-    addMissingColumns(connection, edgeTable, schema = schema)
-    
+    addMissingColumns(connection, edgeTable, schema=schema)
+
     end = time.time()
     log(f"Add missing columns: {end - start} seconds")
-    
+
     # Create table to aggregate parallel edges
-    createTableToAggregateEdges(connection, edgeTable, area, utmProj = utmProj, schema = schema)
-    
+    createTableToAggregateEdges(
+        connection, edgeTable, area, utmProj=utmProj, schema=schema
+    )
+
     end = time.time()
     log(f"Execute query: {end - start} seconds")
-    
+
     # Get bidirectional and unidirectional roads
-    bi = getBidirectionalRoads(engine, area, utmProj = utmProj, schema = schema)
-    
+    bi = getBidirectionalRoads(engine, area, utmProj=utmProj, schema=schema)
+
     end = time.time()
     log(f"Bidirectional roads: {end - start} seconds")
-    
-    uni = getUnidirectionalRoads(engine, area, utmProj = utmProj, schema = schema)
+
+    uni = getUnidirectionalRoads(engine, area, utmProj=utmProj, schema=schema)
 
     end = time.time()
     log(f"Unidirectional roads: {end - start} seconds")
-    
+
     # Agregate bidirectional roads into one
     bi_without_parallel = aggregateBiRoads(bi)
 
@@ -479,88 +496,100 @@ def createGraphFromBbox(connection:psycopg2.extensions.connection,
 
     # Rename useful columns
     edge_with_cost = edge_with_cost.rename(
-        columns= {"id1":"original_id",
-                "u1":"source",
-                "v1":"target",
-                "geom1":"geom",
-                "osmid1":"osmid",
-                "oneway1":"oneway",
-                "ref1":"ref",
-                "name1":"name",
-                "highway1":"highway",
-                "lanes1":"lanes",
-                "maxspeed1":"maxspeed",
-                "access1":"access",
-                "bridge1":"bridge",
-                "tunnel1":"tunnel",
-                "service1":"service",
-                "footway1":"footway",
-                "abutters1":"abutters",
-                "width1":"width",
-                "junction1":"junction"})
-    
+        columns={
+            "id1": "original_id",
+            "u1": "source",
+            "v1": "target",
+            "geom1": "geom",
+            "osmid1": "osmid",
+            "oneway1": "oneway",
+            "ref1": "ref",
+            "name1": "name",
+            "highway1": "highway",
+            "lanes1": "lanes",
+            "maxspeed1": "maxspeed",
+            "access1": "access",
+            "bridge1": "bridge",
+            "tunnel1": "tunnel",
+            "service1": "service",
+            "footway1": "footway",
+            "abutters1": "abutters",
+            "width1": "width",
+            "junction1": "junction",
+        }
+    )
+
     # Keep only these columns
-    edge_with_cost = edge_with_cost[[
-        "original_id",
-        "source",
-        "target",
-        "cost",
-        "reverse_cost",
-        "geom",
-        "osmid",
-        "oneway",
-        "ref",
-        "name",
-        "highway",
-        "lanes",
-        "maxspeed",
-        "access",
-        "bridge",
-        "tunnel",
-        "service",
-        "footway",
-        "abutters",
-        "width",
-        "junction"]]
+    edge_with_cost = edge_with_cost[
+        [
+            "original_id",
+            "source",
+            "target",
+            "cost",
+            "reverse_cost",
+            "geom",
+            "osmid",
+            "oneway",
+            "ref",
+            "name",
+            "highway",
+            "lanes",
+            "maxspeed",
+            "access",
+            "bridge",
+            "tunnel",
+            "service",
+            "footway",
+            "abutters",
+            "width",
+            "junction",
+        ]
+    ]
 
     # Set the geometry to the geom column
     edge_with_cost = edge_with_cost.set_geometry("geom")
-    
+
     # Reset index
     edge_with_cost = edge_with_cost.reset_index()
-    
+
     # Load dataframe into postgis table
-    edge_with_cost.to_postgis(edgeWithCostTable, engine, if_exists="replace", index=True, index_label = 'id', schema = schema)
-    
+    edge_with_cost.to_postgis(
+        edgeWithCostTable,
+        engine,
+        if_exists="replace",
+        index=True,
+        index_label="id",
+        schema=schema,
+    )
+
     end = time.time()
     log(f"Edge with cost to postgis: {end - start} seconds")
-    
+
     # Create geom index
-    utils.createGeomIndex(connection, edgeWithCostTable, schema = schema)
-    
+    utils.createGeomIndex(connection, edgeWithCostTable, schema=schema)
+
     end = time.time()
     log(f"Geom index with cost to postgis: {end - start} seconds")
-    
+
     # Create mapped classes
-    createMappedClasses(connection, area, schema = schema)
-    
+    createMappedClasses(connection, area, schema=schema)
+
     end = time.time()
     log(f"Create mapped classes: {end - start} seconds")
-    
-    
+
     if deleteOtherTables:
-        utils.dropTableCascade(connection, edgeTable, schema = schema)
-        utils.dropTableCascade(connection, area, schema = schema)
-        
+        utils.dropTableCascade(connection, edgeTable, schema=schema)
+        utils.dropTableCascade(connection, area, schema=schema)
+
         end = time.time()
         log(f"Delete useless tables: {end - start} seconds")
-        
+
     end = time.time()
     log(f"Download edge and nodes for {area}: {end - start} seconds")
 
 
 ## Buildings
-def getClass(row:pd.core.series.Series) -> str:
+def getClass(row: pd.core.series.Series) -> str:
     """Get the class of a row depending on the value of
     the two columns amenity and building of the dataframe.
     If building is just yes, change it to 'building'
@@ -571,22 +600,21 @@ def getClass(row:pd.core.series.Series) -> str:
     Returns:
         str: Class of the row
     """
-    if row['amenity'] is not None:
-        return row['amenity']
-    elif row['building'] is not None:
+    if row["amenity"] is not None:
+        return row["amenity"]
+    elif row["building"] is not None:
         # If building is only yes, return 'building'
-        if row['building'] == 'yes':
-            return 'building'
+        if row["building"] == "yes":
+            return "building"
         else:
-            return row['building']
+            return row["building"]
     else:
         return None
 
 
-def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
-                           bbox: str,
-                           area:str,
-                           schema:str = "public"):
+def createBuildingFromBbox(
+    engine: sqlalchemy.engine.base.Engine, bbox: str, area: str, schema: str = "public"
+):
     """Create building table from a bbox.
 
     Args:
@@ -597,76 +625,83 @@ def createBuildingFromBbox(engine:sqlalchemy.engine.base.Engine,
     """
     # Tags to download buildings only
     tags = {"building": True}
-    
+
     # Table name
     tableName = f"building_{area}"
-    
-    # Bbox 
+
+    # Bbox
     bboxTuple = utils.bboxCSVToTuple(bbox)
-    
+
     # Download building data
     gdf = ox.features_from_bbox(bbox=bboxTuple, tags=tags)
-    
+
     # Rename geometry clumn and export
-    gdf = gdf.rename(columns={'geometry':'geom'})
+    gdf = gdf.rename(columns={"geometry": "geom"})
     gdf = gdf.set_geometry("geom")
-    
+
     # Keep only ways
     gdf = gdf.loc["way"][:]
-    
+
     # Reset index and set only osmid as the index
     gdf = gdf.reset_index()
-    gdf = gdf.set_index('osmid')
-    
+    gdf = gdf.set_index("osmid")
+
     # Colunmns that needs to be keepen
     columnsToKeep = [
-        'building',
-        'amenity',
-        'name',
-        'building:level',
+        "building",
+        "amenity",
+        "name",
+        "building:level",
         "height",
-        'addr:full',
-        'addr:city',
-        'addr:neighbourhood',
-        'addr:postcode',
-        'addr:province',
-        'source',
-        'note',
-        'geom',
+        "addr:full",
+        "addr:city",
+        "addr:neighbourhood",
+        "addr:postcode",
+        "addr:province",
+        "source",
+        "note",
+        "geom",
     ]
-    
+
     # columns that needs to be renamed
     columnsRenamed = {
-        'building:level':'level',
-        'addr:full':'address',
-        'addr:city':'city',
-        'addr:neighbourhood':'neighbourhood',
-        'addr:postcode':'postcode',
-        'addr:province':'province',
+        "building:level": "level",
+        "addr:full": "address",
+        "addr:city": "city",
+        "addr:neighbourhood": "neighbourhood",
+        "addr:postcode": "postcode",
+        "addr:province": "province",
     }
-    
+
     # Filter on column name, so if there are no column no error will be raised
     columnsBool = gdf.columns.isin(columnsToKeep)
     columns = gdf.columns[columnsBool]
-    
+
     # Filter only columns find in the data
     gdf = gdf[columns]
-    
+
     # Rename column
     gdf = gdf.rename(columns=columnsRenamed)
-    
+
     # Keep only polygon geometries
     gdf = gdf[gdf.geom_type == "Polygon"]
-    
+
     # Create a category column
-    gdf['class'] = gdf.apply(getClass, axis = 1)
-    
+    gdf["class"] = gdf.apply(getClass, axis=1)
+
     # Export gdf to PostGIS
-    gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
+    gdf.to_postgis(
+        tableName,
+        engine,
+        if_exists="replace",
+        schema=schema,
+        index=True,
+        index_label="id",
+    )
 
 
 ## Places
-def getCategory(row:pd.core.series.Series) -> str:
+def getCategory(row: pd.core.series.Series) -> str:
     """Get the class of a row depending on the value of
     the two columns amenity and shop of the dataframe.
 
@@ -676,20 +711,22 @@ def getCategory(row:pd.core.series.Series) -> str:
     Returns:
         str: Category of the row
     """
-    if row['amenity'] is not None:
-        return row['amenity']
-    elif row['shop'] is not None:
-        return row['shop']
+    if row["amenity"] is not None:
+        return row["amenity"]
+    elif row["shop"] is not None:
+        return row["shop"]
     else:
         return None
 
 
-def createPlaceFromBbox(connection:psycopg2.extensions.connection,
-                        engine:sqlalchemy.engine.base.Engine,
-                        bbox: str,
-                        area:str,
-                        boundingBoxTable:str = 'bounding_box',
-                        schema:str = "public"):
+def createPlaceFromBbox(
+    connection: psycopg2.extensions.connection,
+    engine: sqlalchemy.engine.base.Engine,
+    bbox: str,
+    area: str,
+    boundingBoxTable: str = "bounding_box",
+    schema: str = "public",
+):
     """Create place table from a bbox.
 
     Args:
@@ -700,63 +737,70 @@ def createPlaceFromBbox(connection:psycopg2.extensions.connection,
         schema (str, optional): Schema to save the table. Defaults to "public".
     """
     # Tags to download buildings only
-    tags = {"amenity": True, "shop" : True}
-    
+    tags = {"amenity": True, "shop": True}
+
     # Table name
     tableName = f"place_{area}"
-    
+
     # Bbox
     bboxTuple = utils.bboxCSVToTuple(bbox)
-    
+
     # Download poi data
     gdf = ox.features_from_bbox(bbox=bboxTuple, tags=tags)
-    
+
     # Rename geometry clumn and export
-    gdf = gdf.rename(columns={'geometry':'geom'})
+    gdf = gdf.rename(columns={"geometry": "geom"})
     gdf = gdf.set_geometry("geom")
 
     # Reset index and set only osmid as the index
     gdf = gdf.reset_index()
-    gdf = gdf.set_index('osmid')
-    
+    gdf = gdf.set_index("osmid")
+
     # Colunmns that needs to be keepen
     columnsToKeep = [
-        'amenity',
-        'shop',
-        'addr:full',
-        'geom',
-        'name',
-        'brand',
-        'phone',
-        'source',
-        'website',
-        'email'
+        "amenity",
+        "shop",
+        "addr:full",
+        "geom",
+        "name",
+        "brand",
+        "phone",
+        "source",
+        "website",
+        "email",
     ]
-    
+
     # columns that needs to be renamed
     columnsRenamed = {
-        'addr:full' : 'address',
+        "addr:full": "address",
     }
-    
+
     # Filter on column name, so if there are no column no error will be raised
     columnsBool = gdf.columns.isin(columnsToKeep)
     columns = gdf.columns[columnsBool]
-    
+
     # Filter only columns find in the data
     gdf = gdf[columns]
-    
+
     # Rename column
     gdf = gdf.rename(columns=columnsRenamed)
-    
+
     # Get centroid of geometry
     gdf["geom"] = gdf["geom"].centroid
-    
+
     # Create a category column
-    gdf['category'] = gdf.apply(getCategory, axis=1)
-    
+    gdf["category"] = gdf.apply(getCategory, axis=1)
+
     # Export gdf to PostGIS
-    gdf.to_postgis(tableName, engine, if_exists="replace", schema=schema, index=True, index_label="id")
-    
+    gdf.to_postgis(
+        tableName,
+        engine,
+        if_exists="replace",
+        schema=schema,
+        index=True,
+        index_label="id",
+    )
+
     # Delete places outside of the bounding box
     queryDelete = f"""
     DELETE FROM {schema}.{tableName} AS p
@@ -767,5 +811,5 @@ def createPlaceFromBbox(connection:psycopg2.extensions.connection,
         WHERE b.name = '{area.capitalize()}'
     )
     """
-    
+
     utils.executeQueryWithTransaction(connection, queryDelete)

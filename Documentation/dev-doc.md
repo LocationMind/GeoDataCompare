@@ -73,7 +73,7 @@ It is essential to map data to this model for the dashboard and quality assessme
 
 - `opt_attr`: Any other optional attribute to retain.
 
-Once the mapping between the dataset model and this model is determined, it is advisable to create a separate file for integrating data for this dataset. Depending on the dataset, mapping to this model may be straightforward or quite challenging. Consult the [PgRouting documentation](https://docs.pgrouting.org/latest/en), especially functions related to the [topology of the graph](https://docs.pgrouting.org/latest/en/topology-functions.html), to create a graph corresponding to this model. Additionally, consider referring to the [osm.py](../Python/Assessment/osm.py) and [omf.py](../Python/Assessment/omf.py) files for ideas on creating your road network.
+Once the mapping between the dataset model and this model is determined, it is advisable to create a separate file for integrating data for this dataset. Depending on the dataset, mapping to this model may be straightforward or quite challenging. Consult the [PgRouting documentation](https://docs.pgrouting.org/latest/en), especially functions related to the [topology of the graph](https://docs.pgrouting.org/latest/en/topology-functions.html), to create a graph corresponding to this model. Additionally, consider referring to the [osm.py](../src/Assessment/osm.py) and [omf.py](../src/Assessment/omf.py) files for ideas on creating your road network.
 
 ### Building and Places Data
 
@@ -109,7 +109,7 @@ The process for adding a new area to the bounding box file is explained in the [
 
 #### `data_integration.py` File
 
-The new Python script created to download data should only provide functions to be used in the [data_integration.py](../Python/Assessment/data_integration.py) file. Ideally, three functions should be created in the new Python script:
+The new Python script created to download data should only provide functions to be used in the [data_integration.py](../src/Assessment/data_integration.py) file. Ideally, three functions should be created in the new Python script:
 
 - `createGraphFromBbox`: For creating edge with cost and node layers from a specific bounding box.
 
@@ -129,7 +129,7 @@ Indeed, with functions like these, adding a new dataset to this process becomes 
 
 1. Import the dataset into the Python file.
 
-2. Add the schema name with an appropriate variable name, such as `schema_<dataset>` [here](../Python/Assessment/data_integration.py#L18).
+2. Add the schema name with an appropriate variable name, such as `schema_<dataset>` [here](../src/Assessment/data_integration.py#L18).
 
 3. For each theme, add an `if / else` statement to check if the layer has already been created.
 
@@ -171,20 +171,20 @@ Of course, it is not mandatory to change the file in this manner; it is merely r
 
 #### `quality.py` and `quality_assessment.py` File
 
-After downloading the data for your new dataset, it will be necessary to calculate the criteria for this dataset as well. Changes to the [quality_assessment.py](../Python/Assessment/quality_assessment.py) file are somewhat similar to those required for the [data_integration.py](../Python/Assessment/data_integration.py) file. As currently only graph analysis is supported, these changes would be applicable solely to datasets added for the road network.
+After downloading the data for your new dataset, it will be necessary to calculate the criteria for this dataset as well. Changes to the [quality_assessment.py](../src/Assessment/quality_assessment.py) file are somewhat similar to those required for the [data_integration.py](../src/Assessment/data_integration.py) file. As currently only graph analysis is supported, these changes would be applicable solely to datasets added for the road network.
 
 To implement these changes, follow these guidelines (the process will still calculate criteria for each dataset):
 
-1. First, create three variables: [`datasetSchema`](../Python/Assessment/quality_assessment.py#L36), [`datasetEdgeTableTemplate`](../Python/Assessment/quality_assessment.py#L37), and [`datasetNodeTableTemplate`](../Python/Assessment/quality_assessment.py#L38). These variables should correspond to your schema name, the name of the edge table, and the name of the node table for the new dataset, respectively. The `dataset` part of the variable names should match the name of your dataset, which is likely the same as the schema name.
+1. First, create three variables: [`datasetSchema`](../src/Assessment/quality_assessment.py#L36), [`datasetEdgeTableTemplate`](../src/Assessment/quality_assessment.py#L37), and [`datasetNodeTableTemplate`](../src/Assessment/quality_assessment.py#L38). These variables should correspond to your schema name, the name of the edge table, and the name of the node table for the new dataset, respectively. The `dataset` part of the variable names should match the name of your dataset, which is likely the same as the schema name.
 
-2. Next, within the `for` statement, create two variables: [`datasetEdgeTable`](../Python/Assessment/quality_assessment.py#L70) and [`datasetNodeTable`](../Python/Assessment/quality_assessment.py#L71). These variables should be defined as:
+2. Next, within the `for` statement, create two variables: [`datasetEdgeTable`](../src/Assessment/quality_assessment.py#L70) and [`datasetNodeTable`](../src/Assessment/quality_assessment.py#L71). These variables should be defined as:
 
 ```python
 datasetEdgeTable = datasetEdgeTableTemplate.format(area.lower())
 datasetNodeTable = datasetNodeTableTemplate.format(area.lower())
 ```
 
-3. For each criterion, copy and paste the lines already created for the OSM and OMF datasets, and replace them with variables corresponding to your dataset. It is likely that a new column will need to be added to the variable [`data`](../Python/Assessment/quality_assessment.py#L84) to include your dataset value. For instance, the following examples illustrate two scenarios: the first does not save any layer to the database, while the second does:
+3. For each criterion, copy and paste the lines already created for the OSM and OMF datasets, and replace them with variables corresponding to your dataset. It is likely that a new column will need to be added to the variable [`data`](../src/Assessment/quality_assessment.py#L86) to include your dataset value. For instance, the following examples illustrate two scenarios: the first does not save any layer to the database, while the second does:
 
 ```python
 
@@ -335,7 +335,7 @@ print()
 generalResults = df.to_markdown(index=False, tablefmt="github")
 ```
 
-With this, you would probably have the markdown well formatted, if you change the name of the title of the markdown (by changing the value of [`exportMarkdown`](../Python/Assessment/quality_assessment.py#L211)). The only feature not implemented is for the length per class, as it only takes two lists as parameters, and not a list of lists, so it is not adapted yet for more than two datasets.
+With this, you would probably have the markdown well formatted, if you change the name of the title of the markdown (by changing the value of [`exportMarkdown`](../src/Assessment/quality_assessment.py#L330)). The only feature not implemented is for the length per class, as it only takes two lists as parameters, and not a list of lists, so it is not adapted yet for more than two datasets.
 
 ## Adding a new criterion
 
@@ -347,7 +347,7 @@ Adding a new criterion should be quite easy, as there are not many changes to do
 
 3. **Implement these changes in a Python script**: If you know how to calculate the criterion for a layer, then it is necessary to create or change an existing Python script. The next steps are indicated for the `quality_assessment.py` and `quality_assessment.py` file, but if another script was created, the modification would be the same:
 
-- First, create a function to calculate the criterion in the [quality.py](../Python/Assessment/quality.py) script. Usually, these functions have this signature (when it is possible to save the result as a layer):
+- First, create a function to calculate the criterion in the [quality.py](../src/Assessment/quality.py) script. Usually, these functions have this signature (when it is possible to save the result as a layer):
 
 ```python
 def getCorrespondingNodes(
@@ -360,13 +360,13 @@ def getCorrespondingNodes(
 
 - If the criterion is for a direct comparison between two datasets or more, there might be more parameters in the function, such as `schemaDatasetB` and `tableNameDatasetB`, for instance.
 
-- Then, in the [quality_assessment](../Python/Assessment/quality_assessment.py) script, add template layer names for each dataset if they are different from edge and node tables [here](../Python/Assessment/quality_assessment.py#L34). For instance: `osmAddressTableTemplate = address_{}`.
+- Then, in the [quality_assessment](../src/Assessment/quality_assessment.py) script, add template layer names for each dataset if they are different from edge and node tables [here](../src/Assessment/quality_assessment.py#L34). For instance: `osmAddressTableTemplate = address_{}`.
 
-- The template layer name for the result should be added [here](../Python/Assessment/quality_assessment.py#L58), like `criterionTemplate = criterion_{}_{}`.
+- The template layer name for the result should be added [here](../src/Assessment/quality_assessment.py#L57), like `criterionTemplate = criterion_{}_{}`.
 
-- Create the actual table by formatting the previous string with the area [here](../Python/Assessment/quality_assessment.py#). For instance: `osmAddressTable = osmAddressTableTemplate.format(area.lower())`.
+- Create the actual table by formatting the previous string with the area [here](../src/Assessment/quality_assessment.py#L75). For instance: `osmAddressTable = osmAddressTableTemplate.format(area.lower())`.
 
-- Then, add lines for calculating your criterion anywhere in the `for` statement. It would be better to add it [here](../Python/Assessment/quality_assessment.py#812), before the end of the `for` loop.
+- Then, add lines for calculating your criterion anywhere in the `for` statement. It would be better to add it [here](../src/Assessment/quality_assessment.py#L310), before the end of the `for` loop.
 
 ```python
 # New criterion
@@ -394,7 +394,7 @@ You might want to add a new theme for OSM or OMF (or another dataset), such as r
 
 3. **Change the `data_integration.py` file**: Once the new process is made, one can add it to the `data_integration.py` file. One can follow these steps for adding the new theme to the `data_integration.py` file:
 
-- Add a new template name for the layer(s) to create, [here](../Python/Assessment/data_integration.py#L49):
+- Add a new template name for the layer(s) to create, [here](../src/Assessment/data_integration.py#L51):
 
 ```python
 # Template names for layers
@@ -407,7 +407,7 @@ nodeTable = "node_{}"
 themeTable = "theme_{}"
 ```
 
-- Add a new boolean to check if layer(s) have already been created, [here](../Python/Assessment/data_integration.py#L55):
+- Add a new boolean to check if layer(s) have already been created, [here](../src/Assessment/data_integration.py#L59):
 
 ```python
 # If true, will recreate all tables even if they already exists
@@ -419,7 +419,7 @@ skipGraphCheck = False
 skipThemeCheck = False
 ```
 
-- Finally, add an `if / else` statement for the new theme for each dataset, [here](../Python/Assessment/data_integration.py#L205):
+- Finally, add an `if / else` statement for the new theme for each dataset, [here](../src/Assessment/data_integration.py#L231):
 
 ```python
 ### Other Theme ###
@@ -459,7 +459,7 @@ This section explains how to implement changes made in the data integration proc
 
 If another dataset is used, it is quite easy to change it in the DashBoard.
 
-First, it is necessary to add a specific class in the [datasets.py](../Python/GeoDataCompare/datasets.py) file.
+First, it is necessary to add a specific class in the [datasets.py](../src/GeoDataCompare/datasets.py) file.
 Here is a template for a new dataset:
 
 ```python
@@ -481,18 +481,18 @@ class MyDataset(Dataset):
     self.placeTable = "md.place_{}" # Name of the place layer in the database, schema included
 ```
 
-Then, change the dataset [A](../Python/GeoDataCompare/app.py#L194) or [B](../Python/GeoDataCompare/app.py#L196) (respectively left and right map) in the [app.py](../Python/GeoDataCompare/app.py) file in order to change the dataset for the whole dashboard.
+Then, change the dataset [A](../src/GeoDataCompare/app.py#L199) or [B](../src/GeoDataCompare/app.py#L201) (respectively left and right map) in the [app.py](../src/GeoDataCompare/app.py) file in order to change the dataset for the whole dashboard.
 It should not be more complicated than this.
 The only issue for the moment would be the same as before when adding a new dataset: differentiating the layers for the overlap indicator and corresponding nodes (globally for layers that need two datasets for comparing them).
 This issue will likely be addressed later.
 
-One might also want to change both [help.md](../Python/GeoDataCompare/help.md) and [licenses.md](../Python/GeoDataCompare/licenses.md) files to include information about the new dataset.
+One might also want to change both [help.md](../src/GeoDataCompare/help.md) and [licenses.md](../src/GeoDataCompare/licenses.md) files to include information about the new dataset.
 
 ## Adding a new criterion to the Dashboard
 
 To add a new criterion in the database, there are two necessary steps:
 
-1. Create the criterion class in the [criterion.py](../Python/GeoDataCompare/criterion.py) file;
+1. Create the criterion class in the [criterion.py](../src/GeoDataCompare/criterion.py) file;
 
 2. Add the criterion to the application.
 
@@ -590,11 +590,11 @@ Several things are important to notice here:
 
 - The name of the layer is `"results.my_criterion_{}_" + self.datasetA.schema`. If it is not the case in the database used within the application, this name needs to be changed.
 
-- If one wants to display other layers, it is possible to add their name in the other layer template list (for instance, adding edges for connected components. One can refer directly to the [ConnectedComponents](../Python/GeoDataCompare/criterion.py#L331) class of the [criterion.py](../Python/GeoDataCompare/criterion.py) script).
+- If one wants to display other layers, it is possible to add their name in the other layer template list (for instance, adding edges for connected components. One can refer directly to the [ConnectedComponents](../src/GeoDataCompare/criterion.py#L348) class of the [criterion.py](../src/GeoDataCompare/criterion.py) script).
 
 - In the `__init__` function, several items are necessary:
 
-  - `theme`: Theme of the layer, defined in the [theme.py](../Python/GeoDataCompare/theme.py) file. Please refer to the next section for more information on how to add a new theme to the dashboard.
+  - `theme`: Theme of the layer, defined in the [theme.py](../src/GeoDataCompare/theme.py) file. Please refer to the next section for more information on how to add a new theme to the dashboard.
 
   - `layerType`: [LonBoard](https://developmentseed.org/lonboard/latest/) type of the layer. For the moment, only [ScatterplotLayer](https://developmentseed.org/lonboard/latest/api/layers/scatterplot-layer/), [PathLayer](https://developmentseed.org/lonboard/latest/api/layers/path-layer/) and [PolygonLayer](https://developmentseed.org/lonboard/latest/api/layers/polygon-layer/) are supported by the application.
 
@@ -610,16 +610,16 @@ Several things are important to notice here:
 
 When this function is finished, there are still two changes to make:
 
-1. Change the [`quality_criteria_choices`](../Python/GeoDataCompare/app.py#L199) variable to add, in the correct theme, a new value such as `my_criterion = c.MyCriterion.displayName`. This way, the criterion should be added to the corresponding theme for the select option.
+1. Change the [`quality_criteria_choices`](../src/GeoDataCompare/app.py#L204) variable to add, in the correct theme, a new value such as `my_criterion = c.MyCriterion.displayName`. This way, the criterion should be added to the corresponding theme for the select option.
 
-2. Change the [`criteria_classes`](../Python/GeoDataCompare/app.py#L218) variable to add almost the same line: `my_criterion = c.MyCriterion`. The key used here must be exactly the same as the one used before, as the application will be able to create the new criterion depending on the key value.
+2. Change the [`criteria_classes`](../src/GeoDataCompare/app.py#L224) variable to add almost the same line: `my_criterion = c.MyCriterion`. The key used here must be exactly the same as the one used before, as the application will be able to create the new criterion depending on the key value.
 
 There should not be any other changes required to add the new criterion to the dashboard.
 However, it might be necessary to change some parts of the code for the layer style.
 If the indicator is a True/False value (and not a range like the connected components, for instance), then the changes can be quite easy.
 
 First, one might want to add specific color pickers for their criterion.
-In order to do so, it is possible to add components in the sidebar corresponding to the new criterion [here](../Python/GeoDataCompare/app.py#L594), after the last components and before the div used for the style of components:
+In order to do so, it is possible to add components in the sidebar corresponding to the new criterion [here](../src/GeoDataCompare/app.py#L636), after the last components and before the div used for the style of components:
 
 ```python
 # Style corresponding nodes layer
@@ -654,7 +654,7 @@ with ui.accordion_panel("Style corresponding nodes", class_= "background-sidebar
     return color_picker_my_criterion_false
 ```
 
-Then, one can change the [`colorBoolean`](../Python/GeoDataCompare/app.py#L1149) function (at the end of the script) to add their criterion and value, like (... corresponds to code not written here):
+Then, one can change the [`colorBoolean`](../src/GeoDataCompare/app.py#L1203) function (at the end of the script) to add their criterion and value, like (... corresponds to code not written here):
 
 ```python
 
@@ -687,11 +687,11 @@ def colorBoolean():
 
 Then, the changes should be applied to the new criterion as well.
 
-If the style is a range style, like the connected components, please refer to the part of the code where the sidebar components are added ([here](../Python/GeoDataCompare/app.py#L432)) and to the [`colorRange`](../Python/GeoDataCompare/app.py#L1149) function at the end of the script to create new components and possibly new functions to change the style.
+If the style is a range style, like the connected components, please refer to the part of the code where the sidebar components are added ([here](../src/GeoDataCompare/app.py#L462)) and to the [`colorRange`](../src/GeoDataCompare/app.py#L1203) function at the end of the script to create new components and possibly new functions to change the style.
 
 ## Adding a new theme to the DashBoard
 
-To add a new theme to the DashBoard, in theory, only the [theme.py](../Python/GeoDataCompare/theme.py) file should be modified, and a new class should be created.
+To add a new theme to the DashBoard, in theory, only the [theme.py](../src/GeoDataCompare/theme.py) file should be modified, and a new class should be created.
 However, if a new theme is added, there would likely be a new general value added (e.g., number of elements in the base layer for this theme).
 
 ### Creating the new theme class
@@ -748,7 +748,7 @@ Two major things need to be changed here:
 
 2. Implement the calculation for the dataframe. It is necessary to have a column, such as a class or a category, to calculate indicators on it (e.g., number of elements, total length, or surface per class). This dataframe will be rendered in the application, under the map.
 
-Once this is done, it is possible to create new criteria using this new theme. If another criterion is added for this theme, please remember to change the [`quality_criteria_choices`](../Python/GeoDataCompare/app.py#L199) variable to add the criterion within its theme, like this:
+Once this is done, it is possible to create new criteria using this new theme. If another criterion is added for this theme, please remember to change the [`quality_criteria_choices`](../src/GeoDataCompare/app.py#L204) variable to add the criterion within its theme, like this:
 
 ```python
 quality_criteria_choices = {
@@ -773,17 +773,17 @@ quality_criteria_choices = {
 }
 ```
 
-You would also be likely to change the `Dataset` class in the [dataset.py](../Python/GeoDataCompare/datasets.py) and its subclasses in order to add the new layer directly in the `Dataset` implementation, such as adding a new attribute `layerName: str` in the `Dataset` class, and then setting its value in every subclass with `self.layerName = "layer_{}"` in the `__init__` function.
+You would also be likely to change the `Dataset` class in the [dataset.py](../src/GeoDataCompare/datasets.py) and its subclasses in order to add the new layer directly in the `Dataset` implementation, such as adding a new attribute `layerName: str` in the `Dataset` class, and then setting its value in every subclass with `self.layerName = "layer_{}"` in the `__init__` function.
 
 ### Adding elements to the DashBoard
 
 It is easy to add an element to the DashBoard. Three steps are necessary for this:
 
-1. First, add two new variables to all classes in the [general_values](../Python/GeoDataCompare/general_values.py) script, such as `nbLayerDatasetA: str` and `nbLayerDatasetB: str`. For the `DefaultGeneralValues`, set their values to an empty string in the `__init__` function. For the `GeneralValues`, set their values to `self.nbLayerDatasetA = self.getNbRowTable(engine, self.datasetA.layerTable.format(area.lower()))` and `self.nbLayerDatasetB = self.getNbRowTable(engine, self.datasetB.layerTable.format(area.lower()))`.
+1. First, add two new variables to all classes in the [general_values](../src/GeoDataCompare/general_values.py) script, such as `nbLayerDatasetA: str` and `nbLayerDatasetB: str`. For the `DefaultGeneralValues`, set their values to an empty string in the `__init__` function. For the `GeneralValues`, set their values to `self.nbLayerDatasetA = self.getNbRowTable(engine, self.datasetA.layerTable.format(area.lower()))` and `self.nbLayerDatasetB = self.getNbRowTable(engine, self.datasetB.layerTable.format(area.lower()))`.
 
-2. Add a new icon for this element in the [`ICONS`](../Python/GeoDataCompare/app.py#L232) variable, with another name, such as `layer: fa.icon_svg("id")`, where `id` is a Font Awesome ID.
+2. Add a new icon for this element in the [`ICONS`](../src/GeoDataCompare/app.py#L239) variable, with another name, such as `layer: fa.icon_svg("id")`, where `id` is a Font Awesome ID.
 
-3. Then, add new cards in the application. The best place to add them is between the place card and the indicator card, [here](../Python/GeoDataCompare/app.py#L741), like this:
+3. Then, add new cards in the application. The best place to add them is between the place card and the indicator card, [here](../src/GeoDataCompare/app.py#L781), like this:
 
 ```python
 

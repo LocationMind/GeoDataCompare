@@ -2,15 +2,17 @@ import os
 import pandas as pd
 import psycopg2
 import sys
+from src.Utils import utils
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
-from Python.Utils import utils
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..")))
 
 
-def getListAreas(connection:psycopg2.extensions.connection,
-                 tableName:str = "bounding_box",
-                 schema:str = "public",
-                 columnName:str = 'name') -> list[str]:
+def getListAreas(
+    connection: psycopg2.extensions.connection,
+    tableName: str = "bounding_box",
+    schema: str = "public",
+    columnName: str = "name",
+) -> list[str]:
     """Get all areas names in the bounding box table.
 
     Args:
@@ -25,29 +27,31 @@ def getListAreas(connection:psycopg2.extensions.connection,
     # Get all the entity from bounding box table, order by name
     query = f"""SELECT {columnName} FROM {schema}.{tableName}
     ORDER BY {columnName} ASC;"""
-    
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     listArea = []
     # Put result to a list
     for row in cursor:
         listArea.append(row[0])
-    
+
     return listArea
 
 
-def getNumberElements(connection:psycopg2.extensions.connection,
-                      schema:str,
-                      tableName:str,
-                      filter:bool = False,
-                      joinTable:str = 'bounding_box',
-                      areaName:str = "") -> int:
+def getNumberElements(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    tableName: str,
+    filter: bool = False,
+    joinTable: str = "bounding_box",
+    areaName: str = "",
+) -> int:
     """Get the number of elements for the designed table (ways or nodes).
     If filter is true, then only entity contains in the join table will be used.
     The ST_Contains method will be used for this.
     If so, the area name is necessary and an exception will be raised if not given.
-    
+
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database
         schema (str): Name of the schema.
@@ -62,16 +66,16 @@ def getNumberElements(connection:psycopg2.extensions.connection,
         An area name must be given.
         ValueError: If joinTable is None or an empty string but the filter is on.
         A join table must be given.
-    
+
     Returns:
         int: Number of elements in the table.
     """
     # General query
     query = f"""SELECT COUNT(*) as cnt FROM {schema}.{tableName} AS e """
-    
+
     # Join query if needed
     joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
-    
+
     if filter:
         # Check for parameter exception
         if areaName == "" or areaName is None:
@@ -81,24 +85,26 @@ def getNumberElements(connection:psycopg2.extensions.connection,
         query += joinQuery
     else:
         query += ";"
-    
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     # Get result
     row = cursor.fetchone()
     count = row[0]
-    
+
     # close cursor
     return count
 
 
-def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
-                            schema:str,
-                            edgeTableName:str,
-                            filter:bool = False,
-                            joinTable:str = 'bounding_box',
-                            areaName:str = None) -> float:
+def getTotalLengthKilometer(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    edgeTableName: str,
+    filter: bool = False,
+    joinTable: str = "bounding_box",
+    areaName: str = None,
+) -> float:
     """Return the total length in kilometer of the table.
     If filter is true, then only entity contains in the join table will be used.
     The ST_Contains method will be used for this.
@@ -125,10 +131,10 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
     """
     # General query
     query = f"""SELECT CEILING(SUM(public.ST_Length(e.geom::geography)) / 1000) as cnt FROM {schema}.{edgeTableName} AS e """
-    
+
     # Join query if needed
     joinQuery = f"""JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom) WHERE b.name = '{areaName}';"""
-    
+
     if filter:
         # Check for parameter exception
         if areaName == "" or areaName is None:
@@ -138,26 +144,28 @@ def getTotalLengthKilometer(connection:psycopg2.extensions.connection,
         query += joinQuery
     else:
         query += ";"
-    
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     # Get result
     row = cursor.fetchone()
     count = row[0]
-    
+
     # close cursor
     cursor.close()
-    
+
     return count
 
 
-def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
-                               schema:str,
-                               edgeTableName:str,
-                               filter:bool = False,
-                               joinTable:str = 'bounding_box',
-                               areaName:str = None) -> list[tuple[str, float, int]]:
+def getLengthKilometerPerClass(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    edgeTableName: str,
+    filter: bool = False,
+    joinTable: str = "bounding_box",
+    areaName: str = None,
+) -> list[tuple[str, float, int]]:
     """Return the length in kilometer of the table per class, in a dict format.
     No mapping is made for each dataset.
     If filter is true, then only entity contains in the join table will be used.
@@ -189,12 +197,12 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
     round((SUM(ST_Length(e.geom::geography)) / 1000)::numeric, 2) as length_kilometer,
     COUNT(*) as nb_entity
     FROM {schema}.{edgeTableName} AS e """
-    
+
     # Join query if needed
     joinQuery = f"""
     JOIN public.{joinTable} AS b ON ST_Contains(b.geom, e.geom)
     WHERE b.name = '{areaName}' """
-    
+
     if filter:
         # Check for parameter exception
         if areaName == "" or areaName is None:
@@ -202,38 +210,39 @@ def getLengthKilometerPerClass(connection:psycopg2.extensions.connection,
         if joinTable == "" or joinTable is None:
             raise ValueError("If filter is true, a join table must be given")
         query += joinQuery
-    
+
     query += """
     GROUP by class
     ORDER by class ASC;"""
-    
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     listClasses = []
     # Get result
-    for (newClass, length, number) in cursor:
+    for newClass, length, number in cursor:
         # None case
         if newClass is None:
-            newClass = 'None'
+            newClass = "None"
         listClasses.append((newClass, float(length), number))
-    
-    
-    listClasses.sort(key= lambda a: a[0].lower())
-    
+
+    listClasses.sort(key=lambda a: a[0].lower())
+
     # close cursor
     cursor.close()
-    
+
     return listClasses
 
 
-def getConnectedComponents(connection:psycopg2.extensions.connection,
-                           schema:str,
-                           edgeTableName:str,
-                           resultAsTable:str = "",
-                           nodeTableName:str = "",
-                           schemaResult:str = "public",
-                           idColumnName:str = "id") -> int:
+def getConnectedComponents(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    edgeTableName: str,
+    resultAsTable: str = "",
+    nodeTableName: str = "",
+    schemaResult: str = "public",
+    idColumnName: str = "id",
+) -> int:
     """Return the number of connected components of the graph using PgRouting algorithms.
     PgRouting must be installed otherwise it will not work.
     If you want to save the result as table, two queries will be run.
@@ -249,7 +258,7 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
         Not necessary if resultAsTable is empty. Defaults to "public".
         idColumnName (str, optional): Name of the node id column.
         Not necessary if resultAsTable is empty. Defaults to "id".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
 
@@ -258,53 +267,54 @@ def getConnectedComponents(connection:psycopg2.extensions.connection,
     """
     # General query
     query = f"""SELECT COUNT(*) FROM (
-		SELECT COUNT(*)
-		FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
-		GROUP BY DISTINCT component
-	) AS sub;"""
-    
+        SELECT COUNT(*)
+        FROM public.pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
+        GROUP BY DISTINCT component
+    ) AS sub;"""
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     # Get result
     row = cursor.fetchone()
     count = row[0]
-    
+
     # close cursor
     cursor.close()
-    
-    
+
     # Add create table statement if the parameter is on
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
         if nodeTableName == "":
             raise ValueError("The node table must be given for the result output")
-        
+
         # Add drop / create table statement
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
-		FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
-		JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
-		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+        FROM pgr_connectedComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
+        JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
+        ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
         """
-        
+
         # Execute query
         utils.executeQueryWithTransaction(connection, query)
-        
+
     return count
 
 
-def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
-                                 schema:str,
-                                 edgeTableName:str,
-                                 resultAsTable:str = "",
-                                 nodeTableName:str = "",
-                                 schemaResult:str = "public",
-                                 idColumnName:str = "id") -> int:
+def getStrongConnectedComponents(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    edgeTableName: str,
+    resultAsTable: str = "",
+    nodeTableName: str = "",
+    schemaResult: str = "public",
+    idColumnName: str = "id",
+) -> int:
     """Return the number of strong connected components of the graph using PgRouting algorithms.
     PgRouting must be installed otherwise it will not work.
     If you want to save the result as table, two queries will be run.
@@ -322,61 +332,63 @@ def getStrongConnectedComponents(connection:psycopg2.extensions.connection,
         Not necessary if resultAsTable is empty. Defaults to "public".
         idColumnName (str, optional): Name of the node id column.
         Not necessary if resultAsTable is empty. Defaults to "id".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
         ValueError: If no node table is given when saving the result as table.
-    
+
     Returns:
         int: Number of strong connected components for the graph.
     """
     # General query
     query = f"""SELECT COUNT(*) FROM (
-		SELECT COUNT(*)
-		FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
-		GROUP BY DISTINCT component
-	) AS sub;"""
-    
+        SELECT COUNT(*)
+        FROM public.pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}')
+        GROUP BY DISTINCT component
+    ) AS sub;"""
+
     # Execute query
     cursor = utils.executeSelectQuery(connection, query)
-    
+
     # Get result
     row = cursor.fetchone()
     count = row[0]
-    
+
     # close cursor
     cursor.close()
-    
+
     # Add create table statement if the parameter is on
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
         if nodeTableName == "":
             raise ValueError("The node table must be given for the result output")
-        
+
         # Create table query
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         SELECT *, COUNT(*) OVER (PARTITION BY component) AS cardinality
-		FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
-		JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
-		ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
+        FROM pgr_strongComponents('SELECT id, source, target, cost, reverse_cost FROM {schema}.{edgeTableName}') pgr
+        JOIN {schema}.{nodeTableName} AS v ON pgr.node = v.{idColumnName}
+        ORDER by COUNT(*) OVER (PARTITION BY component) ASC;
         """
-        
+
         # Execute query
         utils.executeQueryWithTransaction(connection, query)
-        
+
     return count
 
 
-def getIsolatedNodes(connection:psycopg2.extensions.connection,
-                     schema:str,
-                     edgeTableName:str,
-                     nodeTableName:str,
-                     resultAsTable:str = "",
-                     schemaResult:str = "public") -> int:
+def getIsolatedNodes(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    edgeTableName: str,
+    nodeTableName: str,
+    resultAsTable: str = "",
+    schemaResult: str = "public",
+) -> int:
     """Return the number of isolated nodes in the graph, by counting
     the number of nodes that do not intersect any roads
 
@@ -389,31 +401,31 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
         Otherwise, only the percentage will be shown. Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
-    
+
     Returns:
         int: Number of strong connected components for the graph.
     """
     query = ""
     # Add create table statement if the parameter is on
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
-        
+
         # Add drop / create table statement
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         """
-        
+
     # General query
     query += f"""
     WITH isolated_nodes AS (
         SELECT DISTINCT ON (n.geom)
-            n.*,        
+            n.*,
             CASE WHEN public.ST_Intersects(e.geom, n.geom)THEN true
             ELSE false
             END AS intersects
@@ -421,21 +433,21 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
         LEFT JOIN {schema}.{edgeTableName} e ON public.ST_Intersects(e.geom, n.geom)
     )
     """
-    
+
     # Select query (either added to the general query or run on its own)
     selectPart = """ SELECT intersects, COUNT(*) as nb
     FROM {}
     GROUP BY intersects
     ORDER BY intersects;
     """
-    
+
     # If the table is created, we do not sum up the length directly, only after the table is created
-    if resultAsTable !="":
-        query+= " SELECT * FROM isolated_nodes;"
-        
+    if resultAsTable != "":
+        query += " SELECT * FROM isolated_nodes;"
+
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
-        
+
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
         cursor = utils.executeSelectQuery(connection, selectQuery)
@@ -443,24 +455,26 @@ def getIsolatedNodes(connection:psycopg2.extensions.connection,
     else:
         query += selectPart.format("isolated_nodes")
         cursor = utils.executeSelectQuery(connection, query)
-    
+
     isolatedNodes = 0
     # Fetch result to calculate the indicator
-    for (intersects, nb) in cursor:
+    for intersects, nb in cursor:
         # We take the overlap length from the result
-        if intersects == False:
+        if not intersects:
             isolatedNodes = nb
-    
+
     return isolatedNodes
 
 
-def getOverlapIndicator(connection:psycopg2.extensions.connection,
-                        schemaDatasetA:str,
-                        tableNameDatasetA:str,
-                        schemaDatasetB:str,
-                        tableNameDatasetB:str,
-                        resultAsTable:str = "",
-                        schemaResult:str = "public") -> float:
+def getOverlapIndicator(
+    connection: psycopg2.extensions.connection,
+    schemaDatasetA: str,
+    tableNameDatasetA: str,
+    schemaDatasetB: str,
+    tableNameDatasetB: str,
+    resultAsTable: str = "",
+    schemaResult: str = "public",
+) -> float:
     """Return the value of the overlap indicator for dataset A over dataset B.
     The result can be write as a table if resultAsTable parameter is not empty.
     If so, a DROP TABLE / CREATE TABLE statement will be added to the query.
@@ -475,7 +489,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         Otherwise, only the percentage will be shown. Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
 
@@ -484,17 +498,17 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     """
     query = ""
     # Add create table statement if the parameter is on
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
-        
+
         # Add drop / create table statement
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         """
-    
+
     # General query
     query += f"""
     WITH union_buffer AS (
@@ -514,7 +528,7 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
         ORDER BY id asc
     )
     """
-    
+
     # Select query (either added to the general query or run in its own)
     selectPart = """
     SELECT
@@ -524,14 +538,14 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     GROUP BY overlap
     ORDER BY overlap;
     """
-    
+
     # If the table is created, we do not sum up the length directly, only after the table is created
-    if resultAsTable !="":
+    if resultAsTable != "":
         query += " SELECT * FROM intersect_buffer;"
-        
+
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
-        
+
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
         cursor = utils.executeSelectQuery(connection, selectQuery)
@@ -539,30 +553,32 @@ def getOverlapIndicator(connection:psycopg2.extensions.connection,
     else:
         query += selectPart.format("intersect_buffer")
         cursor = utils.executeSelectQuery(connection, query)
-    
+
     totalLength = 0
     overlapLength = 0
     # Fetch result to calculate the indicator
-    for (overlap, length) in cursor:
+    for overlap, length in cursor:
         # We take the overlap length from the result
-        if overlap == True:
+        if overlap:
             overlapLength = length
         totalLength += length
-    
+
     # Calculate indicator
     indicator = round((overlapLength / totalLength) * 100, 2)
-    
+
     return indicator
 
 
-def getCorrespondingNodes(connection:psycopg2.extensions.connection,
-                          schemaDatasetA:str,
-                          tableNameDatasetA:str,
-                          schemaDatasetB:str,
-                          tableNameDatasetB:str,
-                          joinTable:str = 'bounding_box',
-                          resultAsTable:str = "",
-                          schemaResult:str = "public") -> tuple[int, float]:
+def getCorrespondingNodes(
+    connection: psycopg2.extensions.connection,
+    schemaDatasetA: str,
+    tableNameDatasetA: str,
+    schemaDatasetB: str,
+    tableNameDatasetB: str,
+    joinTable: str = "bounding_box",
+    resultAsTable: str = "",
+    schemaResult: str = "public",
+) -> tuple[int, float]:
     """Return the number of corresponding nodes in dataset A, comparing it to dataset B,
     and the percentage of nodes.
     Both tables are filtered using the join table.
@@ -579,7 +595,7 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         Otherwise, only the percentage will be shown. Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
 
@@ -589,17 +605,17 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     """
     query = ""
     # Add create table statement if the parameter is on
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
-        
+
         # Add drop / create table statement
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         """
-    
+
     # General query
     query += f"""
     WITH vertices_dataset_a AS (
@@ -622,21 +638,21 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
         LEFT JOIN vertices_dataset_b vb ON public.ST_Intersects(va.geom, vb.geom)
     )
     """
-    
+
     # Select query (either added to the general query or run on its own)
     selectPart = """SELECT intersects, COUNT(*) as nb
     FROM {}
     GROUP BY intersects
     ORDER BY intersects;
     """
-    
+
     # If the table is created, we do not sum up the length directly, only after the table is created
-    if resultAsTable !="":
-        query+= " SELECT * FROM vertices_intersect;"
-        
+    if resultAsTable != "":
+        query += " SELECT * FROM vertices_intersect;"
+
         # Execute the query to create the table
         utils.executeQueryWithTransaction(connection, query)
-        
+
         # Select the overlap indicator
         selectQuery = selectPart.format(f"{schemaResult}.{resultAsTable}")
         cursor = utils.executeSelectQuery(connection, selectQuery)
@@ -644,24 +660,26 @@ def getCorrespondingNodes(connection:psycopg2.extensions.connection,
     else:
         query += selectPart.format("vertices_intersect")
         cursor = utils.executeSelectQuery(connection, query)
-    
+
     totalNodes = 0
     intersectNodes = 0
     # Fetch result to calculate the indicator
-    for (intersects, nb) in cursor:
+    for intersects, nb in cursor:
         # We take the number of intersected nodes
-        if intersects == True:
+        if intersects:
             intersectNodes = nb
         totalNodes += nb
-    
+
     # Calculate indicator
     percentage = round((intersectNodes / totalNodes) * 100, 2)
-    
+
     return intersectNodes, percentage
 
 
-def listsToMardownTable(listOSM:list,
-                        listOMF:list,) -> str:
+def listsToMardownTable(
+    listOSM: list,
+    listOMF: list,
+) -> str:
     """Merge two list with the same first column into a markdown table.
     The lists must be list of tuples or list of list, and within each tuples or
     list, the same number of value is expected.
@@ -675,7 +693,7 @@ def listsToMardownTable(listOSM:list,
         Defaults to ["class", "OMF - Total length (km)", "OMF - Number of entities"].
         columnsOSM (list, optional): Name of the OMF list columns.
         Defaults to ["class", "OMF - Total length (km)", "OMF - Number of entities"].
-    
+
     Raises:
         ValueError: If the listOSM parameter is empty.
         ValueError: If the listOSM parameter is empty.
@@ -690,26 +708,28 @@ def listsToMardownTable(listOSM:list,
         raise ValueError("The OSM list parameter must not be empty")
     if len(listOMF) == 0:
         raise ValueError("The OMF list parameter must not be empty")
-    
+
     # Test if the list have the same number of column in the first entry
     lenOSM = len(listOSM[0])
     lenOMF = len(listOMF[0])
-    
+
     if lenOSM != lenOMF:
-        raise ValueError(f"The two lists does not have the same number of columns in the first entry: len(listOSM[0]) = {lenOSM}, len(listOMF[0]) = {lenOMF})")
-    
+        raise ValueError(
+            f"The two lists does not have the same number of columns in the first entry: len(listOSM[0]) = {lenOSM}, len(listOMF[0]) = {lenOMF})"
+        )
+
     # Transform list in dataframe
     columnsOSM = ["class", "length", "entity"]
     columnsOMF = ["class", "length", "entity"]
     dfOSM = pd.DataFrame(listOSM, columns=columnsOSM)
     dfOMF = pd.DataFrame(listOMF, columns=columnsOMF)
-    
+
     finalList = []
     # Iterate over OSM rows first
-    for _, (classDf, lengthOSM, entityOSM) in dfOSM.iterrows():        
+    for _, (classDf, lengthOSM, entityOSM) in dfOSM.iterrows():
         # Check if the value is also in OMF dataframe
-        valueInOMF = dfOMF.loc[dfOMF['class'] == classDf]
-        
+        valueInOMF = dfOMF.loc[dfOMF["class"] == classDf]
+
         # If no value is found, we put 0 as a value
         if valueInOMF.empty:
             lengthOMF, entityOMF = 0, 0
@@ -720,7 +740,7 @@ def listsToMardownTable(listOSM:list,
             entityOMF = valueInOMF.iloc[0]["entity"]
             # Remove line from the dataFrame
             dfOMF = dfOMF.drop(id)
-        
+
         # Add the value to the final list
         finalList.append([classDf, lengthOSM, entityOSM, lengthOMF, entityOMF])
 
@@ -730,32 +750,40 @@ def listsToMardownTable(listOSM:list,
         lengthOSM, entityOSM = 0, 0
         # Add the value to the final list
         finalList.append([classDf, lengthOSM, entityOSM, lengthOMF, entityOMF])
-    
+
     # Sort the list by class
-    finalList.sort(key= lambda a: a[0])
-    
+    finalList.sort(key=lambda a: a[0])
+
     # Create the dataframe
-    finalColumns = ["class", "OSM - Total length (km)", "OSM - Number of entities", "OMF - Total length (km)", "OMF - Number of entities"]
+    finalColumns = [
+        "class",
+        "OSM - Total length (km)",
+        "OSM - Number of entities",
+        "OMF - Total length (km)",
+        "OMF - Number of entities",
+    ]
     finalDataFrame = pd.DataFrame(finalList, columns=finalColumns)
-    
+
     # Export to markdown
     markdown = finalDataFrame.to_markdown(index=False, tablefmt="github")
-    
+
     return markdown
 
 
-def getDensityPlaceGrid(connection:psycopg2.extensions.connection,
-                        schema:str,
-                        placeTable:str,
-                        area:str,
-                        boundingBoxTable:str = 'bounding_box',
-                        resultAsTable:str = "",
-                        schemaResult:str = "public") -> int:
+def getDensityPlaceGrid(
+    connection: psycopg2.extensions.connection,
+    schema: str,
+    placeTable: str,
+    area: str,
+    boundingBoxTable: str = "bounding_box",
+    resultAsTable: str = "",
+    schemaResult: str = "public",
+) -> int:
     """Return the density of places in the bounding box.
     If the result is save as a table then the density is calculated on
     100 x 100 meters square.
     Uses the geometry from the bounding box table for a density.
-    
+
     Args:
         connection (psycopg2.extensions.connection): Connection token for the database.
         schema (str): Name of the schema.
@@ -767,10 +795,10 @@ def getDensityPlaceGrid(connection:psycopg2.extensions.connection,
         Defaults to "".
         schemaResult (str, optional): Name of the schema for the results.
         Not necessary if resultAsTable is empty. Defaults to "public".
-    
+
     Raises:
         ValueError: If no result schema is given when saving the result as table.
-    
+
     Returns:
         int: Density of places per kilometer square.
     """
@@ -786,19 +814,19 @@ def getDensityPlaceGrid(connection:psycopg2.extensions.connection,
     )
     SELECT nb_places.nb / area_bbox.area AS density FROM nb_places, area_bbox
     """
-    
+
     cursor = utils.executeSelectQuery(connection, queryDensity)
     value = cursor.fetchone()[0]
-    
+
     # Create table if needed
-    if resultAsTable !="":
+    if resultAsTable != "":
         if schemaResult == "":
             raise ValueError("A schema must be given for the result output")
-        
+
         # Add drop / create table statement
         query = f"""
         DROP TABLE IF EXISTS {schemaResult}.{resultAsTable} CASCADE;
-        
+
         CREATE TABLE {schemaResult}.{resultAsTable} AS
         WITH grid AS (
             SELECT (ST_SquareGrid(0.001, geom)).*
@@ -822,12 +850,12 @@ def getDensityPlaceGrid(connection:psycopg2.extensions.connection,
         UNION
         SELECT * FROM grid_intersects
         ORDER by i, j ASC;
-        
+
         ALTER TABLE {schemaResult}.{resultAsTable}
         ADD COLUMN id serial;
         """
-        
+
         # Create table
         utils.executeQueryWithTransaction(connection, query)
-    
+
     return value
