@@ -1,6 +1,9 @@
+name: geodatacompare
+
 services:
   pgrouting:
     image: pgrouting/pgrouting:16-3.4-3.6.1
+    container_name: db-pgrouting
     environment:
       POSTGRES_DB: pgrouting
       POSTGRES_USER: postgres

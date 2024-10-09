@@ -2,14 +2,13 @@ import sys
 import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..')))
 import duckdb
-from Python import utils
+from Python.Utils import utils
 
 # Connections to the database
-dbname = 'pgrouting'
-host = "localhost"
-connection = utils.getConnection(dbname, host = host)
-engine = utils.getEngine(dbname, host = host)
-utils.initialiseDuckDB(dbname, host = host)
+connection = utils.getConnection()
+engine = utils.getEngine()
+utils.initialiseDuckDB()
+
 
 # Create test table
 query = """
