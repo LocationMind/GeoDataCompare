@@ -8,15 +8,16 @@
 
 - [GeoDataCompare: Visualisation system to compare OpenStreetMap and Overture Maps Foundation data](#geodatacompare-visualisation-system-to-compare-openstreetmap-and-overture-maps-foundation-data)
 - [Documentation](#documentation)
-- [Install](#install)
-  - [Necessary components](#necessary-components)
-  - [Requirements](#requirements)
-  - [Database](#database)
-  - [Environment file](#environment-file)
-- [Using the scripts](#using-the-scripts)
-  - [Download data](#download-data)
-  - [Quality assessment](#quality-assessment)
-  - [Running the application](#running-the-application)
+- [Getting started](#getting-started)
+  - [Install](#install)
+    - [Necessary components](#necessary-components)
+    - [Requirements](#requirements)
+    - [Database](#database)
+    - [Environment file](#environment-file)
+  - [Using the scripts](#using-the-scripts)
+    - [Download data](#download-data)
+    - [Quality assessment](#quality-assessment)
+    - [Running the application](#running-the-application)
 - [Licenses](#licenses)
 - [Credits](#credits)
 
@@ -27,13 +28,18 @@ This project provides Python scripts to download and integrate data into a Postg
 
 This project was initially created for an internship at the [ENSG-Géomatique](https://ensg.eu/fr) school and is maintained by [LocationMind Inc.](https://locationmind.com/).
 
+The information on the command line is provided for Windows users only.
+It might be necessary to make small changes in the command line if you are a Mac or Linux user, for instance.
+
 # Documentation
 
 If you want more information about the data, quality criteria, or how to use the dashboard, you can refer to the [user documentation](./Documentation/user-doc.md).
 
 If you want to modify a process or the dashboard (especially to add more criteria or other themes), please refer to the [developer documentation](./Documentation/dev-doc.md).
 
-# Install
+# Getting started
+
+## Install
 
 Whether it is for installing the dependencies, running the scripts, or the application, it is always assumed that the command line is at the root of the GitHub project.
 This is important, as some scripts might not work if they are not run from the root of the project.
@@ -41,7 +47,7 @@ This is important, as some scripts might not work if they are not run from the r
 Also, depending on the OS you are using, you might need to change `\` to `/` or vice versa.
 It should not be necessary to do so in the Python scripts, only in the command line.
 
-## Necessary components
+### Necessary components
 
 To run the application, it is necessary to have at least these two components:
 
@@ -58,7 +64,7 @@ with these specific versions used for development and testing:
 | **Python** | 3.12.3 |
 
 
-## Requirements
+### Requirements
 
 It is strongly recommended to use a Python virtual environment to download the necessary dependencies only within the virtual environment.
 Here is how you can do this:
@@ -87,7 +93,7 @@ python.exe -m pip install --upgrade pip
 pip install pip-tools && pip-compile Requirements\requirements.in && pip install -r Requirements\requirements.txt
 ```
 
-## Database
+### Database
 
 Create a PostGIS database named `pgrouting`.
 
@@ -96,7 +102,7 @@ This is not a necessary step, as it should be run by the scripts as well, but it
 
 More information about the database can be found in the [Database section](./Documentation/user-doc.md#database) of the user documentation.
 
-## Environment file
+### Environment file
 
 You can customise the [.env](./.env) file to configure your connection to the PostGIS database.
 Initially, the parameter values are:
@@ -109,9 +115,9 @@ Initially, the parameter values are:
 
 This file is used in all scripts, whether for quality assessment or the dashboard.
 
-# Using the scripts
+## Using the scripts
 
-## Download data
+### Download data
 
 Use the [data_integration.py](Python\Assessment\data_integration.py) file to download and integrate OSM and OMF data:
 
@@ -123,7 +129,7 @@ It uses the file containing the bounding box: [bboxs.json](./Data/bboxs.json).
 Refer to the [user documentation](./Documentation/user-doc.md#adding-areas) for more information on how to add new areas.
 You will also find information on how to configure the [data_integration.py](src/Assessment/data_integration.py/) file to force the data download or prevent the bounding box table from being recreated.
 
-## Quality assessment
+### Quality assessment
 
 This script needs to be run after the data integration process, but before running the dashboard.
 It is contained in the [quality_assessment.py](./src/Assessment/quality_assessment.py).
@@ -139,7 +145,7 @@ The summary result is located in the [`Results`](./Results/) folder of the repos
 Once again, you can refer to the [user documentation](./Documentation/user-doc.md#quality-assessment-criteria) for more information about this script and how to configure it.
 
 
-## Running the application
+### Running the application
 
 Run this command to launch the application:
 
