@@ -277,7 +277,7 @@ If changes are required, they should be made consistently across the different f
 The script can be run with this command:
 
 ```cmd
-python Python\Assessment\data_integration.py
+python src\Assessment\data_integration.py
 ```
 
 Or directly by running the script in an IDE of choice.
@@ -305,7 +305,7 @@ Other variables can also be changed, but this is not recommended, especially sin
 As with the previous script, this script can be run with this command:
 
 ```cmd
-python Python\Assessment\quality_assessment.py
+python src\Assessment\quality_assessment.py
 ```
 
 Or directly by running the script in an IDE of choice.
@@ -318,7 +318,7 @@ Calculating everything may take some time, but the results will be printed to th
 To run the application, since the requirements are already downloaded, one can simply use this command:
 
 ```
-shiny run .\Python\Web\Dashboard\app.py
+shiny run .\src\Web\Dashboard\app.py
 ```
 
 Then, open your browser and navigate to [http://127.0.0.1:8000](http://127.0.0.1:8000).

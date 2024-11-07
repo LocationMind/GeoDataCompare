@@ -119,10 +119,10 @@ This file is used in all scripts, whether for quality assessment or the dashboar
 
 ### Download data
 
-Use the [data_integration.py](Python\Assessment\data_integration.py) file to download and integrate OSM and OMF data:
+Use the [data_integration.py](src/Assessment/data_integration.py) file to download and integrate OSM and OMF data:
 
 ```cmd
-python Python\Assessment\data_integration.py
+python src\Assessment\data_integration.py
 ```
 
 It uses the file containing the bounding box: [bboxs.json](./Data/bboxs.json).
@@ -136,7 +136,7 @@ It is contained in the [quality_assessment.py](./src/Assessment/quality_assessme
 To run this script:
 
 ```cmd
-python Python\Assessment\quality_assessment.py
+python src\Assessment\quality_assessment.py
 ```
 
 This script will create layers in the database for the visible ones and also a summary result.
