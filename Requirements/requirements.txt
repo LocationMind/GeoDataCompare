@@ -131,7 +131,7 @@ numpy==1.26.4
     #   statsmodels
 osmnx==1.9.3
     # via -r Requirements\requirements.in
-overturemaps==0.9.0
+overturemaps==0.10.0
     # via -r Requirements\requirements.in
 packaging==24.1
     # via
