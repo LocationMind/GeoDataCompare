@@ -36,7 +36,7 @@ else:
 
 # Limit date of data
 ox.settings.overpass_settings = (
-    '[out:json][timeout:{timeout}]{maxsize}[date:"2024-08-31T23:59:59Z"]'
+    '[out:json][timeout:{timeout}]{maxsize}[date:"2024-09-30T23:59:59Z"]'
 )
 
 curdir = os.getcwd()
