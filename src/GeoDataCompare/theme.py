@@ -314,7 +314,7 @@ class Place(Theme):
             gdfSumup = pd.DataFrame()
 
         else:
-            # Set geometry column and project to another crs
+            # Set geometry column
             gdf = gdf.set_geometry("geom")
 
             # Agregate per categories and calculate the sum and count for each category

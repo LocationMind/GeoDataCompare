@@ -14,10 +14,10 @@ This documentation provides information on how to modify various scripts to eith
   - [Adding a new theme](#adding-a-new-theme)
 - [GeoDataCompare](#geodatacompare)
   - [Change input datasets](#change-input-datasets)
-  - [Adding a new criterion to the Dashboard](#adding-a-new-criterion-to-the-dashboard)
-  - [Adding a new theme to the DashBoard](#adding-a-new-theme-to-the-dashboard)
+  - [Adding a new criterion to the dashboard](#adding-a-new-criterion-to-the-dashboard)
+  - [Adding a new theme to the dashboard](#adding-a-new-theme-to-the-dashboard)
     - [Creating the new theme class](#creating-the-new-theme-class)
-    - [Adding elements to the DashBoard](#adding-elements-to-the-dashboard)
+    - [Adding elements to the dashboard](#adding-elements-to-the-dashboard)
 
 # Data Integration Process
 
@@ -453,11 +453,11 @@ To add this theme to the dashboard, please refer to the [GeoDataCompare](#adding
 
 # GeoDataCompare
 
-This section explains how to implement changes made in the data integration process into the DashBoard.
+This section explains how to implement changes made in the data integration process into the dashboard.
 
 ## Change input datasets
 
-If another dataset is used, it is quite easy to change it in the DashBoard.
+If another dataset is used, it is quite easy to change it in the dashboard.
 
 First, it is necessary to add a specific class in the [datasets.py](../src/GeoDataCompare/datasets.py) file.
 Here is a template for a new dataset:
@@ -488,7 +488,7 @@ This issue will likely be addressed later.
 
 One might also want to change both [help.md](../src/GeoDataCompare/help.md) and [licenses.md](../src/GeoDataCompare/licenses.md) files to include information about the new dataset.
 
-## Adding a new criterion to the Dashboard
+## Adding a new criterion to the dashboard
 
 To add a new criterion in the database, there are two necessary steps:
 
@@ -602,7 +602,7 @@ Several things are important to notice here:
 
   - `columnCriterion`: Name of the column on which the indicator value is calculated. It is not mandatory if, for instance, only geometrical operations are necessary for the indicator.
 
-  - `displayNameCriterion`: Name of the criterion to display in the indicator card in the Dashboard. Usually, it is the name of the criterion with a unit (e.g. km, km², %), but it is not mandatory.
+  - `displayNameCriterion`: Name of the criterion to display in the indicator card in the dashboard. Usually, it is the name of the criterion with a unit (e.g. km, km², %), but it is not mandatory.
 
   - `icon`: [Font Awesome](https://fontawesome.com/icons/) icon name. It is possible to search for an icon and copy the name of the icon in order to use it directly in the application.
 
@@ -689,9 +689,9 @@ Then, the changes should be applied to the new criterion as well.
 
 If the style is a range style, like the connected components, please refer to the part of the code where the sidebar components are added ([here](../src/GeoDataCompare/app.py#L462)) and to the [`colorRange`](../src/GeoDataCompare/app.py#L1203) function at the end of the script to create new components and possibly new functions to change the style.
 
-## Adding a new theme to the DashBoard
+## Adding a new theme to the dashboard
 
-To add a new theme to the DashBoard, in theory, only the [theme.py](../src/GeoDataCompare/theme.py) file should be modified, and a new class should be created.
+To add a new theme to the dashboard, in theory, only the [theme.py](../src/GeoDataCompare/theme.py) file should be modified, and a new class should be created.
 However, if a new theme is added, there would likely be a new general value added (e.g., number of elements in the base layer for this theme).
 
 ### Creating the new theme class
@@ -775,9 +775,9 @@ quality_criteria_choices = {
 
 You would also be likely to change the `Dataset` class in the [dataset.py](../src/GeoDataCompare/datasets.py) and its subclasses in order to add the new layer directly in the `Dataset` implementation, such as adding a new attribute `layerName: str` in the `Dataset` class, and then setting its value in every subclass with `self.layerName = "layer_{}"` in the `__init__` function.
 
-### Adding elements to the DashBoard
+### Adding elements to the dashboard
 
-It is easy to add an element to the DashBoard. Three steps are necessary for this:
+It is easy to add an element to the dashboard. Three steps are necessary for this:
 
 1. First, add two new variables to all classes in the [general_values](../src/GeoDataCompare/general_values.py) script, such as `nbLayerDatasetA: str` and `nbLayerDatasetB: str`. For the `DefaultGeneralValues`, set their values to an empty string in the `__init__` function. For the `GeneralValues`, set their values to `self.nbLayerDatasetA = self.getNbRowTable(engine, self.datasetA.layerTable.format(area.lower()))` and `self.nbLayerDatasetB = self.getNbRowTable(engine, self.datasetB.layerTable.format(area.lower()))`.
 

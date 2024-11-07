@@ -3,7 +3,7 @@ duckdb==0.10.2
 geoalchemy2==0.15.1
 matplotlib==3.9.0
 osmnx==1.9.3
-overturemaps==0.9.0
+overturemaps==0.10.0
 psycopg2==2.9.9
 pytest==8.2.1
 shapely==2.0.4

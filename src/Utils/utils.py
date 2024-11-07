@@ -368,7 +368,8 @@ def createIndex(
     # Create the query
     sqlQuery = f"""DROP INDEX IF EXISTS {schema}.{tableName}_{columnName}_idx CASCADE;
 
-    CREATE INDEX IF NOT EXISTS {tableName}_{columnName}_idx ON {schema}.{tableName} USING btree ({columnName} ASC NULLS LAST);"""
+    CREATE INDEX IF NOT EXISTS {tableName}_{columnName}_idx
+    ON {schema}.{tableName} USING btree ({columnName} ASC NULLS LAST);"""
 
     # And execute it
     executeQueryWithTransaction(connection, sqlQuery)

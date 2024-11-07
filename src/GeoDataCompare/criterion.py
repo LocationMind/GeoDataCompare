@@ -1057,7 +1057,7 @@ class BuildingDensity(Criterion):
             number = gdf.shape[0]
 
             # Calculate the density
-            value = f"{round((number / self.areaKm2), 2)} / km2"
+            value = f"{int(number / self.areaKm2)} / km2"
 
         return str(value)
 

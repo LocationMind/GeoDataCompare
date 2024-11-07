@@ -371,7 +371,7 @@ ui.page_opts(
 
 ## Switch dark / light mode ##
 with ui.nav_control():
-    ui.input_dark_mode()
+    ui.input_dark_mode(mode="light")
 
 ## Sidebar ##
 with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
@@ -457,8 +457,8 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                 )
                 return color_picker_polygon_line
 
-        # Style (strongly) connected components layers
-        with ui.accordion_panel("Style components", class_="background-sidebar"):
+        # Style layers with range
+        with ui.accordion_panel("Style range", class_="background-sidebar"):
 
             "Choose a color and copy it to the table"
 
@@ -478,6 +478,8 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
 
             ui.div(style="padding: 0.5em;")
 
+            ui.input_switch("switch_components", "Style adapted to places (grid)", True)
+
             @render.data_frame
             def legendComponents() -> render.DataGrid:
                 """Render data frame function.
@@ -488,11 +490,21 @@ with ui.sidebar(open="desktop", bg="#f8f8f8", width=350):
                 Returns:
                     render.DataGrid: Data grid to change component layers style.
                 """
-                data = {
-                    "Min value": [0, 6, 16, 251],
-                    "Max value": [5, 15, 250, "max"],
-                    "Colors": ["#0e4d0e", "#ff6a01", "#c401c0", "#b16d25"],
-                }
+                # Choose color depending on the switch case
+                if input.switch_components():
+                    # Data adapted to the grid
+                    data = {
+                        "Min value": [0, 1, 6, 16],
+                        "Max value": [0, 5, 15, "max"],
+                        "Colors": ["#ffffff", "#beff8a", "#e3e628", "#f35e5e"],
+                    }
+                else:
+                    # Data adapted to the components
+                    data = {
+                        "Min value": [0, 6, 16, 251],
+                        "Max value": [5, 15, 250, "max"],
+                        "Colors": ["#0e4d0e", "#ff6a01", "#c401c0", "#b16d25"],
+                    }
 
                 dataFrame = pd.DataFrame(data)
 
@@ -1339,6 +1351,8 @@ def colorRange():
                 layer.get_fill_color = apply_categorical_cmap(
                     values=gdfcopy["id"], cmap=colorMap
                 )
+
+                layer.get_line_width = 0
 
                 # Set opacity value
                 layer.opacity = 0.1
