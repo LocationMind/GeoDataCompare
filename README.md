@@ -100,6 +100,15 @@ Create a PostGIS database named `pgrouting`.
 Then, to install the extensions and create the schemas according to the database model, run the [init.sql](./Data/init.sql) script in your database.
 This is not a necessary step, as it should be run by the scripts as well, but it prevents errors to do it manually.
 
+To do so, you can run these two commands:
+
+```cmd
+createdb -U postgres pgrouting
+psql -U postgres -d pgrouting -f Data\init.sql
+```
+
+After each command, you should have to enter the password associated with the postgres user (usually `postgres`).
+
 More information about the database can be found in the [Database section](./Documentation/user-doc.md#database) of the user documentation.
 
 ### Environment file
@@ -150,7 +159,7 @@ Once again, you can refer to the [user documentation](./Documentation/user-doc.m
 Run this command to launch the application:
 
 ```
-shiny run .\Python\GeoDataCompare\app.py
+shiny run .\src\GeoDataCompare\app.py
 ```
 
 You can then go to this link: http://127.0.0.1:8000
