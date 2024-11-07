@@ -65,6 +65,7 @@ with open(pathJson, "r") as f:
 
 # Create tables for each bbox
 for elem in bboxJson["bboxs"]:
+
     # Reset timer
     start = time.time()
     # Get the element we need from the json
@@ -172,18 +173,9 @@ for elem in bboxJson["bboxs"]:
             connection, edgeTable.format(area), schema_omf, skipGraphCheck
         )
         and utils.isProcessAlreadyDone(
-            connection, nodeTable.format(area), schema_omf, True
+            connection, nodeTable.format(area), schema_omf, skipGraphCheck
         )
     ):
-
-        # # Old version
-        # omf.createGraphFromBbox(
-        #     bbox = bbox,
-        #     savePathFolder = folderSave,
-        #     area = area,
-        #     connection = connection,
-        #     schema = schema_omf
-        # )
 
         # New version
         omf.createGraphFromBboxNewVersion(
