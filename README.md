@@ -100,6 +100,15 @@ Create a PostGIS database named `pgrouting`.
 Then, to install the extensions and create the schemas according to the database model, run the [init.sql](./Data/init.sql) script in your database.
 This is not a necessary step, as it should be run by the scripts as well, but it prevents errors to do it manually.
 
+To do so, you can run these two commands:
+
+```cmd
+createdb -U postgres pgrouting
+psql -U postgres -d pgrouting -f Data\init.sql
+```
+
+After each command, you should have to enter the password associated with the postgres user (usually `postgres`).
+
 More information about the database can be found in the [Database section](./Documentation/user-doc.md#database) of the user documentation.
 
 ### Environment file
@@ -150,7 +159,7 @@ Once again, you can refer to the [user documentation](./Documentation/user-doc.m
 Run this command to launch the application:
 
 ```
-shiny run .\Python\GeoDataCompare\app.py
+shiny run .\src\GeoDataCompare\app.py
 ```
 
 You can then go to this link: http://127.0.0.1:8000
@@ -159,8 +168,10 @@ You can find more information about how to use the application in the `Help` sec
 
 # Licenses
 
-OpenStreetMap data is under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/), while Overture Maps Foundation might have different licences (see [here](https://docs.overturemaps.org/attribution/)), but for the buildings and transportation themes, as OSM data is used, it is under the same licence.
-Place data from OvertureMap is under the [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
+OpenStreetMap data is under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/), while Overture Maps Foundation licenses depend on the theme.
+You can find information about Overture Maps Foundation licenses and attributions on [this page](https://docs.overturemaps.org/attribution/).
+The buildings and transportation themes are both under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/).
+Places data from Overture Maps Foundation is under the [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
 
 The visualisation platform and this project, in general, are under the [MIT License](./LICENSE.md).
 
