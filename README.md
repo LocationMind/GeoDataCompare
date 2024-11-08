@@ -168,8 +168,10 @@ You can find more information about how to use the application in the `Help` sec
 
 # Licenses
 
-OpenStreetMap data is under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/), while Overture Maps Foundation might have different licences (see [here](https://docs.overturemaps.org/attribution/)), but for the buildings and transportation themes, as OSM data is used, it is under the same licence.
-Place data from OvertureMap is under the [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
+OpenStreetMap data is under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/), while Overture Maps Foundation licenses depend on the theme.
+You can find information about Overture Maps Foundation licenses and attributions on [this page](https://docs.overturemaps.org/attribution/).
+The buildings and transportation themes are both under the [Open Data Commons Open Database License](https://opendatacommons.org/licenses/odbl/).
+Places data from Overture Maps Foundation is under the [Community Data License Agreement – Permissive – Version 2.0](https://cdla.dev/permissive-2-0/).
 
 The visualisation platform and this project, in general, are under the [MIT License](./LICENSE.md).
 
